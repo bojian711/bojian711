@@ -1,7 +1,5 @@
 - 👋 Hi, I’m @bojian711
 - 👀 物理、数学教研
-- 🌱 I’m currently learning ...
-- 💞️ I’m looking to collaborate on ...
 - 📫 Wechat: secondanye
 
 
