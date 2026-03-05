@@ -1,0 +1,104 @@
+<iframe srcdoc='
+<html>
+<head>
+    <style>
+        body { margin: 0; font-family: sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 10px; overflow: hidden; }
+        .container { border: 1px solid #333; padding: 15px; border-radius: 12px; background: #252525; }
+        select { width: 100%; background: #333; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 6px; margin-bottom: 10px; cursor:pointer;}
+        button { background: #e22a2a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; margin-bottom: 10px; }
+        canvas { width: 100%; height: 140px; background: #000; border-radius: 4px; border: 1px solid #444; }
+        .live-info { display: flex; justify-content: space-between; font-size: 11px; margin-top: 5px; font-family: monospace; }
+        .live-val { color: #ff4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <select id="model-select">
+            <option value="440 + 200 * (Math.sin(10*t) + Math.sin(Math.PI*20*t) + Math.sin(Math.E*30*t))">1. 多重无理频率叠加 (准周期波动)</option>
+            <option value="400 + 400 * (Math.sin(Math.pow(t, 2) * 5))">2. 线性扫频 Chirp (频率随时间平方增长)</option>
+            <option value="(() => { let x = (t%1); for(let i=0; i<5; i++) x = 3.9 * x * (1 - x); return 200 + 600 * x; })()">3. 混沌映射 (Logistic Map 频率跳跃)</option>
+            <option value="440 + 300 * Math.sign(Math.sin(Math.pow(t, 1.5) * 10))">4. 变频方波 (非均匀相位突变)</option>
+            <option value="(() => { let s=0; for(let i=0; i<6; i++) s+=Math.pow(0.5, i)*Math.cos(Math.pow(3, i)*Math.PI*t); return 440 + 200*s; })()">5. 魏尔斯特拉斯函数近似 (分形频率)</option>
+        </select>
+        <button id="p">▶ 启动病态函数监听</button>
+        <canvas id="graph"></canvas>
+        <div class="live-info">
+            <span>状态: <span id="stat" class="live-val">停止</span></span>
+            <span>瞬时频率: <span id="freq-val" class="live-val">--</span> Hz</span>
+        </div>
+    </div>
+
+    <script>
+        let ac, osc, animationId;
+        const btn = document.getElementById("p");
+        const select = document.getElementById("model-select");
+        const freqVal = document.getElementById("freq-val");
+        const stat = document.getElementById("stat");
+        const canvas = document.getElementById("graph");
+        const ctx = canvas.getContext("2d");
+
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        const history = [];
+        const maxPoints = 300;
+
+        btn.onclick = () => {
+            if (ac) { 
+                ac.close(); ac = null; 
+                cancelAnimationFrame(animationId);
+                btn.innerText = "▶ 启动病态函数监听"; 
+                stat.innerText = "停止";
+                return; 
+            }
+            
+            ac = new (window.AudioContext || window.webkitAudioContext)();
+            osc = ac.createOscillator();
+            const gain = ac.createGain();
+            
+            const getF = () => {
+                try { return new Function("t", "return " + select.value); } 
+                catch(e) { return (t) => 440; }
+            };
+            let f = getF();
+            select.onchange = () => { f = getF(); history.length = 0; };
+
+            osc.connect(gain);
+            gain.connect(ac.destination);
+            osc.start();
+            btn.innerText = "■ 停止 (注意保护听力)";
+            stat.innerText = "运行中";
+
+            const draw = () => {
+                if (!ac) return;
+                const t = ac.currentTime;
+                const val = f(t);
+                
+                osc.frequency.setTargetAtTime(val, t, 0.005); // 极短的平滑时间以保持“跳跃感”
+                freqVal.innerText = Math.round(val);
+
+                history.push(val);
+                if (history.length > maxPoints) history.shift();
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = "#444";
+                ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+                ctx.beginPath();
+                ctx.strokeStyle = "#ff4444";
+                ctx.lineWidth = 1.5;
+                for (let i = 0; i < history.length; i++) {
+                    const x = (i / maxPoints) * canvas.width;
+                    const y = canvas.height - ((history[i] - 100) / 800) * canvas.height;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+
+                animationId = requestAnimationFrame(draw);
+            };
+            draw();
+        };
+    </script>
+</body>
+</html>' 
+style="width: 100%; height: 350px; border: none; overflow: hidden;"></iframe>
