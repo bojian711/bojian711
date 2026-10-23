@@ -82,7 +82,10 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
         <input id='s5' type='range' min='0' max='60' step='1' value='20'>
         <output id='o5'>20</output>
       </div>
+    </div>
+    <div class='row' style='margin-top:8px'>
       <label class='chk'><input id='kRel' type='checkbox'>显示 <span class='v'>Δv</span> 曲线（<span class='v'>v</span><sub>2</sub>−<span class='v'>v</span><sub>1</sub>）</label>
+      <label class='chk'><input id='kRev' type='checkbox'>减速到 0 后反向加速（不勾选则静止）</label>
     </div>
     <div class='row' style='margin-top:8px'>
       <button id='bPlay'>暂停</button>
@@ -103,7 +106,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span><span class='v'>Δv</span> = <span class='n' id='rDV'>—</span></span>
       <span>相遇：<span class='n' id='rMeet'>—</span></span>
     </div>
-    <div class='rule'>1 号从原点出发，2 号在其后方 <span class='v'>d</span> 米处。v-t 图线下的面积是位移，两条图线之间的面积差就是间距的变化，间距减到 0 即相遇；减速的图线落到 <span class='v'>t</span> 轴后保持为 0。以 1 号为参考系时，2 号走到 <span class='n'>0</span> 处即相遇。</div>
+    <div class='rule'>1 号从原点出发，2 号在其后方 <span class='v'>d</span> 米处。v-t 图线下的面积是位移，两条图线之间的面积差就是间距的变化，间距减到 0 即相遇；减速的图线落到 <span class='v'>t</span> 轴后：默认保持为 0，勾选「反向加速」则穿过 0 沿反方向加速。以 1 号为参考系时，2 号走到 <span class='n'>0</span> 处即相遇。</div>
     <div class='hint' id='hint'>拖动滑块改变参数（自动回到 t=0）；拖时间滑块可逐帧查看。</div>
   </div>
 </div>
@@ -130,16 +133,19 @@ var s1=$('s1'), s2=$('s2'), s3=$('s3'), s4=$('s4'), s5=$('s5'), sT=$('sT');
 var o1=$('o1'), o2=$('o2'), o3=$('o3'), o4=$('o4'), o5=$('o5'), oT=$('oT');
 var rT=$('rT'), rX1=$('rX1'), rX2=$('rX2'), rDX=$('rDX');
 var rV1=$('rV1'), rV2=$('rV2'), rDV=$('rDV'), rMeet=$('rMeet');
-var hint=$('hint'), bPlay=$('bPlay'), bReset=$('bReset'), kRel=$('kRel');
+var hint=$('hint'), bPlay=$('bPlay'), bReset=$('bReset'), kRel=$('kRel'), kRev=$('kRev');
 
-/* ===== 物理模型：a<0 即刹车，v 到 0 后静止 ===== */
+/* ===== 物理模型：a<0 减速；默认 v 到 0 后静止，勾选 kRev 后反向加速 ===== */
+var REV=false;
 function velOf(v0,a,t){
-  if(a<0){ var vv=v0+a*t; return vv>0?vv:0; }
+  if(a<0&&!REV){ var vv=v0+a*t; return vv>0?vv:0; }
   return v0+a*t;
 }
 function posOf(v0,a,t){
-  if(a<0&&v0>0){ var ts=v0/(-a); if(t<ts) return v0*t+0.5*a*t*t; return v0*v0/(-2*a); }
-  if(a<0&&v0<=0) return 0;
+  if(a<0&&!REV){
+    if(v0>0){ var ts=v0/(-a); if(t<ts) return v0*t+0.5*a*t*t; return v0*v0/(-2*a); }
+    return 0;
+  }
   return v0*t+0.5*a*t*t;
 }
 function x1Of(t){ return posOf(P.v1,P.a1,t); }
@@ -181,15 +187,17 @@ function recompute(){
   for(i=0;i<meets.length;i++){ if(!dd.length||meets[i]-dd[dd.length-1]>0.06) dd.push(meets[i]); }
   var lastM=dd.length?dd[dd.length-1]:0;
   var tEnd=Math.max(base+4,lastM+3); tEnd=Math.min(30,Math.max(10,tEnd));
-  var gMax=0,rMin=0,rMax=0,vMin=0,vMax=0,M=240,minAbs=1e18,minT=0;
+  var gMax=0,gLo=0,rMin=0,rMax=0,vMin=0,vMax=0,M=240,minAbs=1e18,minT=0;
   var x1,x2,xr,vA,vB,vr;
   for(i=0;i<=M;i++){
     t=tEnd*i/M;
     x1=x1Of(t); x2=x2Of(t); xr=x2-x1;
     vA=velOf(v1,a1,t); vB=velOf(v2,a2,t); vr=vB-vA;
     if(x1>gMax)gMax=x1; if(x2>gMax)gMax=x2;
+    if(x1<gLo)gLo=x1; if(x2<gLo)gLo=x2;
     if(xr<rMin)rMin=xr; if(xr>rMax)rMax=xr;
     if(vA>vMax)vMax=vA; if(vB>vMax)vMax=vB; if(vr>vMax)vMax=vr;
+    if(vA<vMin)vMin=vA; if(vB<vMin)vMin=vB;
     if(vr<vMin)vMin=vr;
     var ab=Math.abs(xr); if(ab<minAbs){minAbs=ab;minT=t;}
   }
@@ -201,7 +209,7 @@ function recompute(){
     if(Math.abs(xr)<best){best=Math.abs(xr);bt=t;}
   }
   minAbs=best; minT=bt;
-  var gMin=-d, gSpan=Math.max(gMax-gMin,1);
+  var gMin=Math.min(-d,gLo), gSpan=Math.max(gMax-gMin,1);
   gMax+=0.08*gSpan; gMin-=0.08*gSpan;
   var rSpan=Math.max(rMax-rMin,1);
   rMin-=0.1*rSpan; rMax+=0.1*rSpan;
@@ -556,6 +564,11 @@ bindParam('s3','v2','<span class=v>v</span><sub>2</sub>',1);
 bindParam('s4','a2','<span class=v>a</span><sub>2</sub>',2);
 bindParam('s5','d','<span class=v>d</span>',0);
 kRel.addEventListener('change',upd);
+kRev.addEventListener('change',function(){
+  REV=kRev.checked;
+  recompute(); tCur=0; sT.value=0;
+  upd();
+});
 sT.addEventListener('input',function(){
   playing=false; bPlay.textContent='播放';
   tCur=parseFloat(sT.value)||0;
@@ -590,6 +603,7 @@ if(D.fonts){D.fonts.load('italic 14px KaTeX_Math'); D.fonts.load('14px KaTeX_Mai
 P.v1=parseFloat(s1.value); P.a1=parseFloat(s2.value);
 P.v2=parseFloat(s3.value); P.a2=parseFloat(s4.value);
 P.d=parseFloat(s5.value);
+REV=!!kRev.checked;
 recompute(); sT.max=ST.tEnd; resize(); upd();
 requestAnimationFrame(step);
 })();
