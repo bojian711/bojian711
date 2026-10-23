@@ -579,9 +579,9 @@ var BUILTIN = [
    tip:'宾语从句用陈述语序：连接词后先写主语 the train，再写谓语；三单要加 -s。',
    tags:['宾语从句','语序','三单']},
 
-  {id:'s12', zh:'他已经写完作业了。', r:'S A A V O',
-   b:['He','has','already','finish>finished','his homework'],
-   tip:'现在完成时 has + 过去分词；already 常放在助动词和过去分词之间。',
+  {id:'s12', zh:'他已经写完作业了。', r:'S F V',
+   b:['He','already','finish his homework>has finished his homework'],
+   tip:'现在完成时 have/has + 过去分词，助动词由主语决定：He 配 has。already 更地道的位置是 has 和 finished 之间：He has already finished his homework.',
    tags:['现在完成时']},
 
   {id:'s13', zh:'这些玻璃杯是玻璃做的。', r:'S V A',
@@ -783,6 +783,7 @@ function formOpts(w, kind, correct){
     var hvPart=/^(has|have|had)\s+(.+)$/.exec(String(correct||''));
     var beForms, hvForms;
     if(bePart) beForms=['am '+bePart[2], 'is '+bePart[2], 'are '+bePart[2]];
+    else if(hvPart) beForms=['is '+vIng(w)];   /* 完成时句的干扰项：is finishing 比 be finishing 更像真选项 */
     else beForms=['be '+vIng(w)];
     if(hvPart) hvForms=['has '+hvPart[2], 'have '+hvPart[2]];
     else hvForms=['have '+vPart(w)];
@@ -891,7 +892,7 @@ var MONTHS='January|February|March|April|May|June|July|August|September|October|
 var WEEK='Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday';
 function inferRole(w){
   var s=String(w||'').trim().replace(/[,，。.!！?？]$/,'');
-  if(/^(always|usually|often|sometimes|seldom|hardly|never)$/i.test(s)) return 'F';
+  if(/^(always|usually|often|sometimes|seldom|hardly|never|already|just|ever|yet|still|soon|nearly|almost)$/i.test(s)) return 'F';
   if(/^(yesterday|tomorrow|today|tonight)$/i.test(s)) return 'T';
   if(/^(last|next|this|every)\s+\S/i.test(s)) return 'T';
   if(/\s+ago$/i.test(s)) return 'T';
@@ -1826,6 +1827,8 @@ function absorb(words, i, take){
   while(k<words.length && n<take && !STOPW.test(words[k]) && !/[,.;!?]/.test(words[k])){ k+=1; n+=1; }
   return words.slice(i,k);
 }
+/* 助动词和中位副词（already / just / never…）之间的谓语：副词单独成块放前面，助动词和谓语合成一块 */
+var MIDADV=/^(already|just|ever|never|yet|still|soon|always|often|usually|sometimes|seldom|hardly|nearly|almost)$/i;
 /* 按空格切开，再把固定搭配、谓语、限定词短语合回去 */
 function splitSmart(str){
   var words=String(str||'').replace(/[.!?,;:]+$/g,'').trim().split(/\s+/).filter(function(x){ return x.length; });
@@ -1836,6 +1839,17 @@ function splitSmart(str){
       if(i+L>words.length) continue;
       var cand=words.slice(i,i+L);
       if(PHRASES[cand.map(normW).join(' ')]){ hit=cand; break; }
+    }
+    /* has already finished：already 单独成块放前面，has finished … 合成一块 */
+    if(!hit && i+2<words.length){
+      var wA=words[i].toLowerCase().replace(/[^a-z']/g,'');
+      if(AUXSET[wA] && MIDADV.test(words[i+1]) && isVerbForm(words[i+2])){
+        var ab=absorb(words, i+2, 3);
+        out.push(words[i+1]);
+        out.push([words[i]].concat(ab).join(' '));
+        i+=2+ab.length;
+        continue;
+      }
     }
     /* 谓语：助动词或动词变形带头，再带最多三个宾语/补语词 */
     if(!hit && i+1<words.length){
@@ -2217,8 +2231,12 @@ function autoBlocks(en){
     if(cand>=0){
       var vb=toBase(w[cand]), rest=w.slice(cand+1).join(' ');
       var base=(vb+' '+rest).trim();
-      if(base!==t){ out.push(base+'>'+t); n+=1; } else out.push(t);
-    }else out.push(t);
+      if(base!==t){ out.push(base+'>'+t); n+=1; roles.push('V'); continue; }
+      out.push(t);
+      roles.push('V');
+      continue;
+    }
+    out.push(t);
     roles.push(inferRole(t));
   }
   if(roles.length && roles[0]==='A') roles[0]='S';
