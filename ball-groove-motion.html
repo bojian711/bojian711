@@ -55,8 +55,8 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
     <div class='row'>
       <div class='ctl'>
         <span class='lb'><span class='v'>θ</span><sub>0</sub> 进入位置 (°)</span>
-        <input id='s1' type='range' min='-150' max='150' step='1' value='-105'>
-        <output id='o1'>−105</output>
+        <input id='s1' type='range' min='-202' max='22' step='1' value='-195'>
+        <output id='o1'>165</output>
       </div>
       <div class='ctl'>
         <span class='lb'><span class='v c1'>v</span><sub>0</sub> 初速 (m/s)</span>
@@ -89,7 +89,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       </div>
     </div>
     <div class='row' style='margin-top:8px'>
-      <label class='chk'><input id='kDir' type='checkbox'>初速沿槽向 θ 减小方向</label>
+      <label class='chk'><input id='kDir' type='checkbox'>初速反向（顺时针）</label>
       <label class='chk'><input id='kEl' type='checkbox'>落回时弹性反弹</label>
       <label class='chk'><input id='kTr' type='checkbox' checked>显示轨迹</label>
       <label class='chk'><input id='kAr' type='checkbox' checked>显示速度矢量</label>
@@ -117,6 +117,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span>机械能 <span class='n' id='rE'>—</span></span>
     </div>
     <div class='rule' id='rOut'>飞出瞬间：—</div>
+    <div class='rule'>角度基准：进入位置 <span class='v'>θ</span><sub>0</sub> 与槽口角 <span class='v'>α</span> 同为半径与圆心水平线的夹角——0° 是圆心正右方，−90° 是最低点，±180° 是正左方，向上为正。球在圆心左侧时槽被推向左，在右侧时被推向右。</div>
     <div class='rule'>水平方向没有外力，系统水平动量 <span class='v'>p</span> 与质心水平速度 <span class='v'>v</span><sub>C</sub> 全程不变；任意时刻 <span class='v c1'>v</span><sub>球对地</sub> = <span class='v c2'>V</span><sub>槽对地</sub> + <span class='v c3'>v</span><sub>球对槽</sub>，三者首尾相接成三角形。飞出瞬间 <span class='v c3'>v</span><sub>球对槽</sub> 沿槽口切线方向。</div>
     <div class='hint' id='hint'>拖动滑块改变参数（自动回到 t=0）；拖时间滑块可逐帧查看。</div>
   </div>
@@ -141,7 +142,7 @@ var ARSC=8;                                  /* 场景速度箭头 px/(m/s) */
 var DT=0.002, TEND=10;
 
 /* ===== 参数与状态 ===== */
-var P={th0:-105, v0:5, m:1, M:2, aL:25, aR:25, sgn:1, e:0};
+var P={th0:-195, v0:5, m:1, M:2, aL:25, aR:25, sgn:1, e:0};
 var SM=null;
 var tCur=0, playing=true, spd=1, last=0;
 var HALO='#ffffff';
@@ -263,10 +264,14 @@ function theme(){
 function thLim(){
   return {L:-(90+P.aL)*D2R, R:(90+P.aR)*D2R};
 }
+/* UI 的 θ0 与 α 同基准：与圆心水平线的夹角，右水平 0°，最低点 −90°，左水平 ±180°。
+   内部 θ 从最低点量：θ = 方位角 + 90°。 */
+function dispAng(a){ var b=((a+180)%360+360)%360-180; return Math.round(b); }
+function innerAng(a){ var b=((a+270)%360+360)%360-180; return b*D2R; }
 function simulate(){
   var m=P.m, M=P.M, mu=m/(m+M), e=P.e;
   var tl=thLim(), thL=tl.L, thR=tl.R;
-  var mode=0, th=P.th0*D2R, thd=P.sgn*P.v0/R, X=0, Xd=0, t=0;
+  var mode=0, th=innerAng(P.th0), thd=P.sgn*P.v0/R, X=0, Xd=0, t=0;
   var bx=X+R*Math.sin(th), by=Y0-R*Math.cos(th);
   var bvx=Xd+R*Math.cos(th)*thd, bvy=R*Math.sin(th)*thd;
   var A={t:[],bx:[],by:[],bvx:[],bvy:[],gx:[],gv:[],md:[],xc:[]};
@@ -369,7 +374,7 @@ function idxAt(t){
 
 /* ===== 重算 ===== */
 function recompute(){
-  var tl=thLim(), lo=Math.round(tl.L/D2R)+3, hi=Math.round(tl.R/D2R)-3;
+  var tl=thLim(), lo=Math.round(tl.L/D2R)-90+3, hi=Math.round(tl.R/D2R)-90-3;
   s1.min=lo; s1.max=hi;
   if(P.th0<lo) P.th0=lo;
   if(P.th0>hi) P.th0=hi;
@@ -380,7 +385,7 @@ function recompute(){
   upd();
 }
 function upd(){
-  o1.textContent=num(P.th0,0)+'\u00b0';
+  o1.textContent=dispAng(P.th0)+'\u00b0';
   o2.textContent=num(P.v0,1);
   o3.textContent=num(P.m,1);
   o4.textContent=num(P.M,1);
@@ -477,12 +482,11 @@ function drawScene(TH){
     rtext([{t:'\u03b1',v:true},'L'],ox+Math.cos(bb2)*(ar+15),oy+Math.sin(bb2)*(ar+15),13,TH.muted,'center','middle',true);
   }
   /* 进入点 */
-  var th0=P.th0*D2R, ex=ox+Math.sin(th0)*rr, ey=oy+Math.cos(th0)*rr;
+  var ph=dispAng(P.th0)*D2R, ex=ox+Math.cos(ph)*rr, ey=oy-Math.sin(ph)*rr;
   ring(ex,ey,3.5,TH.bg,TH.muted,1.6);
-  var a0=PI/2, a1=PI/2-th0;
   ctx.strokeStyle=TH.muted; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.arc(ox,oy,0.28*rr,Math.min(a0,a1),Math.max(a0,a1)); ctx.stroke();
-  rtext([{t:'\u03b8',v:true},'\u2080'],ox+Math.cos((a0+a1)/2)*(0.28*rr+14),oy+Math.sin((a0+a1)/2)*(0.28*rr+14),13,TH.muted,'center','middle',true);
+  ctx.beginPath(); ctx.arc(ox,oy,0.28*rr,0,-ph,ph>0); ctx.stroke();
+  rtext([{t:'\u03b8',v:true},'\u2080'],ox+Math.cos(-ph/2)*(0.28*rr+14),oy+Math.sin(-ph/2)*(0.28*rr+14),13,TH.muted,'center','middle',true);
   /* 轨迹 */
   if(kTr.checked&&i>0){
     ctx.strokeStyle=TH.p1; ctx.globalAlpha=0.5; ctx.lineWidth=1.6; ctx.lineJoin='round';
@@ -674,12 +678,12 @@ function bindSl(el,key,isInt){
 bindSl(s1,'th0',true); bindSl(s2,'v0',false); bindSl(s3,'m',false);
 bindSl(s4,'M',false); bindSl(s5,'aL',true); bindSl(s6,'aR',true);
 var HINTS={
-  s1:'进入位置：越高则重力势能越大，到槽底与飞出时的速度越大，但相对速度方向仍沿槽口切线。',
+  s1:'进入位置：与圆心水平线的夹角（与槽口角同基准）。0° 为圆心右方水平，−90° 为最低点，±180° 为左方水平。位置越高重力势能越大。',
   s2:'初速越大，飞出时 v(球对槽) 越大，斜抛射程越远——可能落回槽内，也可能落到槽外。',
   s3:'小球质量越大，系统质心越靠近小球，球槽被推动的幅度越大（V槽 峰值变大）。',
   s4:'球槽质量越大，球槽越稳：V槽 越小；M 远大于 m 时退化为固定球槽。',
-  s5:'左槽口角：决定左槽壁形状与左槽口高度，负值表示槽口低于圆心水平面。',
-  s6:'右槽口角：决定飞出方向——角越大槽壁越内倾，飞出速度越偏向槽内侧，越容易落回槽内。'
+  s5:'左槽口角：左半径与水平线的夹角，向上为正，负值表示槽口低于圆心水平面。',
+  s6:'右槽口角：右半径与水平线的夹角，向上为正，0° 即四分之一圆弧。角越大槽壁越内倾，飞出速度越偏向槽内侧，越容易落回槽内。'
 };
 [s1,s2,s3,s4,s5,s6].forEach(function(el){
   el.addEventListener('input',function(){ say(HINTS[el.id]||''); });
@@ -691,7 +695,7 @@ kAr.addEventListener('change',function(){ say(''); });
 kFx.addEventListener('change',function(){ say(kFx.checked?(SM.out?'矢量图定格在飞出瞬间 t='+num(SM.out.t,2)+' s。':'本次参数下没有飞出事件，矢量图仍随当前时刻。'):'矢量图跟随当前时刻。'); });
 bPlay.addEventListener('click',function(){ playing=!playing; bPlay.textContent=playing?'暂停':'播放'; });
 bReset.addEventListener('click',function(){
-  s1.value='-105'; s2.value='5'; s3.value='1'; s4.value='2'; s5.value='25'; s6.value='25';
+  s1.value='-195'; s2.value='5'; s3.value='1'; s4.value='2'; s5.value='25'; s6.value='25';
   kDir.checked=false; kEl.checked=false; kFx.checked=false;
   syncParams();
   tCur=0; playing=true; bPlay.textContent='暂停'; spd=1; bSpd.textContent='速度 1×';
