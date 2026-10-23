@@ -59,7 +59,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
         <output id='o1'>165</output>
       </div>
       <div class='ctl'>
-        <span class='lb'><span class='v c1'>v</span><sub>0</sub> 初速 (m/s)</span>
+        <span class='lb'><span class='v c1'>v</span><sub>0</sub> 初速 (m/s，沿切线)</span>
         <input id='s2' type='range' min='0' max='10' step='0.1' value='5'>
         <output id='o2'>5.0</output>
       </div>
@@ -79,12 +79,12 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
     <div class='row' style='margin-top:8px'>
       <div class='ctl'>
         <span class='lb'><span class='v'>α</span><sub>左</sub> 槽口 (°)</span>
-        <input id='s5' type='range' min='-60' max='75' step='1' value='25'>
+        <input id='s5' type='range' min='-90' max='75' step='1' value='25'>
         <output id='o5'>25</output>
       </div>
       <div class='ctl'>
         <span class='lb'><span class='v'>α</span><sub>右</sub> 槽口 (°)</span>
-        <input id='s6' type='range' min='-60' max='75' step='1' value='25'>
+        <input id='s6' type='range' min='-90' max='75' step='1' value='25'>
         <output id='o6'>25</output>
       </div>
     </div>
@@ -112,12 +112,13 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span><span class='v c1'>v</span><sub>球y</sub> = <span class='n' id='rVy'>—</span></span>
       <span><span class='v c2'>V</span><sub>槽</sub> = <span class='n' id='rGv'>—</span></span>
       <span><span class='v c3'>v</span><sub>球对槽</sub> = <span class='n' id='rVr'>—</span></span>
-      <span>水平总动量 <span class='n' id='rP'>—</span></span>
+      <span>水平总动量 <span class='v'>p</span> = <span class='v'>p</span><sub>0</sub> <span class='n' id='rP'>—</span></span>
       <span>质心水平速度 <span class='n' id='rVc'>—</span></span>
       <span>机械能 <span class='n' id='rE'>—</span></span>
     </div>
     <div class='rule' id='rOut'>飞出瞬间：—</div>
     <div class='rule'>角度基准：进入位置 <span class='v'>θ</span><sub>0</sub> 与槽口角 <span class='v'>α</span> 同为半径与圆心水平线的夹角——0° 是圆心正右方，−90° 是最低点，±180° 是正左方，向上为正。球在圆心左侧时槽被推向左，在右侧时被推向右。</div>
+    <div class='rule'>初动量：球槽初速为零，小球以 <span class='v'>v</span><sub>0</sub>（对地，沿进入点切线）进入，故系统水平初动量 <span class='v'>p</span><sub>0</sub> = <span class='v c1'>m</span> <span class='v'>v</span><sub>0,ₓ</sub>——在最低点进入时即 <span class='v c1'>m</span><span class='v'>v</span><sub>0</sub>，不为零；质心水平速度 <span class='v'>v</span><sub>C</sub> = <span class='v'>p</span><sub>0</sub>/(<span class='v c1'>m</span>+<span class='v c2'>M</span>) 全程不变。</div>
     <div class='rule'>水平方向没有外力，系统水平动量 <span class='v'>p</span> 与质心水平速度 <span class='v'>v</span><sub>C</sub> 全程不变；任意时刻 <span class='v c1'>v</span><sub>球对地</sub> = <span class='v c2'>V</span><sub>槽对地</sub> + <span class='v c3'>v</span><sub>球对槽</sub>，三者首尾相接成三角形。飞出瞬间 <span class='v c3'>v</span><sub>球对槽</sub> 沿槽口切线方向。</div>
     <div class='hint' id='hint'>拖动滑块改变参数（自动回到 t=0）；拖时间滑块可逐帧查看。</div>
   </div>
@@ -262,7 +263,10 @@ function theme(){
 
 /* ===== 物理内核 ===== */
 function thLim(){
-  return {L:-(90+P.aL)*D2R, R:(90+P.aR)*D2R};
+  var L=-(90+P.aL)*D2R, Rr=(90+P.aR)*D2R;
+  if(L>-0.05) L=-0.05;            /* α=−90° 时槽口降到最低点，留 0.05 rad 避免弧退化 */
+  if(Rr<0.05) Rr=0.05;
+  return {L:L, R:Rr};
 }
 /* UI 的 θ0 与 α 同基准：与圆心水平线的夹角，右水平 0°，最低点 −90°，左水平 ±180°。
    内部 θ 从最低点量：θ = 方位角 + 90°。 */
@@ -374,7 +378,9 @@ function idxAt(t){
 
 /* ===== 重算 ===== */
 function recompute(){
-  var tl=thLim(), lo=Math.round(tl.L/D2R)-90+3, hi=Math.round(tl.R/D2R)-90-3;
+  var tl=thLim(), lo=Math.round(tl.L/D2R)-90, hi=Math.round(tl.R/D2R)-90;
+  if(hi-lo>10){ lo+=3; hi-=3; }
+  if(hi<lo){ var midq=Math.round((lo+hi)/2); lo=midq; hi=midq; }
   s1.min=lo; s1.max=hi;
   if(P.th0<lo) P.th0=lo;
   if(P.th0>hi) P.th0=hi;
@@ -682,8 +688,8 @@ var HINTS={
   s2:'初速越大，飞出时 v(球对槽) 越大，斜抛射程越远——可能落回槽内，也可能落到槽外。',
   s3:'小球质量越大，系统质心越靠近小球，球槽被推动的幅度越大（V槽 峰值变大）。',
   s4:'球槽质量越大，球槽越稳：V槽 越小；M 远大于 m 时退化为固定球槽。',
-  s5:'左槽口角：左半径与水平线的夹角，向上为正，负值表示槽口低于圆心水平面。',
-  s6:'右槽口角：右半径与水平线的夹角，向上为正，0° 即四分之一圆弧。角越大槽壁越内倾，飞出速度越偏向槽内侧，越容易落回槽内。'
+  s5:'左槽口角：左半径与水平线的夹角，向上为正；负值表示槽口低于圆心水平面，−90° 时槽口降到最低点、槽几乎闭合。',
+  s6:'右槽口角：右半径与水平线的夹角，向上为正，0° 即四分之一圆弧，−90° 时槽口降到最低点。角越大槽壁越内倾，飞出速度越偏向槽内侧，越容易落回槽内。'
 };
 [s1,s2,s3,s4,s5,s6].forEach(function(el){
   el.addEventListener('input',function(){ say(HINTS[el.id]||''); });
