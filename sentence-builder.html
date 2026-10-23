@@ -222,6 +222,7 @@ body.dragnow .vcard{opacity:0;visibility:hidden;transition:none}
 .echip button:hover{color:var(--accent)}
 .morphrow{display:none;gap:6px;align-items:center;flex-wrap:wrap;margin:2px 0 8px;font-size:13px;color:var(--ink2)}
 .morphrow input{width:190px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:5px 8px;font-size:13px;font-family:inherit}
+select{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:5px 8px;font-size:13px;font-family:inherit}
 .gbtn.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .arow{border:1px solid var(--line);border-radius:10px;padding:9px 10px;margin-bottom:8px;background:var(--bg)}
 .arow.off{opacity:.55}
@@ -388,11 +389,16 @@ body.dragnow .vcard{opacity:0;visibility:hidden;transition:none}
       <div class='sec'>
         <div class='h3'>素材：截图 / PDF / 文本文件</div>
         <div class='srcview' id='srcView'>
-          截图可以直接 Ctrl+V 粘进来，或点下面选文件。<br>
-          图片和 PDF 只在上面显示出来给你照着录（浏览器读不出里面的字），文字部分用键盘或语音输入。
+          截图可以直接 Ctrl+V 粘进来，或点下面选文件（手机上选文件可以直接拍照）。<br>
+          <b>图片可一键识别（OCR）</b>：识别、切句、分词块、配翻译、入库全自动，不用手动细改。
         </div>
         <div class='row' style='margin-top:8px'>
           <input type='file' id='srcFile' accept='image/*,application/pdf,.txt,.md,.csv,.json'>
+          <select id='ocrLang'>
+            <option value='eng+chi_sim'>中英对照</option>
+            <option value='eng'>仅英文</option>
+          </select>
+          <button class='gbtn' id='srcOcr' type='button' disabled>识别图片并自动入库</button>
           <button class='gbtn' id='srcClear' type='button'>清掉素材</button>
         </div>
         <div class='msg' id='srcMsg'></div>
@@ -1790,7 +1796,7 @@ function readFile(){
 }
 
 /* ---------- 素材录入台 ---------- */
-var E={blocks:[], morphIdx:-1, morphMode:'', srcUrl:null};
+var E={blocks:[], morphIdx:-1, morphMode:'', srcUrl:null, srcBlob:null};
 var ROLE_CYCLE=['A','S','V','O','C','F','T','P','M'];
 /* 初中高频固定搭配：自动切词块时把这类短语合在一起，不拆成单个词 */
 var PHRASES={};
@@ -2019,7 +2025,9 @@ function showSrcFile(f){
     try{
       E.srcUrl=URL.createObjectURL(f);
       el('srcView').innerHTML=(isImg? '<img src=\''+E.srcUrl+'\' alt=\'素材\'>' : '<embed src=\''+E.srcUrl+'\' type=\'application/pdf\'>');
-      srcMsg(isImg? '截图已显示，照着录就行。' : 'PDF 已显示（读不出文字，照着录）；要批量导入请用下面「批量导入」里的文本。');
+      E.srcBlob=isImg? f : null;
+      var ob=el('srcOcr'); if(ob) ob.disabled=!isImg;
+      srcMsg(isImg? '图片已显示。点「识别图片并自动入库」一键 OCR（识别在本机完成，首次需联网下引擎和语言包）。' : 'PDF 只能显示，暂不支持 OCR；文本内容请复制到「批量一键处理」。');
     }catch(e){ srcMsg('这个文件显示不了，用键盘录入吧。','ng'); }
     return;
   }
@@ -2047,7 +2055,9 @@ function showSrcFile(f){
 }
 function clearSrc(){
   if(E.srcUrl){ try{ URL.revokeObjectURL(E.srcUrl); }catch(e){} E.srcUrl=null; }
-  el('srcView').innerHTML='截图可以直接 Ctrl+V 粘进来，或点下面选文件。<br>图片和 PDF 只在上面显示出来给你照着录（浏览器读不出里面的字），文字部分用键盘或语音输入。';
+  E.srcBlob=null;
+  var ob=el('srcOcr'); if(ob) ob.disabled=true;
+  el('srcView').innerHTML='截图可以直接 Ctrl+V 粘进来，或点下面选文件（手机上选文件可以直接拍照）。<br><b>图片可一键识别（OCR）</b>：识别、切句、分词块、配翻译、入库全自动，不用手动细改。';
   srcMsg('');
 }
 
@@ -2517,6 +2527,79 @@ function rememberGloss(it){
   g.unshift({en:it.en, zh:it.zh});
   store(K_G, g.slice(0,300));
 }
+
+/* ---------- 图片 OCR：tesseract.js 懒加载，识别全程在本机跑 ---------- */
+var OCR_URL='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+function loadScript(src, cb){
+  var s=document.createElement('script');
+  s.src=src;
+  s.onload=function(){ cb(null); };
+  s.onerror=function(){ cb(new Error('下载失败')); };
+  document.head.appendChild(s);
+}
+/* OCR 原文 → 干净的素材行：去掉页码、噪音行、纯数字行 */
+function ocrLines(txt){
+  var lines=String(txt||'').split(/\r?\n/), out=[], i, s;
+  for(i=0;i<lines.length;i++){
+    s=lines[i].replace(/\s+/g,' ').trim();
+    if(!s) continue;
+    var cjk=(s.match(/[\u4e00-\u9fa5]/g)||[]).length;
+    var enW=(s.match(/[A-Za-z]{2,}/g)||[]).length;
+    if(cjk<3 && enW<3) continue;                       /* 页眉页码、乱码、单个词 */
+    if(/^[0-9\s\-—_.·]+$/.test(s)) continue;          /* 纯数字行 */
+    if(s.length<4) continue;
+    out.push(s);
+  }
+  return out;
+}
+/* OCR 专用入库：翻译配好的直接入库；待核的留在批量面板等确认 */
+function ocrCommit(){
+  var msg=el('inAutoMsg'), n=0, i, added=[], keep=[];
+  for(i=0;i<A.rows.length;i++){
+    var it=A.rows[i].it;
+    if(it._st==='ok' && it.zh && !/\{\{待核\}\}/.test(it.zh)){
+      added.push(it); rememberGloss(it); n+=1;
+    }else keep.push(A.rows[i]);
+  }
+  if(n){ S.my=added.concat(S.my); saveMy(); rebuild(); renderMy(); }
+  A.rows=keep; renderAuto();
+  return {added:n, kept:keep.length};
+}
+function doOcr(){
+  if(!E.srcBlob){ srcMsg('先选一张截图，或用手机拍一张。','ng'); return; }
+  var msg=el('srcMsg');
+  if(!window.Tesseract){
+    msg.className='msg'; msg.textContent='正在联网下载 OCR 引擎（约 2 MB，之后浏览器会缓存）…';
+    loadScript(OCR_URL, function(err){
+      if(err || !window.Tesseract){ srcMsg('OCR 引擎下载失败——这步需要联网。也可以照着图手动输入。','ng'); return; }
+      runTesseract();
+    });
+    return;
+  }
+  runTesseract();
+}
+function runTesseract(){
+  var lang=el('ocrLang')? el('ocrLang').value : 'eng+chi_sim';
+  var msg=el('srcMsg');
+  msg.className='msg';
+  msg.textContent='正在识别…（首次要下载语言包：中英对照约 15 MB、仅英文约 4 MB，之后有缓存）';
+  var p;
+  try{ p=window.Tesseract.recognize(E.srcBlob, lang, {logger:function(m){
+    if(m && m.status) msg.textContent='正在识别：'+m.status+((m.progress!=null)? ' '+Math.round(m.progress*100)+'%' : '');
+  }}); }
+  catch(e){ srcMsg('OCR 启动失败：'+(e && e.message || e),'ng'); return; }
+  p.then(function(res){
+    var txt=String(res && res.data && res.data.text || '');
+    var lines=ocrLines(txt);
+    if(!lines.length){ srcMsg('没识别出有用的文字。图太糊或字太少？可以重拍，或改用手动输入。','ng'); return; }
+    el('inBulk').value=lines.join('\n');
+    switchPane('bulk');
+    autoRun();
+    var r=ocrCommit();
+    srcMsg('识别出 '+lines.length+' 行素材：'+r.added+' 句已自动入词库'+
+           (r.kept? '，另有 '+r.kept+' 句翻译待核，留在「批量一键处理」里等你确认中文' : '')+'。','ok');
+  }).catch(function(e){ srcMsg('识别失败：'+(e && e.message || e),'ng'); });
+}
 function autoEdit(i){
   var x=A.rows[i] && A.rows[i].it;
   if(!x) return;
@@ -2599,6 +2682,7 @@ function init(){
   bind('inDictAdd', dictImport);
   bind('inDictClear', dictClear);
   bind('inAuto', autoRun);
+  bind('srcOcr', doOcr);
   bind('inAutoAll', autoToggleAll);
   bind('inAutoAdd', autoCommit);
   bind('inVoiceZh', function(){ startVoice('zh'); });
@@ -2653,7 +2737,8 @@ window.SB={S:S, buildEn:buildEn, parseBlock:parseBlock, diffPairs:diffPairs, nor
   autoQuestions:autoQuestions, extractPairs:extractPairs, splitZhEn:splitZhEn, splitSent:splitSent,
   autoOne:autoOne, autoRun:autoRun, autoCommit:autoCommit, autoEdit:autoEdit, autoToggleAll:autoToggleAll,
   A:A, switchPane:switchPane, DICT:DICT, normItem:normItem, baseVerbQ:baseVerbQ,
-  parseGloss:parseGloss, dictGloss:dictGloss, dictImport:dictImport, dictClear:dictClear, UDICT:UDICT};
+  parseGloss:parseGloss, dictGloss:dictGloss, dictImport:dictImport, dictClear:dictClear, UDICT:UDICT,
+  ocrLines:ocrLines, ocrCommit:ocrCommit, doOcr:doOcr};
 </script>
 </body>
 </html>
