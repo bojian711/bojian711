@@ -121,7 +121,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
     <div class='rule' id='rOut'>飞出瞬间：—</div>
     <div class='rule'>角度基准：进入位置 <span class='v'>θ</span><sub>0</sub> 与槽口角 <span class='v'>α</span> 同为半径与圆心水平线的夹角——0° 是圆心正右方，−90° 是最低点，±180° 是正左方，向上为正。球在圆心左侧时槽被推向左，在右侧时被推向右。</div>
     <div class='rule'>初动量：球槽初速为零，小球以 <span class='v'>v</span><sub>0</sub>（对地，沿进入点切线）进入，故系统水平初动量 <span class='v'>p</span><sub>0</sub> = <span class='v c1'>m</span> <span class='v'>v</span><sub>0,ₓ</sub>——在最低点进入时即 <span class='v c1'>m</span><span class='v'>v</span><sub>0</sub>，不为零；质心水平速度 <span class='v'>v</span><sub>C</sub> = <span class='v'>p</span><sub>0</sub>/(<span class='v c1'>m</span>+<span class='v c2'>M</span>) 全程不变。</div>
-    <div class='rule'>参考系：网格与地面刻度一律锚在<b>地面</b>上。<span class='v'>V</span><sub>槽</sub> 与 <span class='v'>v</span><sub>球</sub> 都是<b>对地</b>速度，画面下方每 2 m 一根刻度桩标出地面坐标 <span class='v'>x</span>。勾选「镜头固定于地面」时画面就是地面参考系；取消勾选则镜头随质心匀速平移，此时画面看上去在整体漂移，读数仍以地面刻度为准。</div>
+    <div class='rule'>参考系：网格与地面刻度一律锚在<b>地面</b>上。<span class='v'>V</span><sub>槽</sub> 与 <span class='v'>v</span><sub>球</sub> 都是<b>对地</b>速度，画面下方每 2 m 一根刻度桩标出地面坐标 <span class='v'>x</span>。勾选「镜头固定于地面」时画面就是地面参考系；取消勾选则镜头随质心匀速平移，此时画面看上去在整体漂移，读数仍以地面刻度为准。场景比例恒定（球槽大小不随参数变化）；球飞得过高或过远时会暂时离开画面，运动全程仍可从 v-t 图读出。</div>
     <div class='rule'>水平方向没有外力，系统水平动量 <span class='v'>p</span> 与质心水平速度 <span class='v'>v</span><sub>C</sub> 全程不变；任意时刻 <span class='v c1'>v</span><sub>球对地</sub> = <span class='v c2'>V</span><sub>槽对地</sub> + <span class='v c3'>v</span><sub>球对槽</sub>，三者首尾相接成三角形。飞出瞬间 <span class='v c3'>v</span><sub>球对槽</sub> 沿槽口切线方向。</div>
     <div class='hint' id='hint'>拖动滑块改变参数（自动回到 t=0）；拖时间滑块可逐帧查看。</div>
   </div>
@@ -138,7 +138,6 @@ var LW=940, LH=670;
 var G=10, R=1.0, HB=0.22, RB=0.09, YG=RB, Y0=R+HB;
 var D2R=Math.PI/180, PI=Math.PI, TAU=2*PI;
 var GY=296, SCX=470;                        /* 地面线像素 y、画面水平中心 */
-var SC_LIST=[130,112,96,82,70,60,50,42,36,30];
 var PX0=68, PX1=566, PYT=372, PYB=556;      /* v-t 绘图区 */
 var VCX=764, VCY=482, VRAD=112;             /* 矢量图原点与可用半径 */
 var VS_LIST=[16,13,11,9,7.5,6,5,4,3.2];     /* 矢量图 px/(m/s) */
@@ -340,27 +339,14 @@ function simulate(){
     rec();
     if(stop) break;
   }
-  /* 标尺与量程 */
-  var i,n=A.t.length, yMax=0, xHalf=0, vMax=0, vv, aa, bb, maxHE=0;
-  var lipTop=Math.max(Y0-R*Math.cos(thL), Y0-R*Math.cos(thR));
+  /* 标尺与量程：场景比例固定（112 px/m，槽半径恒 112 px，不随参数变化） */
+  var i,n=A.t.length, vMax=0, vv, k;
   for(i=0;i<n;i++){
-    if(A.by[i]+RB>yMax) yMax=A.by[i]+RB;
-    if(Math.abs(A.bx[i]-A.gx[i])<4){
-      aa=Math.abs(A.bx[i]-A.xc[i])+RB; if(aa>xHalf) xHalf=aa;
-    }
-    bb=Math.abs(A.gx[i]-A.xc[i])+R+0.16; if(bb>xHalf) xHalf=bb;
     vv=Math.abs(A.bvx[i]); if(vv>vMax) vMax=vv;
     vv=Math.abs(A.gv[i]); if(vv>vMax) vMax=vv;
     vv=Math.abs(A.bvy[i]); if(vv>vMax) vMax=vv;
-    if(Math.abs(A.bx[i]-A.gx[i])<6){
-      aa=(Math.max(A.gx[i]+R+0.2,A.bx[i]+RB)-Math.min(A.gx[i]-R-0.2,A.bx[i]-RB))/2;
-    } else aa=R+0.2;
-    if(aa>maxHE) maxHE=aa;
   }
-  if(lipTop+0.1>yMax) yMax=lipTop+0.1;
-  var need=Math.min((GY-26)/Math.max(yMax,0.4),(SCX-26)/Math.max(xHalf,0.5));
-  var sc=SC_LIST[SC_LIST.length-1], k;
-  for(k=0;k<SC_LIST.length;k++){ if(SC_LIST[k]<=need){ sc=SC_LIST[k]; break; } }
+  var sc=112;
   var vq=[2,3,4,5,6,8,10,12,16,20,25,30], VMAX=vq[vq.length-1];
   for(k=0;k<vq.length;k++){ if(vq[k]>=vMax*1.08){ VMAX=vq[k]; break; } }
   var vs=VS_LIST[VS_LIST.length-1], vmaxAll=0;
@@ -370,15 +356,9 @@ function simulate(){
     vv=Math.abs(A.gv[i]); if(vv>vmaxAll) vmaxAll=vv;
   }
   for(k=0;k<VS_LIST.length;k++){ if(VS_LIST[k]*vmaxAll<=VRAD){ vs=VS_LIST[k]; break; } }
-  var vC0=Math.abs(m*A.bvx[0]+M*A.gv[0])/(m+M);
-  var dzNeed=maxHE+0.7+2*vC0;
-  var dzsc=SC_LIST[SC_LIST.length-1];
-  for(k=0;k<SC_LIST.length;k++){ if(SC_LIST[k]<=(SCX-26)/dzNeed){ dzsc=SC_LIST[k]; break; } }
-  if(dzsc>sc) dzsc=sc;
   var out=null,k2;
   for(k2=0;k2<ev.length;k2++){ if(ev[k2].k==='outR'||ev[k2].k==='outL'){ out=ev[k2]; break; } }
   A.n=n; A.ev=ev; A.stop=stop; A.sc=sc; A.VMAX=VMAX; A.vs=vs; A.thL=thL; A.thR=thR;
-  A.dzsc=dzsc;
   A.tEnd=A.t[n-1]; A.out=out; A.p0=m*A.bvx[0]+M*A.gv[0]; A.e0=energyAt(A,0);
   return A;
 }
@@ -450,7 +430,7 @@ function syw(y){return GY-y*SM.sc;}
 var camNow=null;    /* 死区镜头的当前位置（世界坐标），参数变化时归 null */
 function drawScene(TH){
   var lock=kCam.checked, i=idxAt(tCur);
-  var sc=lock?SM.dzsc:SM.sc;
+  var sc=SM.sc;
   /* 死区：镜头平时不动，物体中点偏离超过死区才向它平移（每帧限步长，呈平滑追焦） */
   var g0=SM.gx[i]-R-0.2, g1=SM.gx[i]+R+0.2;
   var bNear=Math.abs(SM.bx[i]-SM.gx[i])<6;
