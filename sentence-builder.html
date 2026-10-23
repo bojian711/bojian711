@@ -1716,8 +1716,7 @@ function renderMy(){
   var h='';
   for(var i=0;i<S.my.length;i++){
     var it=S.my[i];
-    var drTag=/^〔草稿〕/.test(it.zh)? ' <span class=\'tg warn\'>草稿</span>' : '';
-    h+='<div class=\'li\'><div class=\'t\'>'+esc(it.zh)+drTag+'<span class=\'s\'>'+esc(it.en)+'</span></div>'+
+    h+='<div class=\'li\'><div class=\'t\'>'+esc(it.zh)+'<span class=\'s\'>'+esc(it.en)+'</span></div>'+
        '<button class=\'x\' type=\'button\' data-myed=\''+i+'\' title=\'编辑\' style=\'margin-right:4px\'>✎</button>'+
        '<button class=\'x\' type=\'button\' data-del=\''+esc(it.id)+'\' title=\'删除\'>&times;</button></div>';
   }
@@ -1980,7 +1979,7 @@ function editMy(i){
     var p=parseBlock(it.b[k]);
     E.blocks.push({t:p.t, to:p.to, role:(it.roles&&it.roles[k])||'A'});
   }
-  el('inZh').value=it.zh.replace(/^〔草稿〕/,'');
+  el('inZh').value=it.zh;
   el('inEn').value=it.en;
   el('inTip').value=it.tip||'';
   el('inTags').value=it.tags.join(',');
@@ -2309,8 +2308,41 @@ function autoZh(en, srcZh){
     else zz.push(seg.replace(/^(a|an|the)\s+/i,''));
   }
   var draft=zz.join('，').replace(/，+/g,'，').replace(/，$/,'');
-  if(draft) return {zh:'〔草稿〕'+draft, st:'dr', gloss:glossTxt};
-  return {zh:'〔草稿〕'+String(en).replace(/[.!?]+$/,''), st:'dr', gloss:''};
+  if(draft) return {zh:draft, st:'dr', gloss:glossTxt};
+  return {zh:String(en).replace(/[.!?]+$/,''), st:'dr', gloss:''};
+}
+/* 联网翻译（MyMemory，免密钥）：浏览器直接调，配不出的句子交给它，词典直译只做断网兜底 */
+function netTranslate(en){
+  return new Promise(function(res){
+    if(!window.fetch){ res(null); return; }
+    var u='https://api.mymemory.translated.net/get?q='+encodeURIComponent(en)+'&langpair=en|zh-CN';
+    window.fetch(u).then(function(r){ return r.json(); }).then(function(j){
+      var t=j && j.responseData && j.responseData.translatedText;
+      if(t && String(j.responseStatus)==='200' && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|INVALID/i.test(t)) res(t);
+      else res(null);
+    }).catch(function(){ res(null); });
+  });
+}
+/* 批量面板里把词典直译的句子联网重翻，翻好的直接替换 */
+function upgradeDrafts(cb){
+  var jobs=[], idx=[], i;
+  for(i=0;i<A.rows.length;i++){
+    if(A.rows[i].it._st==='dr'){ idx.push(i); jobs.push(netTranslate(A.rows[i].it.en)); }
+  }
+  if(!jobs.length){ cb && cb(true); return; }
+  var msg=el('inAutoMsg');
+  msg.className='msg';
+  msg.textContent='正在联网翻译 '+jobs.length+' 句…';
+  Promise.all(jobs).then(function(ts){
+    var ok=0, k;
+    for(k=0;k<ts.length;k++){
+      if(ts[k]){ A.rows[idx[k]].it.zh=ts[k]; A.rows[idx[k]].it._st='tr'; ok+=1; }
+    }
+    renderAuto();
+    msg.className='msg ok';
+    msg.textContent='翻译完成：联网翻好 '+ok+' 句'+(ok<jobs.length? '，另有 '+(jobs.length-ok)+' 句用了词典直译（可稍后在词库里核对）' : '')+'。确认没问题就点「把勾选的加入词库」。';
+    cb && cb(true);
+  });
 }
 /* 自动分类：时态 + 语法点 + 话题 */
 function autoTags(en, blocks){
@@ -2499,12 +2531,13 @@ function autoRun(){
   renderAuto();
   msg.className='msg ok';
   msg.textContent='抽出 '+A.rows.length+' 句：已自动分词块、标词形变化、配翻译、出题、打标签。中文要改就直接改，勾掉的不会入库。';
+  upgradeDrafts();
 }
 function renderAuto(){
   var box=el('inAutoList'), h='', i, x;
   for(i=0;i<A.rows.length;i++){
     x=A.rows[i].it;
-    var stTag=(x._st==='ok')? '' : (x._st==='dr'? '<span class=\'tg warn\'>草稿翻译</span>' : '<span class=\'tg warn\'>待核</span>');
+    var stTag=(x._st==='ok' || x._st==='tr')? '' : (x._st==='dr'? '<span class=\'tg warn\'>词典直译</span>' : '');
     h+='<div class=\'arow'+(A.rows[i].on? '' : ' off')+'\' data-i=\''+i+'\'>'+
        '<div class=\'top\'><input type=\'checkbox\' data-ck=\''+i+'\''+(A.rows[i].on? ' checked' : '')+'>'+
        '<input type=\'text\' class=\'zh\' data-zh=\''+i+'\' value=\''+esc(x.zh)+'\' placeholder=\'中文翻译（要改就在这儿改）\'></div>'+
@@ -2544,7 +2577,7 @@ function autoCommit(){
   if(!n){ msg.className='msg ng'; msg.textContent='没有可入库的句子：要么没勾选，要么中文还是「{{待核}}」。'; return; }
   S.my=added.concat(S.my); saveMy(); rebuild(); renderMy();
   msg.className='msg ok';
-  msg.textContent='已加入 '+n+' 句'+(dr? '（其中 '+dr+' 句中文是机翻草稿，去「词库」里点 ✎ 随时改）' : '')+'，词库现有 '+(S.my.length+BUILTIN.length)+' 句。';
+  msg.textContent='已加入 '+n+' 句'+(dr? '（其中 '+dr+' 句是词典直译，可去「词库」点 ✎ 随时改）' : '')+'，词库现有 '+(S.my.length+BUILTIN.length)+' 句。';
   A.rows=[]; el('inAutoList').innerHTML='';
 }
 /* 记住人工确认过的翻译，下次遇到同样的句子直接复用 */
@@ -2579,18 +2612,18 @@ function ocrLines(txt){
   }
   return out;
 }
-/* OCR 专用入库：全部进词库，草稿句标出来等用户在词库里改 */
+/* OCR 专用入库：全部进词库，词典直译的句子报个数等用户在词库里核对 */
 function ocrCommit(){
-  var n=0, dr=0, i, added=[];
+  var n=0, gloss=0, i, added=[];
   for(i=0;i<A.rows.length;i++){
     var it=A.rows[i].it;
     if(it._st==='ok') rememberGloss(it);
-    if(it._st==='dr') dr+=1;
+    if(it._st==='dr') gloss+=1;
     added.push(it); n+=1;
   }
   if(n){ S.my=added.concat(S.my); saveMy(); rebuild(); renderMy(); }
   A.rows=[]; el('inAutoList').innerHTML='';
-  return {added:n, drafts:dr};
+  return {added:n, gloss:gloss};
 }
 function doOcr(){
   if(!E.srcBlob){ srcMsg('先选一张截图，或用手机拍一张。','ng'); return; }
@@ -2628,9 +2661,12 @@ function runTesseract(){
     el('inBulk').value=lines.join('\n');
     switchPane('bulk');
     autoRun();
-    var r=ocrCommit();
-    srcMsg('识别出 '+lines.length+' 行素材：'+r.added+' 句已全部入词库'+
-           (r.drafts? '，其中 '+r.drafts+' 句中文是机翻草稿（去「词库」点 ✎ 随时改）' : '')+'。','ok');
+    /* 词典直译的句子先联网重翻，翻完再整体入库 */
+    upgradeDrafts(function(){
+      var r=ocrCommit();
+      srcMsg('识别出 '+lines.length+' 行素材：'+r.added+' 句已入词库'+
+             (r.gloss? '，其中 '+r.gloss+' 句是词典直译（联网翻译没成功），建议在词库里点 ✎ 核对' : '')+'。','ok');
+    });
   }).catch(function(e){ srcMsg('识别失败：'+(e && e.message || e),'ng'); });
 }
 function autoEdit(i){
@@ -2641,7 +2677,7 @@ function autoEdit(i){
     var p=parseBlock(x.b[k]);
     E.blocks.push({t:p.t, to:p.to, role:(x.roles&&x.roles[k])||'A'});
   }
-  el('inZh').value=x.zh.replace(/^〔草稿〕/,'');
+  el('inZh').value=x.zh;
   el('inEn').value=x.en;
   el('inTip').value=x.tip||'';
   el('inTags').value=x.tags.join(',');
@@ -2771,7 +2807,7 @@ window.SB={S:S, buildEn:buildEn, parseBlock:parseBlock, diffPairs:diffPairs, nor
   autoOne:autoOne, autoRun:autoRun, autoCommit:autoCommit, autoEdit:autoEdit, autoToggleAll:autoToggleAll,
   A:A, switchPane:switchPane, DICT:DICT, normItem:normItem, baseVerbQ:baseVerbQ,
   parseGloss:parseGloss, dictGloss:dictGloss, dictImport:dictImport, dictClear:dictClear, UDICT:UDICT,
-  ocrLines:ocrLines, ocrCommit:ocrCommit, doOcr:doOcr, editMy:editMy};
+  ocrLines:ocrLines, ocrCommit:ocrCommit, doOcr:doOcr, editMy:editMy, netTranslate:netTranslate, upgradeDrafts:upgradeDrafts};
 </script>
 </body>
 </html>
