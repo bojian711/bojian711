@@ -98,9 +98,9 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
     </div>
     <div class='row' id='rHalf' style='margin-top:7px;display:none'>
       <div class='ctl'><span class='lb'>边界倾角 <span class='v'>α</span></span>
-        <input id='sal' type='range' min='15' max='80' step='1' value='40'>
+        <input id='sal' type='range' min='0' max='360' step='1' value='40'>
         <output id='oal'>40</output><span class='unit'>°</span></div>
-      <div class='ctl'><span class='seg'>场区在边界线上方，粒子自左侧水平射入</span></div>
+      <div class='ctl'><span class='seg'>场区在边界法向一侧；α &gt; 180° 时场区翻到下方</span></div>
     </div>
     <div class='row' id='rTri' style='margin-top:7px;display:none'>
       <div class='ctl'><span class='lb'>边长 <span class='v'>a</span></span>
@@ -127,6 +127,8 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <label class='chk'><input id='kTraj' type='checkbox' checked>轨迹</label>
       <label class='chk'><input id='kVec' type='checkbox' checked>速度 / 洛伦兹力</label>
       <label class='chk'><input id='kGrid' type='checkbox'>网格</label>
+      <label class='chk'><input id='kGhost' type='checkbox'>保留旧轨迹</label>
+      <button id='bGClear'>清除旧轨迹</button>
     </div>
     <div class='readout'>
       <span><span class='v'>r</span><span class='n'> = </span><span class='n' id='oR'>—</span></span>
@@ -175,7 +177,15 @@ var spd=1, running=true;
 var st={x:STARTX, y:0, ux:1, uy:0, inF:false};
 var traj=[], tIn=0, thAcc=0, thOut=null, tOut=null, captured=false, endT=-1;
 var entryP=null, entryD=null, exitP=null, exitD=null;
-var showTraj=true, showVec=true, showGrid=false;
+var showTraj=true, showVec=true, showGrid=false, showGhost=false;
+var ghosts=[];                 /* 旧轨迹快照，最多 6 条，用于改参数前后对比 */
+function snapGhost(){
+  if(!showGhost) return;
+  if(traj.length>8){
+    ghosts.push(traj.slice());
+    while(ghosts.length>6) ghosts.shift();
+  }
+}
 
 /* ===== 小工具 ===== */
 function num(v,d){
@@ -300,7 +310,10 @@ function triVerts(a,b,c){
 function inside(x,y){
   if(shape==='rect') return Math.abs(x)<=RW/2+1e-7 && Math.abs(y)<=RH/2+1e-7;
   if(shape==='circ') return x*x+y*y<=CR*CR+1e-7;
-  if(shape==='half') return y > -Math.tan(HAL*PI/180)*(x-HQX)-1e-7;
+  if(shape==='half'){
+    var ar=HAL*PI/180;
+    return Math.sin(ar)*(x-HQX)+Math.cos(ar)*y > -1e-7;
+  }
   if(shape==='tri'){
     if(!TV) return false;
     for(var i=0;i<3;i++){
@@ -397,16 +410,16 @@ function drawField(T){
     ctx.lineTo(X(TV[2][0]),Y(TV[2][1]));
     ctx.closePath(); ctx.fill(); ctx.stroke();
   }else if(shape==='half'){
-    var kk=Math.tan(HAL*PI/180);
+    var ar=HAL*PI/180, nx=Math.sin(ar), ny=Math.cos(ar), dx=Math.cos(ar), dy=-Math.sin(ar), BB=260;
     ctx.beginPath();
-    ctx.moveTo(X(VX0),Y(-kk*(VX0-HQX)));
-    ctx.lineTo(X(VX1),Y(-kk*(VX1-HQX)));
-    ctx.lineTo(X(VX1),Y(VY1+8));
-    ctx.lineTo(X(VX0),Y(VY1+8));
+    ctx.moveTo(X(HQX+dx*BB),Y(dy*BB));
+    ctx.lineTo(X(HQX-dx*BB),Y(-dy*BB));
+    ctx.lineTo(X(HQX-dx*BB+nx*BB),Y(-dy*BB+ny*BB));
+    ctx.lineTo(X(HQX+dx*BB+nx*BB),Y(dy*BB+ny*BB));
     ctx.closePath(); ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(X(VX0),Y(-kk*(VX0-HQX)));
-    ctx.lineTo(X(VX1),Y(-kk*(VX1-HQX)));
+    ctx.moveTo(X(HQX+dx*BB),Y(dy*BB));
+    ctx.lineTo(X(HQX-dx*BB),Y(-dy*BB));
     ctx.stroke();
   }
 }
@@ -431,6 +444,18 @@ function drawBSym(T){
     }
   }
 }
+function drawGhosts(T){
+  if(!showGhost||!ghosts.length) return;
+  var g,i,p,tr;
+  ctx.strokeStyle=T.curveDim; ctx.lineWidth=2.0; ctx.lineJoin='round'; ctx.lineCap='round';
+  for(g=0;g<ghosts.length;g++){
+    tr=ghosts[g];
+    if(tr.length<2) continue;
+    ctx.beginPath();
+    for(i=0;i<tr.length;i++){p=tr[i]; if(i===0) ctx.moveTo(X(p[0]),Y(p[1])); else ctx.lineTo(X(p[0]),Y(p[1]));}
+    ctx.stroke();
+  }
+}
 function drawTraj(T){
   if(!showTraj) return;
   var i,p;
@@ -453,14 +478,17 @@ function drawCircle(T){
 }
 function drawVec(T){
   if(!showVec) return;
-  var px=X(st.x), py=Y(st.y), s=qs*bd, nx, ny;
-  if(s>0){nx=st.uy; ny=-st.ux;} else {nx=-st.uy; ny=st.ux;}
+  var px=X(st.x), py=Y(st.y);
   var vx=px+st.ux*38, vy=py-st.uy*38;
-  var fx=px+nx*30, fy=py-ny*30;
   arrow2(px,py,vx,vy,T.p3,2.2);
-  arrow2(px,py,fx,fy,T.p2,2.0);
   rtextBox([{t:'v',v:true}],vx+st.ux*9,vy-st.uy*9,14,T.p3,'center','middle');
-  rtextBox([{t:'F',v:true}],fx+nx*9,fy-ny*9,14,T.p2,'center','middle');
+  if(st.inF){
+    var s=qs*bd, nx, ny;
+    if(s>0){nx=st.uy; ny=-st.ux;} else {nx=-st.uy; ny=st.ux;}
+    var fx=px+nx*30, fy=py-ny*30;
+    arrow2(px,py,fx,fy,T.p2,2.0);
+    rtextBox([{t:'F',v:true}],fx+nx*9,fy-ny*9,14,T.p2,'center','middle');
+  }
 }
 function drawAngle(T){
   if(!exitP||!entryP||thOut===null) return;
@@ -485,7 +513,7 @@ function drawAngle(T){
   rtextBox([{t:'θ',v:true},' = '+num(thOut*180/PI,1)+'°'],ex+Math.cos(mid)*(rr+16),ey+Math.sin(mid)*(rr+16),14,T.fg,'center','middle');
 }
 function drawShapeLabel(T){
-  var kk, i;
+  var i;
   if(shape==='rect'){
     rtextBox([{t:'W',v:true},' = '+num(RW,0)+' cm'],X(0),Y(RH/2)-9,13,T.muted,'center','bottom');
     rtextBox([{t:'H',v:true},' = '+num(RH,0)+' cm'],X(RW/2)+9,Y(0),13,T.muted,'left','middle');
@@ -506,9 +534,10 @@ function drawShapeLabel(T){
       rtextBox([{t:nm[i],v:true},' = '+num(sl,0)],X(ex),Y(ey),13,T.muted,'center','middle');
     }
   }else if(shape==='half'){
-    kk=Math.tan(HAL*PI/180);
+    var ar=HAL*PI/180, nx=Math.sin(ar), ny=Math.cos(ar);
     rtextBox([{t:'α',v:true},' = '+num(HAL,0)+'°'],X(HQX)+14,Y(0)+22,14,T.muted,'left','middle');
-    rtextBox(['场区'],X(20),Y(20),13,T.muted,'center','middle');
+    var fx2=clamp(HQX+nx*17,VX0+10,VX1-10), fy2=clamp(ny*17,VY0+8,VY1-8);
+    rtextBox(['场区'],X(fx2),Y(fy2),13,T.muted,'center','middle');
   }
 }
 function drawLegend(T){
@@ -519,7 +548,7 @@ function drawLegend(T){
   arrow2(x,y+24,x+22,y+24,T.p3,2.2);
   rtext([{t:'v',v:true},' 速度'],x+27,y+24,13,T.muted,'left','middle');
   arrow2(x,y+43,x+22,y+43,T.p2,2.0);
-  rtext([{t:'F',v:true},' 洛伦兹力'],x+27,y+43,13,T.muted,'left','middle');
+  rtext([{t:'F',v:true},' 洛伦兹力（仅场内）'],x+27,y+43,13,T.muted,'left','middle');
   var sx=16, sy=LH-26;
   line(sx,sy,sx+20*PX,sy,T.muted,1.4);
   line(sx,sy-4,sx,sy+4,T.muted,1.4);
@@ -536,6 +565,7 @@ function draw(){
   if(showGrid) drawGrid(T);
   drawField(T);
   drawBSym(T);
+  drawGhosts(T);
   drawTraj(T);
   drawCircle(T);
   drawAngle(T);
@@ -577,6 +607,7 @@ function upd(){
 }
 function hint(s){$('hint').textContent=s;}
 function clearRun(){
+  snapGhost();
   traj.length=0; traj.push([st.x,st.y]);
   thAcc=0; tIn=0; thOut=null; tOut=null; captured=false; endT=-1;
   exitP=null; exitD=null;
@@ -594,7 +625,7 @@ bindRange('sv',function(v){v0=v;},'速率 v 变大 → 半径 r 变大，但周�
 bindRange('sb',function(v){Bm=v;},'磁感应强度 B 变大 → 半径 r 变小、周期 T 变小，偏转更明显。');
 bindRange('srw',function(v){RW=v;},'矩形加宽：粒子在场内的路程变长，出射点右移。');
 bindRange('srh',function(v){RH=v;},'矩形加高：粒子更不容易从上（下）边界射出。');
-bindRange('sal',function(v){HAL=v;},'单边直线场区：偏转角由入射方向与边界的夹角定，与 v、B、m 无关。');
+bindRange('sal',function(v){HAL=v;},'边界倾角 α 可调 0–360°：α∈(0,180°) 场区在上方；α>180° 翻到下方；90°/270° 附近粒子可能不进场或一直被困。');
 bindRange('scr',function(v){CR=v;},'圆形场区：沿半径射入必沿半径射出，tan(θ/2) = R/r。');
 function triUpd(){
   var v=triVerts(tA0,tB0,tC0);
@@ -617,6 +648,7 @@ function setShape(s){
   for(k in map){ if(Object.prototype.hasOwnProperty.call(map,k)) $(map[k]).style.display=(k===s)?'flex':'none'; }
   for(k in btns){ if(Object.prototype.hasOwnProperty.call(btns,k)) $(btns[k]).className=(k===s)?'on':''; }
   if(s==='tri'&&!TV) TV=triVerts(tA0,tB0,tC0);
+  snapGhost();
   reset(); upd();
 }
 $('bRect').addEventListener('click',function(){setShape('rect'); hint('矩形有界：出射边由 r 与矩形尺寸共同决定。');});
@@ -642,7 +674,7 @@ $('bPlay').addEventListener('click',function(){
   $('bPlay').textContent=running?'暂停':'播放';
   $('bPlay').className=running?'on':'';
 });
-$('bReset').addEventListener('click',function(){ reset(); upd(); hint('已复位：粒子回到左侧起点重新射入。'); });
+$('bReset').addEventListener('click',function(){ snapGhost(); reset(); upd(); hint('已复位：粒子回到左侧起点重新射入。'); });
 function setSpd(v){
   spd=v;
   $('bS1').className=v===0.5?'on':'';
@@ -656,6 +688,12 @@ $('bS3').addEventListener('click',function(){setSpd(2);});
 $('kTraj').addEventListener('change',function(){showTraj=$('kTraj').checked;});
 $('kVec').addEventListener('change',function(){showVec=$('kVec').checked;});
 $('kGrid').addEventListener('change',function(){showGrid=$('kGrid').checked;});
+$('kGhost').addEventListener('change',function(){
+  showGhost=$('kGhost').checked;
+  if(!showGhost){ ghosts.length=0; hint('已关闭对比并清除旧轨迹。'); }
+  else hint('已开启对比：改参数、换场区或点「重来」时，旧轨迹以浅色保留（最多 6 条）。');
+});
+$('bGClear').addEventListener('click',function(){ ghosts.length=0; hint('已清除全部旧轨迹。'); });
 
 /* ===== 主循环 ===== */
 function resize(){
@@ -675,7 +713,7 @@ function step(ts){
 }
 window.addEventListener('resize',resize);
 if(D.fonts){D.fonts.load('italic 14px KaTeX_Math'); D.fonts.load('14px KaTeX_Main');}
-showTraj=$('kTraj').checked; showVec=$('kVec').checked; showGrid=$('kGrid').checked;
+showTraj=$('kTraj').checked; showVec=$('kVec').checked; showGrid=$('kGrid').checked; showGhost=$('kGhost').checked;
 TV=triVerts(tA0,tB0,tC0);
 resize(); reset(); upd();
 requestAnimationFrame(step);
