@@ -94,6 +94,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <label class='chk'><input id='kTr' type='checkbox' checked>显示轨迹</label>
       <label class='chk'><input id='kAr' type='checkbox' checked>显示速度矢量</label>
       <label class='chk'><input id='kFx' type='checkbox'>矢量图定格飞出瞬间</label>
+      <label class='chk'><input id='kCam' type='checkbox' checked>镜头固定于地面（快出画才平移）</label>
     </div>
     <div class='row' style='margin-top:8px'>
       <button id='bPlay'>暂停</button>
@@ -111,6 +112,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span><span class='v c1'>v</span><sub>球x</sub> = <span class='n' id='rVx'>—</span></span>
       <span><span class='v c1'>v</span><sub>球y</sub> = <span class='n' id='rVy'>—</span></span>
       <span><span class='v c2'>V</span><sub>槽</sub> = <span class='n' id='rGv'>—</span></span>
+      <span><span class='v c2'>x</span><sub>槽</sub>（对地位移） = <span class='n' id='rGx'>—</span></span>
       <span><span class='v c3'>v</span><sub>球对槽</sub> = <span class='n' id='rVr'>—</span></span>
       <span>水平总动量 <span class='v'>p</span> = <span class='v'>p</span><sub>0</sub> <span class='n' id='rP'>—</span></span>
       <span>质心水平速度 <span class='n' id='rVc'>—</span></span>
@@ -119,6 +121,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
     <div class='rule' id='rOut'>飞出瞬间：—</div>
     <div class='rule'>角度基准：进入位置 <span class='v'>θ</span><sub>0</sub> 与槽口角 <span class='v'>α</span> 同为半径与圆心水平线的夹角——0° 是圆心正右方，−90° 是最低点，±180° 是正左方，向上为正。球在圆心左侧时槽被推向左，在右侧时被推向右。</div>
     <div class='rule'>初动量：球槽初速为零，小球以 <span class='v'>v</span><sub>0</sub>（对地，沿进入点切线）进入，故系统水平初动量 <span class='v'>p</span><sub>0</sub> = <span class='v c1'>m</span> <span class='v'>v</span><sub>0,ₓ</sub>——在最低点进入时即 <span class='v c1'>m</span><span class='v'>v</span><sub>0</sub>，不为零；质心水平速度 <span class='v'>v</span><sub>C</sub> = <span class='v'>p</span><sub>0</sub>/(<span class='v c1'>m</span>+<span class='v c2'>M</span>) 全程不变。</div>
+    <div class='rule'>参考系：网格与地面刻度一律锚在<b>地面</b>上。<span class='v'>V</span><sub>槽</sub> 与 <span class='v'>v</span><sub>球</sub> 都是<b>对地</b>速度，画面下方每 2 m 一根刻度桩标出地面坐标 <span class='v'>x</span>。勾选「镜头固定于地面」时画面就是地面参考系；取消勾选则镜头随质心匀速平移，此时画面看上去在整体漂移，读数仍以地面刻度为准。</div>
     <div class='rule'>水平方向没有外力，系统水平动量 <span class='v'>p</span> 与质心水平速度 <span class='v'>v</span><sub>C</sub> 全程不变；任意时刻 <span class='v c1'>v</span><sub>球对地</sub> = <span class='v c2'>V</span><sub>槽对地</sub> + <span class='v c3'>v</span><sub>球对槽</sub>，三者首尾相接成三角形。飞出瞬间 <span class='v c3'>v</span><sub>球对槽</sub> 沿槽口切线方向。</div>
     <div class='hint' id='hint'>拖动滑块改变参数（自动回到 t=0）；拖时间滑块可逐帧查看。</div>
   </div>
@@ -150,7 +153,8 @@ var HALO='#ffffff';
 
 var s1=$('s1'), s2=$('s2'), s3=$('s3'), s4=$('s4'), s5=$('s5'), s6=$('s6'), sT=$('sT');
 var o1=$('o1'), o2=$('o2'), o3=$('o3'), o4=$('o4'), o5=$('o5'), o6=$('o6'), oT=$('oT');
-var rS=$('rS'), rVx=$('rVx'), rVy=$('rVy'), rGv=$('rGv'), rVr=$('rVr'), rP=$('rP'), rVc=$('rVc'), rE=$('rE');
+var rS=$('rS'), rVx=$('rVx'), rVy=$('rVy'), rGv=$('rGv'), rGx=$('rGx'), rVr=$('rVr'), rP=$('rP'), rVc=$('rVc'), rE=$('rE');
+var kCam=$('kCam');
 var rOut=$('rOut'), hint=$('hint');
 var bPlay=$('bPlay'), bReset=$('bReset'), bJump=$('bJump'), bSpd=$('bSpd');
 var kDir=$('kDir'), kEl=$('kEl'), kTr=$('kTr'), kAr=$('kAr'), kFx=$('kFx');
@@ -337,7 +341,7 @@ function simulate(){
     if(stop) break;
   }
   /* 标尺与量程 */
-  var i,n=A.t.length, yMax=0, xHalf=0, vMax=0, vv, aa, bb;
+  var i,n=A.t.length, yMax=0, xHalf=0, vMax=0, vv, aa, bb, maxHE=0;
   var lipTop=Math.max(Y0-R*Math.cos(thL), Y0-R*Math.cos(thR));
   for(i=0;i<n;i++){
     if(A.by[i]+RB>yMax) yMax=A.by[i]+RB;
@@ -348,6 +352,10 @@ function simulate(){
     vv=Math.abs(A.bvx[i]); if(vv>vMax) vMax=vv;
     vv=Math.abs(A.gv[i]); if(vv>vMax) vMax=vv;
     vv=Math.abs(A.bvy[i]); if(vv>vMax) vMax=vv;
+    if(Math.abs(A.bx[i]-A.gx[i])<6){
+      aa=(Math.max(A.gx[i]+R+0.2,A.bx[i]+RB)-Math.min(A.gx[i]-R-0.2,A.bx[i]-RB))/2;
+    } else aa=R+0.2;
+    if(aa>maxHE) maxHE=aa;
   }
   if(lipTop+0.1>yMax) yMax=lipTop+0.1;
   var need=Math.min((GY-26)/Math.max(yMax,0.4),(SCX-26)/Math.max(xHalf,0.5));
@@ -362,9 +370,15 @@ function simulate(){
     vv=Math.abs(A.gv[i]); if(vv>vmaxAll) vmaxAll=vv;
   }
   for(k=0;k<VS_LIST.length;k++){ if(VS_LIST[k]*vmaxAll<=VRAD){ vs=VS_LIST[k]; break; } }
+  var vC0=Math.abs(m*A.bvx[0]+M*A.gv[0])/(m+M);
+  var dzNeed=maxHE+0.7+2*vC0;
+  var dzsc=SC_LIST[SC_LIST.length-1];
+  for(k=0;k<SC_LIST.length;k++){ if(SC_LIST[k]<=(SCX-26)/dzNeed){ dzsc=SC_LIST[k]; break; } }
+  if(dzsc>sc) dzsc=sc;
   var out=null,k2;
   for(k2=0;k2<ev.length;k2++){ if(ev[k2].k==='outR'||ev[k2].k==='outL'){ out=ev[k2]; break; } }
   A.n=n; A.ev=ev; A.stop=stop; A.sc=sc; A.VMAX=VMAX; A.vs=vs; A.thL=thL; A.thR=thR;
+  A.dzsc=dzsc;
   A.tEnd=A.t[n-1]; A.out=out; A.p0=m*A.bvx[0]+M*A.gv[0]; A.e0=energyAt(A,0);
   return A;
 }
@@ -378,6 +392,7 @@ function idxAt(t){
 
 /* ===== 重算 ===== */
 function recompute(){
+  camNow=null;
   var tl=thLim(), lo=Math.round(tl.L/D2R)-90, hi=Math.round(tl.R/D2R)-90;
   if(hi-lo>10){ lo+=3; hi-=3; }
   if(hi<lo){ var midq=Math.round((lo+hi)/2); lo=midq; hi=midq; }
@@ -406,6 +421,7 @@ function upd(){
   rVx.textContent=num(vx,2)+' m/s';
   rVy.textContent=num(vy,2)+' m/s';
   rGv.textContent=num(gv,2)+' m/s';
+  rGx.textContent=num(SM.gx[i],2)+' m';
   rVr.textContent=num(Math.hypot(vrx,vry),2)+' m/s';
   rP.textContent=num(m*vx+M*gv,3)+' kg\u00b7m/s';
   rVc.textContent=num((m*vx+M*gv)/(m+M),3)+' m/s';
@@ -425,48 +441,68 @@ function upd(){
 }
 
 /* ===== 场景绘图 ===== */
+/* ===== 场景绘图 =====
+   两套坐标：世界坐标 x（原点在地面、锚定不动）与画布坐标。
+   镜头锁定时 cam 为常数、画面即地面参考系；镜头跟随质心时 cam=质心位置，
+   网格与地面刻度仍锚在世界坐标上，于是整幅地面会随镜头流动。 */
 function sxw(x,cam){return SCX+(x-cam)*SM.sc;}
 function syw(y){return GY-y*SM.sc;}
+var camNow=null;    /* 死区镜头的当前位置（世界坐标），参数变化时归 null */
 function drawScene(TH){
-  var i=idxAt(tCur), cam=SM.xc[i];
-  var ox=sxw(SM.gx[i],cam), oy=syw(Y0), rr=R*SM.sc;
+  var lock=kCam.checked, i=idxAt(tCur);
+  var sc=lock?SM.dzsc:SM.sc;
+  /* 死区：镜头平时不动，物体中点偏离超过死区才向它平移（每帧限步长，呈平滑追焦） */
+  var g0=SM.gx[i]-R-0.2, g1=SM.gx[i]+R+0.2;
+  var bNear=Math.abs(SM.bx[i]-SM.gx[i])<6;
+  var t0=bNear?Math.min(g0,SM.bx[i]-RB):g0, t1=bNear?Math.max(g1,SM.bx[i]+RB):g1;
+  var cMid=(t0+t1)/2;
+  var cam;
+  if(lock){
+    var vh=(SCX-26)/sc, dead=vh-(t1-t0)/2-0.7;
+    if(camNow===null) camNow=cMid;
+    else if(dead>0){
+      var d=cMid-camNow;
+      if(Math.abs(d)>dead){ var dd=cMid-camNow, mstep=6/sc;   /* 越区则把镜头重新对准中心（限步长） */
+        camNow+=Math.abs(dd)<mstep?dd:(dd>0?mstep:-mstep); }
+    } else camNow=cMid;
+    cam=camNow;
+  } else { cam=SM.xc[i]; camNow=cam; }
+  function X_(w){return SCX+(w-cam)*sc;}
+  function Y_(w){return GY-w*sc;}
+  var ox=X_(SM.gx[i]), oy=Y_(Y0), rr=R*sc;
   var j,x,y,k;
-  /* 网格（1 m） */
+  var wl=cam-SCX/sc, wr=cam+(LW-SCX)/sc;
+  /* 网格：竖线锚在世界整米处 */
   ctx.save();
   ctx.strokeStyle=TH.grid; ctx.lineWidth=1;
   ctx.beginPath();
-  for(k=-24;k<=24;k++){
-    x=sxw(cam+k,cam);
-    if(x<2||x>LW-2) continue;
+  for(k=Math.ceil(wl);k<=Math.floor(wr);k++){
+    x=X_(k); if(x<2||x>LW-2) continue;
     ctx.moveTo(x,18); ctx.lineTo(x,GY);
   }
-  for(k=1;k<=6;k++){
-    y=GY-k*SM.sc; if(y<18) continue;
-    ctx.moveTo(0,y); ctx.lineTo(LW,y);
-  }
+  for(k=1;;k++){ y=GY-k*sc; if(y<18) break; ctx.moveTo(0,y); ctx.lineTo(LW,y); }
   ctx.stroke();
   ctx.restore();
-  /* 地面 */
+  /* 地面（斜纹锚在世界坐标上） */
   line(0,GY,LW,GY,TH.axis,1.4);
   ctx.strokeStyle=TH.tick; ctx.lineWidth=1;
   ctx.beginPath();
-  for(k=-80;k<=80;k++){
-    x=sxw(cam+k*0.25,cam);
-    if(x<-10||x>LW+10) continue;
+  for(k=Math.ceil(wl/0.25);k<=Math.floor(wr/0.25);k++){
+    x=X_(k*0.25); if(x<-10||x>LW+10) continue;
     ctx.moveTo(x,GY); ctx.lineTo(x-6,GY+9);
   }
   ctx.stroke();
-  rtext(['地面'],8,GY+22,13,TH.muted,'left','alphabetic',true);
+  rtext(['地面坐标 x / m'],8,GY+22,12.5,TH.muted,'left','alphabetic',true);
   /* 参考线（圆心水平线、竖直半径） */
   dash([4,4]);
   line(ox-1.3*rr,oy,ox+1.3*rr,oy,TH.tick,1);
-  line(ox,oy,ox,syw(Y0-R),TH.tick,1);
+  line(ox,oy,ox,Y_(Y0-R),TH.tick,1);
   dash();
   /* 槽体：弧 + 支柱 */
   ctx.strokeStyle=TH.body; ctx.lineWidth=6; ctx.lineCap='round';
   ctx.beginPath(); ctx.arc(ox,oy,rr,PI/2-SM.thR,PI/2-SM.thL); ctx.stroke();
   ctx.lineWidth=5;
-  ctx.beginPath(); ctx.moveTo(ox,syw(Y0-R)); ctx.lineTo(ox,GY-2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox,Y_(Y0-R)); ctx.lineTo(ox,GY-2); ctx.stroke();
   ctx.lineWidth=5;
   ctx.beginPath(); ctx.moveTo(ox-0.28*rr,GY-2); ctx.lineTo(ox+0.28*rr,GY-2); ctx.stroke();
   ctx.lineCap='butt';
@@ -494,22 +530,22 @@ function drawScene(TH){
   ctx.strokeStyle=TH.muted; ctx.lineWidth=1;
   ctx.beginPath(); ctx.arc(ox,oy,0.28*rr,0,-ph,ph>0); ctx.stroke();
   rtext([{t:'\u03b8',v:true},'\u2080'],ox+Math.cos(-ph/2)*(0.28*rr+14),oy+Math.sin(-ph/2)*(0.28*rr+14),13,TH.muted,'center','middle',true);
-  /* 轨迹 */
+  /* 轨迹（整条用当前镜头，避免混入不同时刻的平移） */
   if(kTr.checked&&i>0){
     ctx.strokeStyle=TH.p1; ctx.globalAlpha=0.5; ctx.lineWidth=1.6; ctx.lineJoin='round';
     ctx.beginPath();
     var stp=Math.max(1,Math.floor(i/900));
     for(j=0;j<=i;j+=stp){
-      x=sxw(SM.bx[j],SM.xc[j]); y=syw(SM.by[j]);
+      x=X_(SM.bx[j]); y=Y_(SM.by[j]);
       if(j===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
     }
     ctx.stroke(); ctx.globalAlpha=1;
   }
   /* 小球 */
-  var br=clamp(RB*SM.sc,5,13);
-  var px=sxw(SM.bx[i],cam), py=syw(SM.by[i]);
+  var br=clamp(RB*sc,5,13);
+  var px=X_(SM.bx[i]), py=Y_(SM.by[i]);
   ring(px,py,br,TH.p1,TH.bg,1.6);
-  /* 速度矢量 */
+  /* 速度矢量（对地） */
   if(kAr.checked){
     var vx=SM.bvx[i], vy=SM.bvy[i], gv=SM.gv[i];
     var L1=Math.min(Math.hypot(vx,vy)*ARSC,150);
@@ -521,12 +557,20 @@ function drawScene(TH){
     var L2=Math.min(Math.abs(gv)*ARSC,150);
     if(L2>6){
       var s2v=gv>0?1:-1;
-      arrow(ox+s2v*6,oy+22,ox+s2v*(6+L2),oy+22,TH.p2,2,6);
-      rtext([{t:'V',v:true}],ox+s2v*(6+L2+9),oy+22,13,TH.p2,'center','middle',true);
+      arrow(ox+s2v*6,Y_(Y0)-28,ox+s2v*(6+L2),Y_(Y0)-28,TH.p2,2,6);
+      rtext([{t:'V',v:true}],ox+s2v*(6+L2+9),Y_(Y0)-28,13,TH.p2,'center','middle',true);
     }
   }
+  /* 地面刻度桩：每 2 m，最后画并压底色，保证读数不被槽体压住 */
+  for(k=Math.ceil(wl/2)*2;k<=wr;k+=2){
+    x=X_(k); if(x<20||x>LW-20) continue;
+    line(x,GY,x,GY-9,TH.tick,1.2);
+    rtextBox([num(k,0)],x,GY-19,11.5,TH.muted,'center','alphabetic');
+  }
   /* 注记 */
-  rtext(['每格 1 m；镜头随系统质心平移'],LW-8,20,12.5,TH.muted,'right','alphabetic',true);
+  rtext([lock?'每格 1 m；镜头基本固定于地面，物体快出画时才平移'
+             :'每格 1 m；镜头随质心平移，网格与刻度仍锚在地面'],
+        LW-8,20,12.5,TH.muted,'right','alphabetic',true);
 }
 
 /* ===== v-t 图 ===== */
@@ -703,7 +747,7 @@ kFx.addEventListener('change',function(){ say(kFx.checked?(SM.out?'矢量图定�
 bPlay.addEventListener('click',function(){ playing=!playing; bPlay.textContent=playing?'暂停':'播放'; });
 bReset.addEventListener('click',function(){
   s1.value='-150'; s2.value='5'; s3.value='1'; s4.value='2'; s5.value='25'; s6.value='25';
-  kDir.checked=false; kEl.checked=false; kFx.checked=false;
+  kDir.checked=false; kEl.checked=false; kFx.checked=false; kCam.checked=true;
   syncParams();
   tCur=0; playing=true; bPlay.textContent='暂停'; spd=1; bSpd.textContent='速度 1×';
   recompute(); say('已复位。');
@@ -730,6 +774,9 @@ function step(ts){
   draw(); upd();
   requestAnimationFrame(step);
 }
+kCam.addEventListener('change',function(){ say(lockNote()); });
+function lockNote(){ return kCam.checked?'镜头基本固定于地面：画面即地面参考系，可直接读数；物体快出画边界时镜头才平移。':'镜头随系统质心平移：地面刻度桩会向左流动，请以刻度桩为准判断对地运动。'; }
+kCam.addEventListener('change',function(){ say(lockNote()); });
 window.addEventListener('resize',resize);
 if(D.fonts){D.fonts.load('italic 14px KaTeX_Math'); D.fonts.load('14px KaTeX_Main');}
 syncParams(); resize(); recompute();
