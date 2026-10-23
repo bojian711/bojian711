@@ -488,8 +488,8 @@ function drawScene(T){
   var lyL=GY+28;
   if(x2p+pw>SX0-10&&x2p<SX1+10){
     line(x2p,lyL-6,x2p,lyL+6,T.tick,1); line(x2p+pw,lyL-6,x2p+pw,lyL+6,T.tick,1);
-    arrow(x2p,lyL,x2p+pw-5,lyL,T.muted,1.2,4); arrow(x2p+pw,lyL,x2p+5,lyL,T.muted,1.2,4);
-    rtextBox([{t:'L = ',v:0},{t:num(P.L,1),v:0},{t:' m'}],x2p+pw/2,lyL+8,12.5,T.muted,'center','top');
+    arrow(x2p,lyL,x2p+pw-5,T.muted,1.2,4); arrow(x2p+pw,lyL,x2p+5,T.muted,1.2,4);
+    rtextBox([{t:'L',v:1},{t:' = ',v:0},{t:num(P.L,1),v:0},{t:' m'}],x2p+pw/2,lyL+8,12.5,T.muted,'center','top');
   }
   /* 木块 */
   rect0(x1p,yb,bw,bh,rgba(T.p1,0.30),T.p1,1.6);
@@ -503,21 +503,21 @@ function drawScene(T){
   }
   /* 摩擦力（绿色，方向即实际方向） */
   if(showF){
-    var FL=clamp(28,pw*0.5,28);
+    var FL=Math.min(28,pw*0.35);
     if(out.off){
-      if(Math.abs(out.v1)>1e-6) arrow(x1p+bw/2,yb+bh-5,x1p+bw/2-sgn(out.v1)*FL,yb+bh-5,T.p3,1.8,4.5);
-      if(Math.abs(out.v2)>1e-6) arrow(x2p+pw*0.55,PY_TOP+PH-5,x2p+pw*0.55-sgn(out.v2)*FL,PY_TOP+PH-5,T.p3,1.8,4.5);
+      if(Math.abs(out.v1)>1e-6) arrow(x1p+bw/2,yb+bh-5,x1p+bw/2-sgn(out.v1)*FL,T.p3,1.8,4.5);
+      if(Math.abs(out.v2)>1e-6) arrow(x2p+pw*0.55,PY_TOP+PH-5,x2p+pw*0.55-sgn(out.v2)*FL,T.p3,1.8,4.5);
     }else{
       var u=out.u, sg=u>0?-1:(u<0?1:0);   /* 块所受摩擦与相对速度反向 */
       if(sg!==0){
-        arrow(x1p+bw/2,yb+bh-5,x1p+bw/2+sg*FL,yb+bh-5,T.p3,1.8,4.5);
-        arrow(x2p+pw*0.55,PY_TOP+5,x2p+pw*0.55-sg*FL,PY_TOP+5,T.p3,1.8,4.5);
+        arrow(x1p+bw/2,yb+bh-5,x1p+bw/2+sg*FL,T.p3,1.8,4.5);
+        arrow(x2p+pw*0.55,PY_TOP+5,x2p+pw*0.55-sg*FL,T.p3,1.8,4.5);
       }
       var fg=0;
       if(Math.abs(out.v2)>1e-6) fg=-sgn(out.v2);
       else if(sg!==0) fg=sg;
       else fg=0;
-      if(fg!==0) arrow(x2p+pw*0.55,PY_TOP+PH-5,x2p+pw*0.55+fg*FL,PY_TOP+PH-5,T.p3,1.8,4.5);
+      if(fg!==0) arrow(x2p+pw*0.55,PY_TOP+PH-5,x2p+pw*0.55+fg*FL,T.p3,1.8,4.5);
     }
   }
   /* 木块跑出画面时给个指向 */
@@ -540,7 +540,7 @@ function drawScene(T){
     if(xa>=SX0-4&&xa<=SX1+4){ line(xa,ya-6,xa,ya+6,T.tick,1); arrow(ca,ya,cb-sgn(dx)*5,ya,T.fg,1.3,4); }
     if(xb>=SX0-4&&xb<=SX1+4){ line(xb,ya-6,xb,ya+6,T.tick,1); arrow(cb,ya,ca+sgn(dx)*5,ya,T.fg,1.3,4); }
     line(ca,ya,cb,ya,T.fg,1.3);
-    rtextBox([{t:'Δx = ',v:0},{t:num(dx,2),v:0},{t:' m'}],(ca+cb)/2,ya+8,12.5,T.fg,'center','top');
+    rtextBox([{t:'Δ',v:0},{t:'x',v:1},{t:' = ',v:0},{t:num(dx,2),v:0},{t:' m'}],(ca+cb)/2,ya+8,12.5,T.fg,'center','top');
   }
 }
 
