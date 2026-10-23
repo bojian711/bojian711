@@ -47,7 +47,7 @@ button{background:var(--btn);color:var(--fg);border:1px solid var(--line);
 </head>
 <body>
 <div class='wrap'>
-  <div class='head'>光的折射与全反射　<span class='v'>n</span><span class='n'><sub>1</sub> sin </span><span class='v'>θ</span><span class='n'><sub>1</sub> = </span><span class='v'>n</span><span class='n'><sub>2</sub> sin </span><span class='v'>θ</span><span class='n'><sub>2</sub></span></div>
+  <div class='head'>光的折射与全反射　<span class='v'>n</span><span class='n'><sub>1</sub> sin </span><span class='v'>i</span><span class='n'> = </span><span class='v'>n</span><span class='n'><sub>2</sub> sin </span><span class='v'>r</span></div>
   <canvas id='cv'></canvas>
   <div class='panel'>
     <div class='row'>
@@ -62,7 +62,7 @@ button{background:var(--btn);color:var(--fg);border:1px solid var(--line);
         <output id='oN2'>1.00</output>
       </div>
       <div class='ctl'>
-        <span class='lb'><span class='v c3'>θ</span><span class='n c3'><sub>1</sub></span>（入射角）</span>
+        <span class='lb'><span class='v c3'>i</span><span class='n c3'>（入射角）</span></span>
         <input id='sT' type='range' min='0' max='89' step='1' value='35'>
         <output id='oT'>35°</output>
       </div>
@@ -74,9 +74,10 @@ button{background:var(--btn);color:var(--fg);border:1px solid var(--line);
       <label class='chk'><input id='kAng' type='checkbox' checked>显示角度标注</label>
     </div>
     <div class='readout'>
-      <span>入射角 <span class='v'>θ</span><span class='n'><sub>1</sub></span> <span class='n' id='oT1'>35°</span></span>
-      <span>折射角 <span class='v'>θ</span><span class='n'><sub>2</sub></span> <span class='n' id='oT2'>—</span><span id='oTIR' style='display:none;color:var(--p1);font-weight:700'>　全反射</span></span>
-      <span>临界角 <span class='v'>θ</span><sub class='v'>c</sub> <span class='n' id='oTc'>—</span></span>
+      <span>入射角 <span class='v'>i</span> <span class='n' id='oT1'>35°</span></span>
+      <span>折射角 <span class='v'>r</span> <span class='n' id='oT2'>—</span><span id='oTIR' style='display:none;color:var(--p1);font-weight:700'>　全反射</span></span>
+      <span>临界角 <span class='v'>i</span><sub class='v'>c</sub> <span class='n' id='oTc'>—</span></span>
+      <span>相对折射率 <span class='v'>n</span><sub class='n'>21</sub> <span class='n'>= </span><span class='v'>n</span><sub class='n'>2</sub><span class='n'>/</span><span class='v'>n</span><sub class='n'>1</sub><span class='n'> = </span><span class='n' id='oN21'>—</span></span>
     </div>
     <div class='rule'>一句话结论：折射方向由 <span class='v'>n</span><span class='n'><sub>1</sub></span>、<span class='v'>n</span><span class='n'><sub>2</sub></span> 与入射角共同决定；<span class='v'>n</span><span class='n'><sub>1</sub></span> &gt; <span class='v'>n</span><span class='n'><sub>2</sub></span> 时存在临界角，入射角超过它即发生全反射。</div>
     <div class='hint' id='hint'>拖动画面中的光源（赭色圆点）改变入射角；把 <span class='v'>n</span><span class='n'><sub>1</sub></span> 调大、<span class='v'>n</span><span class='n'><sub>2</sub></span> 调小可看到全反射。</div>
@@ -103,7 +104,7 @@ var dragging=false;
 
 var sN1=$('sN1'), sN2=$('sN2'), sT=$('sT');
 var oN1=$('oN1'), oN2=$('oN2'), oT=$('oT');
-var oT1=$('oT1'), oT2=$('oT2'), oTc=$('oTc'), oTIR=$('oTIR'), hint=$('hint');
+var oT1=$('oT1'), oT2=$('oT2'), oTc=$('oTc'), oTIR=$('oTIR'), oN21=$('oN21'), hint=$('hint');
 var bGA=$('bGA'), bAG=$('bAG'), bReset=$('bReset'), kAng=$('kAng');
 var pTh=null, pN1=null, pN2=null, pTir=null;
 
@@ -247,14 +248,14 @@ function draw(){
       ctx.strokeStyle=T.muted; ctx.lineWidth=1.2; ctx.beginPath();
       ctx.arc(OX,OY,42, Math.min(aUp,aSrc), Math.max(aUp,aSrc)); ctx.stroke();
       var m1=(aUp+aSrc)/2;
-      labelBox([{t:'θ',v:true},{t:'1',sub:true}], OX+58*Math.cos(m1), OY+58*Math.sin(m1), T.fg, topBg, 'center');
+      labelBox([{t:'i',v:true}], OX+58*Math.cos(m1), OY+58*Math.sin(m1), T.fg, topBg, 'center');
     }
     if(!sn.tir && sn.th2>=6){
       var aRef=aDown+side*r2;
       ctx.strokeStyle=T.muted; ctx.lineWidth=1.2; ctx.beginPath();
       ctx.arc(OX,OY,42, Math.min(aDown,aRef), Math.max(aDown,aRef)); ctx.stroke();
       var m2=(aDown+aRef)/2;
-      labelBox([{t:'θ',v:true},{t:'2',sub:true}], OX+58*Math.cos(m2), OY+58*Math.sin(m2), T.fg, botBg, 'center');
+      labelBox([{t:'r',v:true}], OX+58*Math.cos(m2), OY+58*Math.sin(m2), T.fg, botBg, 'center');
     }
   }
   /* 介质与法线标签（最后画，带底色块防穿字） */
@@ -273,6 +274,7 @@ function upd(){
   oT2.textContent=sn.tir?'—':num(sn.th2,1)+'°';
   oTIR.style.display=sn.tir?'inline':'none';
   oTc.textContent=n1>n2?num(Math.asin(n2/n1)*180/PI,1)+'°':'—';
+  oN21.textContent=num(n2/n1,2);
   var msg='';
   if(pTir!==null){
     if(sn.tir&&!pTir) msg='入射角越过临界角 '+sp(oTc.textContent)+'，折射光消失，全部反射回介质 1。';
