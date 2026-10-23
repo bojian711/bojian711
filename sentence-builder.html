@@ -400,6 +400,20 @@ body.dragnow .vcard{opacity:0;visibility:hidden;transition:none}
       <div class='row' style='margin-bottom:10px'>
         <button class='gbtn on' id='tabOne' type='button'>单句录入</button>
         <button class='gbtn' id='tabBulk' type='button'>批量一键处理</button>
+        <button class='gbtn' id='tabDict' type='button'>词汇表</button>
+      </div>
+      <div id='paneDict' class='sec hidden'>
+        <div class='h3'>导入词汇表：扩大自动翻译和生词本的词典</div>
+        <div style='font-size:12px;color:var(--ink3);margin:-3px 0 8px;line-height:1.6'>
+          每行一条，支持四种写法：<b>apple=苹果</b>　<b>apple 苹果</b>　<b>apple|苹果</b>　<b>apple&#9;苹果</b>（tab 分隔）。词组也可以，如 <b>get up=起床</b>。导入后存在本机，自动配翻译的命中率会变高，收进生词本时自动带中文释义。
+        </div>
+        <textarea id='inDict' placeholder='apple=苹果&#10;get up=起床&#10;library 图书馆'></textarea>
+        <div class='row'>
+          <button class='gbtn' id='inDictAdd' type='button'>导入词汇表</button>
+          <button class='gbtn' id='inDictClear' type='button'>清空已导入</button>
+        </div>
+        <div class='msg' id='inDictMsg'></div>
+        <div id='inDictStat' style='font-size:12px;color:var(--ink3);line-height:1.8'></div>
       </div>
       <div id='paneBulk' class='sec hidden'>
         <div class='h3'>一键处理：贴一段素材，自动出句子</div>
@@ -451,8 +465,58 @@ body.dragnow .vcard{opacity:0;visibility:hidden;transition:none}
 
 <script>
 'use strict';
+/* ---------- 动词原形表 / 情态动词表（BUILTIN 规范化时就要用，必须放在最前） ---------- */
+var VBASE=('play go do have be can may must should will would like love read write watch study eat drink run swim '+
+ 'sing dance draw make take get give see buy finish clean visit help open close use learn speak talk say tell ask '+
+ 'want need think know find put bring wear sit stand walk ride drive fly work live stay wait begin start stop keep '+
+ 'look listen hear feel become show teach catch come build spend cost cut hurt let forget remember enjoy practice '+
+ 'answer follow move carry try call turn pick wash cook rain snow blow grow finish join leave arrive return travel '+
+ 'exercise rest sleep wake smile cry laugh worry decide plan hope wish believe understand improve change '+
+ 'meet bring send sell pay win lose hold mean fall feed fight dig hang hide hit lend lie rise shake shoot '+
+ 'shut sink smell spell spread stick strike sweep throw deal burn beat break choose freeze ring set steal '+
+ 'wear grow blow draw drink drive eat fly give hear know learn leave read ride say see sing speak stand '+
+ 'swim take teach tell think write become begin cut hurt put let read spread teach').split(' ');
+var VSET={};
+for(var _vi=0;_vi<VBASE.length;_vi++) VSET[VBASE[_vi]]=1;
+var MODALSET={};
+(function(){
+  var l='will would can could may might must should shall'.split(' ');
+  for(var i=0;i<l.length;i++) MODALSET[l[i]]=1;
+})();
+/* 双写末辅音白名单（isCVC 用，同样要在 BUILTIN 规范化前就绪） */
+var DBLW={begin:1,prefer:1,refer:1,occur:1,admit:1,regret:1,control:1,permit:1,forget:1,upset:1};
+var IRR2={};
+var IRR_PAST={};  /* 原形 -> 过去式（vPast 查这个，不再产出 goed 这类错误干扰项） */
+var IRR_PP={};      /* 原形 -> 过去分词（have done 选项用） */
+(function(){
+  var l=('go|went|gone do|did|done be|was|been have|had|had see|saw|seen come|came|come take|took|taken '+
+   'eat|ate|eaten give|gave|given write|wrote|written speak|spoke|spoken break|broke|broken choose|chose|chosen '+
+   'draw|drew|drawn drink|drank|drunk drive|drove|driven fall|fell|fallen fly|flew|flown forget|forgot|forgotten '+
+   'freeze|froze|frozen grow|grew|grown hide|hid|hidden know|knew|known lie|lay|lain ride|rode|ridden '+
+   'ring|rang|rung rise|rose|risen shake|shook|shaken sing|sang|sung sink|sank|sunk steal|stole|stolen '+
+   'swim|swam|swum throw|threw|thrown wake|woke|woken wear|wore|worn begin|began|begun blow|blew|blown '+
+   'bring|brought|brought build|built|built buy|bought|bought catch|caught|caught deal|dealt|dealt '+
+   'dig|dug|dug feed|fed|fed feel|felt|felt fight|fought|fought find|found|found get|got|got '+
+   'hang|hung|hung hear|heard|heard hold|held|held keep|kept|kept lead|led|led leave|left|left '+
+   'lend|lent|lent lose|lost|lost make|made|made mean|meant|meant meet|met|met pay|paid|paid '+
+   'read|read|read run|ran|run say|said|said sell|sold|sold send|sent|sent shine|shone|shone '+
+   'shoot|shot|shot sit|sat|sat sleep|slept|slept spend|spent|spent stand|stood|stood stick|stuck|stuck '+
+   'strike|struck|struck sweep|swept|swept teach|taught|taught tell|told|told think|thought|thought '+
+   'understand|understood|understood win|won|won become|became|become burn|burnt|burnt learn|learnt|learnt '+
+   'smell|smelt|smelt spell|spelt|spelt cut|cut|cut put|put|put let|let|let hurt|hurt|hurt set|set|set '+
+   'shut|shut|shut spread|spread|spread hit|hit|hit cost|cost|cost can|could|1 may|might|1 will|would|1 '+
+   'shall|should|1 must|must|1').split(/\s+/);
+  var i, f;
+  for(i=0;i<l.length;i++){
+    f=l[i].split('|');
+    if(f[1] && f[1]!=='1'){ IRR2[f[1]]=f[0]; if(!IRR_PAST[f[0]]) IRR_PAST[f[0]]=f[1]; }
+    if(f[2] && f[2]!=='1' && !IRR_PP[f[0]]) IRR_PP[f[0]]=f[2];
+    if(f[2] && f[2]!=='1' && f[2]!==f[1]) IRR2[f[2]]=f[0];
+  }
+})();
 /* ============================================================
    内置词库：b 数组按「正确顺序」写；'原形>目标形式' 标记需要变形的词块
+   情态动词也算变形：'rain>will rain'（拖动时显示原形 rain，定形环节选 will rain）
    加词库优先用页面右上角「词库」面板，也可直接在下面数组里追加
    ============================================================ */
 var BUILTIN = [
@@ -478,12 +542,10 @@ var BUILTIN = [
    tip:'There be 就近原则：紧挨着 be 的 a book 是单数，所以用 is。',
    tags:['There be','主谓一致']},
 
-  {id:'s05', zh:'我妹妹五岁时就会游泳了。', r:'S V V A',
-   b:['My sister','could','swim','when she was five'],
+  {id:'s05', zh:'我妹妹五岁时就会游泳了。', r:'S V A',
+   b:['My sister','swim>could swim','when she was five'],
    tip:'情态动词后接动词原形，而且不随人称变化；could 本身已经表示过去。',
-   tags:['情态动词','一般过去时'],
-   q:[{at:2, kind:'verb', ask:'could 后面用 swim 的什么形式？',
-       opts:['swim','swims','swimming','to swim'], ans:0, why:'情态动词后接动词原形。'}]},
+   tags:['情态动词','一般过去时']},
 
   {id:'s06', zh:'这栋楼比那栋楼高得多。', r:'S V A A A',
    b:['This building','is','much','tall>taller','than that one'],
@@ -559,11 +621,9 @@ var BUILTIN = [
    tags:['一般过去时','不规则动词','状语顺序']},
 
   {id:'s19', zh:'明天将会下雨。', r:'S V T',
-   b:['It','will rain','tomorrow'],
+   b:['It','rain>will rain','tomorrow'],
    tip:'表示天气用 it 作主语；will 后面接动词原形。',
-   tags:['一般将来时'],
-   q:[{at:1, kind:'verb', ask:'will 后面用 rain 的什么形式？',
-       opts:['rain','rains','raining','to rain'], ans:0, why:'will 后接动词原形。'}]},
+   tags:['一般将来时']},
 
   {id:'s20', zh:'我们班有四十名学生。', r:'A V S P',
    b:['There','are','forty students','in our class'],
@@ -571,11 +631,9 @@ var BUILTIN = [
    tags:['There be','名词复数']},
 
   {id:'s21', zh:'你必须在晚饭前完成作业。', r:'S V O T',
-   b:['You','must finish','your homework','before dinner'],
+   b:['You','finish>must finish','your homework','before dinner'],
    tip:'must 是情态动词，后面接动词原形，也不随人称变化。',
-   tags:['情态动词'],
-   q:[{at:1, kind:'verb', ask:'must 后面接什么形式？',
-       opts:['finish','finishes','finishing','to finish'], ans:0, why:'情态动词后接动词原形。'}]},
+   tags:['情态动词']},
 
   {id:'s22', zh:'汤姆是我们班最高的男生。', r:'S V C P',
    b:['Tom','is','tall boy>the tallest boy','in our class'],
@@ -602,7 +660,7 @@ var BUILTIN = [
        opts:['in May 3rd','on May 3rd','at May 3rd'], ans:1, why:'具体某一天前用 on。'}]},
 
   {id:'s26', zh:'如果明天下雨，我们就待在家里。', r:'A V A S V',
-   b:['If it','rain>rains','tomorrow,','we','will stay at home'],
+   b:['If it','rain>rains','tomorrow,','we','stay at home>will stay at home'],
    tip:'if 引导条件状语从句时，从句用一般现在时表将来（主将从现）；it 是三单，rain 加 -s。',
    tags:['状语从句','一般现在时','一般将来时']},
 
@@ -686,7 +744,6 @@ function firstDiff(t,to){
   return {idx:p, len:ea-p+1, a:a.slice(p,ea+1).join(' '), b:b.slice(p,eb+1).join(' ')};
 }
 /* 双写末辅音：只限单音节，双音节走白名单（visit 不能写成 visitting） */
-var DBLW={begin:1,prefer:1,refer:1,occur:1,admit:1,regret:1,control:1,permit:1,forget:1,upset:1};
 function isCVC(w){
   if(w.length<3) return false;
   if(!/[^aeiou][aeiou][bdglmnprst]$/.test(w) || /[wxy]$/.test(w)) return false;
@@ -703,7 +760,9 @@ function vIng(w){
   if(isCVC(w)) return w+w.slice(-1)+'ing';
   return w+'ing';
 }
+function vPart(w){ return IRR_PP[w] || vPast(w); }
 function vPast(w){
+  if(IRR_PAST[w]) return IRR_PAST[w];
   if(/[^aeiou]e$/.test(w)) return w+'d';
   if(/[^aeiou]y$/.test(w)) return w.slice(0,-1)+'ied';
   if(isCVC(w)) return w+w.slice(-1)+'ed';
@@ -726,7 +785,7 @@ function formOpts(w, kind, correct){
     if(bePart) beForms=['am '+bePart[2], 'is '+bePart[2], 'are '+bePart[2]];
     else beForms=['be '+vIng(w)];
     if(hvPart) hvForms=['has '+hvPart[2], 'have '+hvPart[2]];
-    else hvForms=['have '+vPast(w)];
+    else hvForms=['have '+vPart(w)];
     o=[w, 'to '+w, vThird(w)].concat(beForms, [vPast(w)], hvForms);
   }
   else o=[w];
@@ -749,8 +808,20 @@ function normQ(raw, it){
   var at=parseInt(raw.at,10);
   if(!(at>=0) || at>=it.b.length) return null;
   var p=parseBlock(it.b[at]);
-  var d=firstDiff(p.t, p.to||p.t);
   var kind=raw.kind||'verb';
+  /* 情态动词归为词形变化：'rain>will rain' 拖动时是原形 rain，定形环节选 will rain / can rain / shall rain… */
+  var md=/^(will|would|can|could|may|might|must|should|shall)\s+(.+)$/.exec(p.to||'');
+  if(kind==='verb' && md && md[2]===p.t){
+    var mods=['will','can','shall','should','must','may'], o=[], seen={}, i;
+    for(i=0;i<mods.length;i++){ var x=mods[i]+' '+p.t; if(!seen[x]){ seen[x]=1; o.push(x); } }
+    if(o.indexOf(p.to)<0) o.push(p.to);   /* could / would / might 追加 */
+    if(raw.opts && raw.opts.length) o=raw.opts.slice();
+    var ans=o.indexOf(p.to); if(ans<0){ o.push(p.to); ans=o.length-1; }
+    return {at:at, wi:0, len:p.t.split(/\s+/).length, base:p.t, kind:'verb',
+            ask:raw.ask||'「'+p.t.split(/\s+/)[0]+'」前面用哪个情态动词？',
+            opts:o, ans:ans, why:raw.why||'情态动词后接动词原形。'};
+  }
+  var d=firstDiff(p.t, p.to||p.t);
   var correct=p.to? d.b : d.a;
   var opts=(raw.opts && raw.opts.length)? raw.opts.slice() : formOpts(d.a, kind, p.to?correct:'');
   if(!opts.length) opts=[d.a];
@@ -763,7 +834,38 @@ function normQ(raw, it){
   return {at:at, wi:d.idx, len:d.len, base:d.a, kind:kind, ask:raw.ask||autoAsk(d.a,kind),
           opts:opts, ans:ans, why:raw.why||''};
 }
-/* 显式 q 优先，其余有变形的词块自动出题 */
+/* 原形动词块的词形题：句子本来就用原形，也要走一遍定形环节（正确答案是原形） */
+function baseVerbQ(it, i){
+  var t=parseBlock(it.b[i]).t;
+  var ws=t.split(/\s+/);
+  var w=ws[0].toLowerCase().replace(/[^a-z']/g,'');
+  /* be 动词单独成块：am / is / are / was / were */
+  if(ws.length===1 && /^(am|is|are|was|were)$/.test(w)){
+    var ob=['am','is','are','was','were'];
+    return {at:i, wi:0, len:1, base:w, kind:'verb',
+      ask:'这里用 be 动词的哪个形式？', opts:ob, ans:ob.indexOf(w),
+      why:'be 的形式由主语的人称、单复数和时态决定。'};
+  }
+  /* 情态动词块没折进 '>' 的，按情态出题（编辑器手动录入的兜底） */
+  if(MODALSET[w] && ws.length>1){
+    var bw=ws[1].toLowerCase().replace(/[^a-z']/g,'');
+    if(!VSET[bw]) return null;   /* 情态动词后只认原形 */
+    var mods=['will','can','shall','should','must','may'], om=[], seen={}, j;
+    om.push(bw); seen[bw]=1;
+    for(j=0;j<mods.length;j++){ var x=mods[j]+' '+bw; if(!seen[x]){ seen[x]=1; om.push(x); } }
+    var c=w+' '+bw;
+    if(om.indexOf(c)<0) om.push(c);
+    return {at:i, wi:0, len:2, base:bw, kind:'verb',
+      ask:'「'+bw+'」前面用哪个情态动词？', opts:om, ans:om.indexOf(c),
+      why:'情态动词后接动词原形。'};
+  }
+  if(MODALSET[w] || !VSET[w]) return null;   /* 首词不是已知动词原形就不乱出题 */
+  var o=formOpts(w,'verb','');
+  return {at:i, wi:0, len:1, base:w, kind:'verb',
+    ask:'「'+w+'」用什么形式？', opts:o, ans:0,
+    why:'这一句里用原形。'};
+}
+/* 显式 q 优先；有变形的词块自动出题；原形动词块也补一道词形题 */
 function buildQs(it){
   var qs=[], used={}, i, q;
   for(i=0;i<(it.q||[]).length;i++){ q=normQ(it.q[i], it); if(q){ qs.push(q); used[q.at]=1; } }
@@ -771,7 +873,14 @@ function buildQs(it){
     if(used[i]) continue;
     if(!parseBlock(it.b[i]).to) continue;
     q=normQ({at:i}, it);
-    if(q) qs.push(q);
+    if(q){ qs.push(q); used[i]=1; }
+  }
+  for(i=0;i<it.b.length;i++){
+    if(used[i]) continue;
+    if(parseBlock(it.b[i]).to) continue;
+    if((it.roles||[])[i]!=='V') continue;
+    q=baseVerbQ(it, i);
+    if(q){ qs.push(q); used[i]=1; }
   }
   qs.sort(function(a,b){ return a.at-b.at; });
   return qs;
@@ -780,18 +889,6 @@ function buildQs(it){
 /* ---------- 词块角色：只有时间/地点状语可以换位置 ---------- */
 var MONTHS='January|February|March|April|May|June|July|August|September|October|November|December';
 var WEEK='Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday';
-var VBASE=('play go do have be can may must should will would like love read write watch study eat drink run swim '+
- 'sing dance draw make take get give see buy finish clean visit help open close use learn speak talk say tell ask '+
- 'want need think know find put bring wear sit stand walk ride drive fly work live stay wait begin start stop keep '+
- 'look listen hear feel become show teach catch come build spend cost cut hurt let forget remember enjoy practice '+
- 'answer follow move carry try call turn pick wash cook rain snow blow grow finish join leave arrive return travel '+
- 'exercise rest sleep wake smile cry laugh worry decide plan hope wish believe understand improve change '+
- 'meet bring send sell pay win lose hold mean fall feed fight dig hang hide hit lend lie rise shake shoot '+
- 'shut sink smell spell spread stick strike sweep throw deal burn beat break choose freeze ring set steal '+
- 'wear grow blow draw drink drive eat fly give hear know learn leave read ride say see sing speak stand '+
- 'swim take teach tell think write become begin cut hurt put let read spread teach').split(' ');
-var VSET={};
-for(var _vi=0;_vi<VBASE.length;_vi++) VSET[VBASE[_vi]]=1;
 function inferRole(w){
   var s=String(w||'').trim().replace(/[,，。.!！?？]$/,'');
   if(/^(always|usually|often|sometimes|seldom|hardly|never)$/i.test(s)) return 'F';
@@ -1501,7 +1598,7 @@ function toggleVocab(w){
     var i=V.items.indexOf(hit);
     V.items.splice(i,1);
   }else{
-    V.items.unshift({w:w, zh:'', en:(S.cur? S.cur.en:''), zhSent:(S.cur? S.cur.zh:'')});
+    V.items.unshift({w:w, zh:dictGloss(w), en:(S.cur? S.cur.en:''), zhSent:(S.cur? S.cur.zh:'')});
   }
   saveVocab();
   if(S.cur){ renderSlots(); renderFbChips(); }
@@ -1944,32 +2041,6 @@ function clearSrc(){
 var K_G='sb_gloss_v1';
 var A={rows:[]};
 /* 不规则动词 base|过去式|过去分词 */
-var IRR2={};
-(function(){
-  var l=('go|went|gone do|did|done be|was|been have|had|had see|saw|seen come|came|come take|took|taken '+
-   'eat|ate|eaten give|gave|given write|wrote|written speak|spoke|spoken break|broke|broken choose|chose|chosen '+
-   'draw|drew|drawn drink|drank|drunk drive|drove|driven fall|fell|fallen fly|flew|flown forget|forgot|forgotten '+
-   'freeze|froze|frozen grow|grew|grown hide|hid|hidden know|knew|known lie|lay|lain ride|rode|ridden '+
-   'ring|rang|rung rise|rose|risen shake|shook|shaken sing|sang|sung sink|sank|sunk steal|stole|stolen '+
-   'swim|swam|swum throw|threw|thrown wake|woke|woken wear|wore|worn begin|began|begun blow|blew|blown '+
-   'bring|brought|brought build|built|built buy|bought|bought catch|caught|caught deal|dealt|dealt '+
-   'dig|dug|dug feed|fed|fed feel|felt|felt fight|fought|fought find|found|found get|got|got '+
-   'hang|hung|hung hear|heard|heard hold|held|held keep|kept|kept lead|led|led leave|left|left '+
-   'lend|lent|lent lose|lost|lost make|made|made mean|meant|meant meet|met|met pay|paid|paid '+
-   'read|read|read run|ran|run say|said|said sell|sold|sold send|sent|sent shine|shone|shone '+
-   'shoot|shot|shot sit|sat|sat sleep|slept|slept spend|spent|spent stand|stood|stood stick|stuck|stuck '+
-   'strike|struck|struck sweep|swept|swept teach|taught|taught tell|told|told think|thought|thought '+
-   'understand|understood|understood win|won|won become|became|become burn|burnt|burnt learn|learnt|learnt '+
-   'smell|smelt|smelt spell|spelt|spelt cut|cut|cut put|put|put let|let|let hurt|hurt|hurt set|set|set '+
-   'shut|shut|shut spread|spread|spread hit|hit|hit cost|cost|cost can|could|1 may|might|1 will|would|1 '+
-   'shall|should|1 must|must|1').split(/\s+/);
-  var i, f;
-  for(i=0;i<l.length;i++){
-    f=l[i].split('|');
-    if(f[1] && f[1]!=='1') IRR2[f[1]]=f[0];
-    if(f[2] && f[2]!=='1' && f[2]!==f[1]) IRR2[f[2]]=f[0];
-  }
-})();
 /* 参考词义：只用来给草稿和提示，配不出整句翻译时不会硬凑 */
 var DICT={};
 (function(){
@@ -2010,10 +2081,92 @@ var DICT={};
    'doctor|医生 spring|春天 festival|节日 holiday|假日 birthday|生日 '+
    'panda|熊猫 tiger|老虎 dog|狗 cat|猫 animal|动物 '+
    'friends|朋友 boys|男孩们 girls|女孩们 teachers|老师们 students|学生们 '+
-   'books|书 pens|钢笔 apples|苹果 eggs|鸡蛋 bananas|香蕉').split(/\s+/);
+    'books|书 pens|钢笔 apples|苹果 eggs|鸡蛋 bananas|香蕉').split(/\s+/);
   var i, f;
   for(i=0;i<l.length;i++){ f=l[i].split('|'); if(f.length===2) DICT[f[0]]=f[1]; }
 })();
+/* ---------- 用户词汇表：粘贴导入，存本机，并入 DICT ---------- */
+var K_D='sb_dict_v1';
+var UDICT=store(K_D)||{};
+var DICT_N0=0;
+(function(){
+  var k;
+  for(k in DICT) DICT_N0+=1;
+  for(k in UDICT) DICT[k]=UDICT[k];
+})();
+/* 解析词汇表：apple=苹果 / apple 苹果 / apple|苹果 / apple<TAB>苹果 / apple：苹果 */
+function parseGloss(txt){
+  var lines=String(txt||'').split(/\r?\n/), out={}, n=0, i;
+  for(i=0;i<lines.length;i++){
+    var s=lines[i].trim();
+    if(!s || s.charAt(0)==='#') continue;
+    var m=/^([A-Za-z][A-Za-z'’\- ]*?)\s*[=|]\s*(.+)$/.exec(s);
+    if(!m) m=/^([A-Za-z][A-Za-z'’\- ]*?)\s*[:：,，]\s*(.+)$/.exec(s);
+    if(!m) m=/^([A-Za-z][A-Za-z'’\- ]*?)[\t ]\s*([一-鿿].*)$/.exec(s);
+    var en='', zh='';
+    if(m){ en=m[1].trim().toLowerCase().replace(/’/g,'\''); zh=m[2].trim(); }
+    if(en && zh && /[a-z]/.test(en) && /[一-鿿]/.test(zh)){ out[en]=zh; n+=1; }
+  }
+  return {map:out, n:n};
+}
+/* 查词：单词直接查，变形词还原后查，词组逐词拼 */
+function dictGloss(w){
+  var s=String(w||'').toLowerCase().replace(/[^a-z'\s]/g,' ').trim().replace(/\s+/g,' ');
+  if(!s) return '';
+  if(DICT[s]) return DICT[s];
+  if(s.indexOf(' ')<0){
+    var b=toBase(s);
+    if(b && DICT[b]) return DICT[b];
+    return '';
+  }
+  var ws=s.split(/\s+/), out=[], miss=0, i, d;
+  for(i=0;i<ws.length;i++){
+    d=DICT[ws[i]]||DICT[toBase(ws[i])]||'';
+    if(d) out.push(d); else miss+=1;
+  }
+  if(out.length && miss<=out.length) return out.join(' / ');
+  return '';
+}
+function renderDictStat(){
+  var box=el('inDictStat');
+  if(!box) return;
+  var keys=Object.keys(UDICT), i, h='内置词典 '+DICT_N0+' 条；你导入的词汇表 <b>'+keys.length+'</b> 条。';
+  if(keys.length){
+    h+='<br>最近导入：';
+    var show=keys.slice(-40);
+    for(i=0;i<show.length;i++) h+=esc(show[i])+'='+esc(UDICT[show[i]])+'　';
+    if(keys.length>40) h+='……';
+  }
+  box.innerHTML=h;
+}
+function dictImport(){
+  var m=el('inDictMsg');
+  var r=parseGloss(el('inDict').value);
+  if(!r.n){
+    m.className='msg ng';
+    m.textContent='没解析出词条。每行一条：apple=苹果、apple 苹果、apple|苹果 都可以。';
+    return;
+  }
+  var k, add=0, cov=0;
+  for(k in r.map){
+    if(UDICT[k]){ if(UDICT[k]!==r.map[k]) cov+=1; } else add+=1;
+    UDICT[k]=r.map[k]; DICT[k]=r.map[k];
+  }
+  store(K_D, UDICT);
+  el('inDict').value='';
+  renderDictStat();
+  m.className='msg ok';
+  m.textContent='导入 '+r.n+' 条（新增 '+add+' 条'+(cov? '，覆盖旧释义 '+cov+' 条' : '')+'）。自动配翻译和生词本释义现在都会用上。';
+}
+function dictClear(){
+  var k;
+  for(k in UDICT){ delete DICT[k]; delete UDICT[k]; }
+  store(K_D, UDICT);
+  renderDictStat();
+  var m=el('inDictMsg');
+  m.className='msg ok';
+  m.textContent='已清空导入的词汇表（内置词典保留）。';
+}
 /* 单词还原成原形：先查不规则表，再走 -s / -ed / -ing 规则 */
 function ruleBase(s){
   if(/ies$/.test(s)) return s.slice(0,-3)+'y';
@@ -2049,8 +2202,17 @@ function autoBlocks(en){
   var parts=splitSmart(en), out=[], roles=[], i, n=0;
   for(i=0;i<parts.length;i++){
     var t=parts[i], w=t.split(/\s+/), cand=-1;
-    if(w.length>1 && AUXSET[w[0].toLowerCase().replace(/[^a-z']/g,'')] && isVerbForm(w[1])) cand=1;
-    else if(w.length>2 && AUXSET[w[0].toLowerCase().replace(/[^a-z']/g,'')] && isVerbForm(w[2])) cand=2;
+    var w0=w[0].toLowerCase().replace(/[^a-z']/g,'');
+    /* 情态动词归为词形变化：will rain → rain>will rain（拖动时显示原形） */
+    if(w.length>1 && MODALSET[w0]){
+      var bw=w[1].toLowerCase().replace(/[^a-z']/g,'');
+      if(VSET[bw] && !isVerbForm(w[1])){
+        var mbase=w.slice(1).join(' ');
+        out.push(mbase+'>'+t); n+=1; roles.push('V'); continue;
+      }
+    }
+    if(w.length>1 && AUXSET[w0] && isVerbForm(w[1])) cand=1;
+    else if(w.length>2 && AUXSET[w0] && isVerbForm(w[2])) cand=2;
     else if(isVerbForm(w[0])) cand=0;
     if(cand>=0){
       var vb=toBase(w[cand]), rest=w.slice(cand+1).join(' ');
@@ -2136,11 +2298,6 @@ function autoTags(en, blocks){
 /* 自动出题：变形块交给 buildQs 自动出，这里补冠词 / 名词 / 介词 / be / 形容词，每句最多两条 */
 var PREPLIST=['in','on','at','by','for','with','from','to','about'];
 var NUMW=/^(two|three|four|five|six|seven|eight|nine|ten|many|some|several|a few|these|those)$/i;
-var MODALSET={};
-(function(){
-  var l='will would can could may might must should shall'.split(' ');
-  for(var i=0;i<l.length;i++) MODALSET[l[i]]=1;
-})();
 function autoQuestions(blocks){
   var qs=[], i, m, rest, w, opts, ans, ask, n=0;
   for(i=0;i<blocks.length;i++){
@@ -2267,6 +2424,7 @@ function autoTip(en, ab){
     if(ab.b[i].indexOf('>')<0) continue;
     var x=parseBlock(ab.b[i]), d=firstDiff(x.t, x.to);
     if(d.a && d.b) p.push('「'+d.a+'」在这里要变成 '+d.b+'。');
+    else if(!d.a && x.to) p.push('「'+x.t+'」在这里要变成 '+x.to+'。');   /* 情态动词这类前面加词的变形 */
   }
   if(/\b(am|is|are)\s+\w+ing\b/.test(' '+en.toLowerCase()+' ')) p.push('现在进行时：be + 动词 -ing。');
   if(/\b(always|usually|often|sometimes|never)\b/.test(en)) p.push('频度副词放在实义动词前面。');
@@ -2358,11 +2516,13 @@ function autoEdit(i){
   eMsg('这一句已载进编辑器，改完点「加入词库」。');
 }
 function switchPane(which){
-  var one=(which==='one');
-  el('paneOne').className='sec'+(one? '' : ' hidden');
-  el('paneBulk').className='sec'+(one? ' hidden' : '');
-  el('tabOne').className='gbtn'+(one? ' on' : '');
-  el('tabBulk').className='gbtn'+(one? '' : ' on');
+  el('paneOne').className='sec'+(which==='one'? '' : ' hidden');
+  el('paneBulk').className='sec'+(which==='bulk'? '' : ' hidden');
+  el('paneDict').className='sec'+(which==='dict'? '' : ' hidden');
+  el('tabOne').className='gbtn'+(which==='one'? ' on' : '');
+  el('tabBulk').className='gbtn'+(which==='bulk'? ' on' : '');
+  el('tabDict').className='gbtn'+(which==='dict'? ' on' : '');
+  if(which==='dict') renderDictStat();
 }
 
 /* ---------- 启动 ---------- */
@@ -2417,6 +2577,9 @@ function init(){
   bind('inReset', inputReset);
   bind('tabOne', function(){ switchPane('one'); });
   bind('tabBulk', function(){ switchPane('bulk'); });
+  bind('tabDict', function(){ switchPane('dict'); });
+  bind('inDictAdd', dictImport);
+  bind('inDictClear', dictClear);
   bind('inAuto', autoRun);
   bind('inAutoAll', autoToggleAll);
   bind('inAutoAdd', autoCommit);
@@ -2471,7 +2634,8 @@ window.SB={S:S, buildEn:buildEn, parseBlock:parseBlock, diffPairs:diffPairs, nor
   toBase:toBase, isVerbForm:isVerbForm, autoBlocks:autoBlocks, autoZh:autoZh, autoTags:autoTags,
   autoQuestions:autoQuestions, extractPairs:extractPairs, splitZhEn:splitZhEn, splitSent:splitSent,
   autoOne:autoOne, autoRun:autoRun, autoCommit:autoCommit, autoEdit:autoEdit, autoToggleAll:autoToggleAll,
-  A:A, switchPane:switchPane, DICT:DICT};
+  A:A, switchPane:switchPane, DICT:DICT, normItem:normItem, baseVerbQ:baseVerbQ,
+  parseGloss:parseGloss, dictGloss:dictGloss, dictImport:dictImport, dictClear:dictClear, UDICT:UDICT};
 </script>
 </body>
 </html>
