@@ -78,6 +78,11 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
     <div class='grp'>木板（下表面摩擦因数 μ<sub>2</sub>）</div>
     <div class='row'>
       <div class='ctl'>
+        <span class='lb'><span class='v c2'>L</span> (m)</span>
+        <input id='s7' type='range' min='1' max='12' step='0.1' value='10'>
+        <output id='o7'>10.0</output>
+      </div>
+      <div class='ctl'>
         <span class='lb'><span class='v c2'>m</span><sub>2</sub> (kg)</span>
         <input id='s4' type='range' min='0.5' max='8' step='0.1' value='2'>
         <output id='o4'>2.0</output>
@@ -125,8 +130,9 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span>状态：<span class='n' id='rState'>—</span></span>
       <span><span class='v'>f</span><sub>1</sub> = <span class='v'>μ</span><sub>1</sub><span class='v'>m</span><sub>1</sub><span class='v'>g</span> = <span class='n' id='rF1'>—</span></span>
       <span><span class='v'>f</span><sub>2max</sub> = <span class='v'>μ</span><sub>2</sub>(<span class='v'>m</span><sub>1</sub>+<span class='v'>m</span><sub>2</sub>)<span class='v'>g</span> = <span class='n' id='rF2'>—</span></span>
+      <span>滑离时刻 = <span class='n' id='rOF'>—</span></span>
     </div>
-    <div class='rule'>两者各自的加速度由各自的受力决定：木块只受 <span class='v c1'>μ</span><sub>1</sub><span class='v'>m</span><sub>1</sub><span class='v'>g</span>，木板受它的反作用力与地面摩擦 <span class='v c2'>μ</span><sub>2</sub>(<span class='v'>m</span><sub>1</sub>+<span class='v'>m</span><sub>2</sub>)<span class='v'>g</span>。每条 v-t 图线的斜率就是该阶段的加速度，两条图线之间的面积等于相对位移。<span class='v c1'>μ</span><sub>1</sub><span class='v'>m</span><sub>1</sub><span class='v'>g</span> 大于地面最大静摩擦时，木板才会被木块带动；此后若两者达到共同速度且 <span class='v c2'>μ</span><sub>2</sub> ≤ <span class='v c1'>μ</span><sub>1</sub>，就一起减速到静止。</div>
+    <div class='rule'>两者各自的加速度由各自的受力决定：木块只受 <span class='v c1'>μ</span><sub>1</sub><span class='v'>m</span><sub>1</sub><span class='v'>g</span>，木板受它的反作用力与地面摩擦 <span class='v c2'>μ</span><sub>2</sub>(<span class='v'>m</span><sub>1</sub>+<span class='v'>m</span><sub>2</sub>)<span class='v'>g</span>。每条 v-t 图线的斜率就是该阶段的加速度，两条图线之间的面积等于相对位移。<span class='v c1'>μ</span><sub>1</sub><span class='v'>m</span><sub>1</sub><span class='v'>g</span> 大于地面最大静摩擦时，木板才会被木块带动；此后若两者达到共同速度且 <span class='v c2'>μ</span><sub>2</sub> ≤ <span class='v c1'>μ</span><sub>1</sub>，就一起减速到静止。木板长度 <span class='v c2'>L</span> 全程不变；一旦木块相对木板的位移达到 <span class='v c2'>L</span>，木块就从板端滑离落到地面上，此后两者各自只受地面摩擦 <span class='v c2'>μ</span><sub>2</sub><span class='v c1'>m</span><sub>1</sub><span class='v'>g</span> 与 <span class='v c2'>μ</span><sub>2</sub><span class='v c2'>m</span><sub>2</sub><span class='v'>g</span> 减速。</div>
     <div class='hint' id='hint'>拖动滑块改参数（自动回到 t=0）；拖时间滑块可逐帧查看。</div>
   </div>
 </div>
@@ -144,7 +150,8 @@ var LWS=920, LHS=226;              /* 情景画布 */
 var LWG=920, LHG=380;              /* v-t 画布 */
 var SX0=52, SX1=868;               /* 情景横向可用范围 */
 var GY=148;                        /* 地面线 */
-var BW=52, BH=34, PH=18;           /* 木块宽高、木板厚 */
+var BL=0.6, PH=18;                 /* 木块真实长度(m)、木板厚(px) */
+var BW=52, BH=34;                  /* 木块绘制宽高，按 BL*SCALE 重算 */
 var BY_TOP=GY-PH-BH;               /* 木块顶面 y */
 var PY_TOP=GY-PH;                  /* 木板顶面 y */
 var GX0=80, GX1=880, GYT=44, GYB=328;   /* v-t 绘图区 */
@@ -152,16 +159,16 @@ var GOX0=GX0-1, GOX1=GX1+1;
 
 /* ===== 状态 ===== */
 var G=9.8;
-var P={m1:1, v1:6, mu1:0.2, m2:2, v2:0, mu2:0.1};
-var PREV={m1:1, v1:6, mu1:0.2, m2:2, v2:0, mu2:0.1};
-var NODES=[], tEnd=0, SCALE=40, tCur=0, playing=true, last=0, speed=0.5;
+var P={m1:1, v1:6, mu1:0.2, m2:2, v2:0, mu2:0.1, L:10};
+var PREV={m1:1, v1:6, mu1:0.2, m2:2, v2:0, mu2:0.1, L:10};
+var NODES=[], tEnd=0, SCALE=40, V0=0, tCur=0, playing=true, last=0, speed=0.5;
 var showF=true, showA=true, showG=true;
 var vLo=0, vHi=1, UNIT=100, tHi=4, PX=200, VZ=0;
 var HALO='#ffffff';
 
-var s1=$('s1'), s2=$('s2'), s3=$('s3'), s4=$('s4'), s5=$('s5'), s6=$('s6'), sT=$('sT');
-var o1=$('o1'), o2=$('o2'), o3=$('o3'), o4=$('o4'), o5=$('o5'), o6=$('o6'), oT=$('oT');
-var rT=$('rT'), rV1=$('rV1'), rV2=$('rV2'), rDV=$('rDV'), rX1=$('rX1'), rX2=$('rX2');
+var s1=$('s1'), s2=$('s2'), s3=$('s3'), s4=$('s4'), s5=$('s5'), s6=$('s6'), s7=$('s7'), sT=$('sT');
+var o1=$('o1'), o2=$('o2'), o3=$('o3'), o4=$('o4'), o5=$('o5'), o6=$('o6'), o7=$('o7'), oT=$('oT');
+var rT=$('rT'), rV1=$('rV1'), rV2=$('rV2'), rDV=$('rDV'), rX1=$('rX1'), rX2=$('rX2'), rOF=$('rOF');
 var rDX=$('rDX'), rSL=$('rSL'), rST=$('rST'), rState=$('rState'), rF1=$('rF1'), rF2=$('rF2');
 var hint=$('hint'), bPlay=$('bPlay'), bReset=$('bReset');
 var bS1=$('bS1'), bS2=$('bS2'), bS3=$('bS3');
@@ -290,9 +297,14 @@ function niceStep(r,target){
 }
 
 /* ===== 物理模型：两接触面的库仑摩擦 ===== */
-function accel(v1,v2){
+/* off=true 表示木块已滑离木板：二者各受地面摩擦，正压分别是 m1g 与 m2g */
+function accel(v1,v2,off){
   var m1=P.m1, m2=P.m2, M=m1+m2, mu1=P.mu1, mu2=P.mu2;
   var u=v1-v2, EPS=1e-7;
+  if(off){
+    return [Math.abs(v1)>EPS?-mu2*G*sgn(v1):0,
+            Math.abs(v2)>EPS?-mu2*G*sgn(v2):0];
+  }
   var slipA=Math.abs(u)>EPS;      /* 块—板是否相对滑动 */
   var slipB=Math.abs(v2)>EPS;     /* 板—地是否滑动 */
   if(!slipA){
@@ -307,37 +319,61 @@ function accel(v1,v2){
   if(Math.abs(F)<=mu2*M*G+1e-12) return [a1,0];    /* 地面静摩擦顶住 → 板不动 */
   return [a1,(F-mu2*M*G*sgn(F))/m2];
 }
+/* rel(t)=x1−x2 在本段内是二次函数，求 rel=target 的最小正根（滑离时刻） */
+function hitTime(rel,urel,durel,target){
+  var c=rel-target;
+  if(Math.abs(durel)<1e-12){
+    if(Math.abs(urel)<1e-12) return -1;
+    var h0=-c/urel; return h0>1e-12?h0:-1;
+  }
+  var disc=urel*urel-2*durel*c;
+  if(disc<0) return -1;
+  var sq=Math.sqrt(disc), r1=(-urel-sq)/durel, r2=(-urel+sq)/durel, best=-1;
+  if(r1>1e-12) best=r1;
+  if(r2>1e-12&&(best<0||r2<best)) best=r2;
+  return best;
+}
 /* 分段匀变速：只在加速度改变的时刻立节点（每个阶段各自是一条直线） */
 function build(){
   var dt=0.004, TMAX=40, EPS=1e-7;
   var v1=P.v1, v2=P.v2, x1=0, x2=0, sl=0, t=0, guard=0;
-  var ns=[], last=[0,0], started=false, L, stopHit=true;
+  var ns=[], last=[0,0], started=false, Nd, stopHit=true, off=false;
+  build.tOff=-1;
   /* 节点语义：以本节点记录的状态为锚，配合本节点的 a1/a2 做匀变速外推 */
-  function mk(a1,a2){ ns.push({t:t,v1:v1,v2:v2,x1:x1,x2:x2,s:sl,a1:a1,a2:a2}); last[0]=a1; last[1]=a2; started=true; }
+  function mk(a1,a2){ ns.push({t:t,v1:v1,v2:v2,x1:x1,x2:x2,s:sl,a1:a1,a2:a2,off:off}); last[0]=a1; last[1]=a2; started=true; }
   while(t<TMAX&&guard<60000){
     guard++;
-    var A=accel(v1,v2), a1=A[0], a2=A[1];
+    var A=accel(v1,v2,off), a1=A[0], a2=A[1];
     if(!started) mk(a1,a2);
-    else if(Math.abs(a1-last[0])>1e-9||Math.abs(a2-last[1])>1e-9) mk(a1,a2);
+    else if(Math.abs(a1-last[0])>1e-9||Math.abs(a2-last[1])>1e-9||off!==ns[ns.length-1].off) mk(a1,a2);
     if(a1===0&&a2===0) break;
     var u=v1-v2, du=a1-a2, h=dt;
     if(Math.abs(u)>EPS&&du*u<-1e-12){var tu=-u/du; if(tu<h) h=Math.max(tu,1e-6);}
     if(Math.abs(v2)>EPS&&a2*v2<-1e-12){var tv=-v2/a2; if(tv<h) h=Math.max(tv,1e-6);}
+    /* 滑离木板：相对位移达到 L（右端）或 −BL（左端）的瞬间，求根精确到事件本身 */
+    if(!off){
+      var rel=x1-x2, urel=v1-v2, durel=a1-a2;
+      var hR=hitTime(rel,urel,durel,P.L), hL=hitTime(rel,urel,durel,-BL), hh=-1;
+      if(hR>0&&(hh<0||hR<hh)) hh=hR;
+      if(hL>0&&(hh<0||hL<hh)) hh=hL;
+      if(hh>0&&hh<h) h=Math.max(hh,1e-9);
+    }
     x1+=v1*h+0.5*a1*h*h;
     x2+=v2*h+0.5*a2*h*h;
-    /* ∫|v1−v2|dt，注意 u 与 du 反号时必须整体取绝对值 */
+    /* ∫|v1−v2|dt，注意 u 与 du 反号时必须整体取绝对值；滑离后两者不再接触，不再累计 */
     var uE=u+du*h, add;
     if(u*uE>=0) add=Math.abs(u*h+0.5*du*h*h);
     else{var tz=-u/du; add=Math.abs(u*tz*0.5)+Math.abs(uE*(h-tz)*0.5);}
-    sl+=add;
+    if(!off) sl+=add;
     v1+=a1*h; v2+=a2*h; t+=h;
     if(Math.abs(v1-v2)<1e-9){
       var vc=(P.m1*v1+P.m2*v2)/(P.m1+P.m2); v1=vc; v2=vc;
     }
     if(Math.abs(v2)<1e-9) v2=0;
     if(Math.abs(v1)<1e-9) v1=0;
-    L=ns[ns.length-1];
-    L.t=t; L.v1=v1; L.v2=v2; L.x1=x1; L.x2=x2; L.s=sl;
+    if(!off&&(x1>=x2+P.L-1e-9||x1+BL<=x2+1e-9)){ off=true; build.tOff=t; }
+    Nd=ns[ns.length-1];
+    Nd.t=t; Nd.v1=v1; Nd.v2=v2; Nd.x1=x1; Nd.x2=x2; Nd.s=sl;
     if(v1===0&&v2===0) break;
   }
   if(guard>=60000) stopHit=false;
@@ -358,19 +394,19 @@ function build(){
   tHi=tEnd*1.02;
   if(tHi<=0) tHi=0.1;
   PX=(GX1-GX0)/tHi;
-  /* 情景图比例：整段行程全装下，标注真实米数 */
-  var xmin=0, xmax=0, i, n=NODES;
+  /* 情景图比例：优先把「全程位移 + 整块木板」装进画面；装不下则保持下限、镜头跟随 */
+  var n=NODES, i, x1mx=0, x2mx=0, x1mn=0, x2mn=0;
   for(i=0;i<n.length;i++){
-    xmin=Math.min(xmin,n[i].x1,n[i].x2);
-    xmax=Math.max(xmax,n[i].x1,n[i].x2);
+    if(n[i].x1>x1mx) x1mx=n[i].x1; if(n[i].x1<x1mn) x1mn=n[i].x1;
+    if(n[i].x2>x2mx) x2mx=n[i].x2; if(n[i].x2<x2mn) x2mn=n[i].x2;
   }
-  var span=Math.max(xmax-xmin,0.5);
+  var span=Math.max(x1mx+BL-x1mn, x2mx+P.L-x2mn, 0.5);
   SCALE=Math.min(46,(SX1-SX0-46)/span);
-  build.span=span; build.xmin=xmin;
-  var pad=(SX1-SX0-46)-span*SCALE;
-  build.origin=SX0+23+pad/2;
-  build.mStep=niceStep(span*1.05,7);
-  if(build.mStep<0.1) build.mStep=0.1;
+  var sMin=clamp(120/P.L,22,46);
+  if(SCALE<sMin) SCALE=sMin;
+  build.avail=(SX1-SX0-46)/SCALE;
+  build.gLo=Math.min(x1mn,x2mn);
+  build.gHi=Math.max(x1mx+BL,x2mx+P.L);
   sT.min='0'; sT.max=String(tEnd); sT.step=String(Math.max(0.005,tEnd/600));
 }
 function at(tq){
@@ -382,22 +418,40 @@ function at(tq){
   if(u0*uE>=0) add=Math.abs(u0*h+0.5*du*h*h);
   else{var tz=-u0/du; add=Math.abs(u0*tz*0.5)+Math.abs(uE*(h-tz)*0.5);}
   if(h<0) add=-add;   /* 回推时面积是往回扣的 */
+  if(A.off) add=0;    /* 已滑离：滑动路程冻结在分离时刻 */
   return {v1:v1, v2:v2,
     x1:A.x1+A.v1*h+0.5*A.a1*h*h,
     x2:A.x2+A.v2*h+0.5*A.a2*h*h,
     s:A.s+add,
-    u:v1-v2};
+    u:v1-v2, off:!!A.off};
 }
 function Xt(t){return GX0+t*PX;}
 function VY(v){return GYB-(v-vLo)*UNIT;}
-function Xs(x){return build.origin+(x-build.xmin)*SCALE;}
+function Xs(x){return SX0+23+(x-V0)*SCALE;}
+/* 视野：装得下就固定显示全程（含起点）；装不下时优先让两个物体同框，实在分太远镜头只跟木块 */
+function updateView(out){
+  var avail=build.avail;
+  var olo=Math.min(out.x1,out.x2), ohi=Math.max(out.x1+BL,out.x2+P.L);
+  var lo=Math.min(olo,build.gLo), hi=Math.max(ohi,build.gHi);
+  if(hi-lo<=avail) V0=(lo+hi)/2-avail/2;
+  else if(ohi-olo<=avail) V0=(olo+ohi)/2-avail/2;
+  else V0=out.x1+BL/2-avail/2;
+}
 
 /* ===== 情景图 ===== */
 function drawScene(T){
   ctx=ctxS; HALO=T.bg;
   var i, k, px, X, out=at(tCur);
+  updateView(out);
   var x1p=Xs(out.x1), x2p=Xs(out.x2);
-  var pl0=x2p, pl1=Math.max(x2p+230, x1p+BW+26);
+  var pw=P.L*SCALE;                       /* 木板长度 = L，全程不变 */
+  var bw=clamp(BL*SCALE,16,64), bh=clamp(bw*0.62,14,32);
+  var yTopOn=PY_TOP-bh, yTopOff=GY-bh;    /* 在板上 / 落地后 的顶面 y */
+  var yb=yTopOn;
+  if(out.off){
+    var f=clamp((tCur-build.tOff)/0.3,0,1);
+    yb=yTopOn+(yTopOff-yTopOn)*(f*f*(3-2*f));
+  }
   rtext([{t:'运动情景'}],24,26,14,T.fg);
   /* 图例 */
   var lx=566, ly=26;
@@ -414,7 +468,7 @@ function drawScene(T){
   ctx.strokeStyle=T.hatch; ctx.lineWidth=1;
   for(px=SX0-8;px<SX1+10;px+=9){ctx.beginPath();ctx.moveTo(px,GY);ctx.lineTo(px-7,GY+7);ctx.stroke();}
   /* 刻度 */
-  var st=build.mStep, k0=Math.ceil(build.xmin/st), k1=Math.floor((build.xmin+build.span)/st);
+  var st=niceStep(build.avail,7), k0=Math.ceil(V0/st), k1=Math.floor((V0+build.avail)/st);
   if(k1-k0>26) k1=k0+26;
   for(k=k0;k<=k1;k++){
     X=Xs(k*st); if(X<SX0-4||X>SX1+4) continue;
@@ -428,39 +482,65 @@ function drawScene(T){
     dash([4,4]); line(gx,GY,gx,BY_TOP-12,T.muted,1.2); dash();
     rtext([{t:'起点'}],gx,BY_TOP-16,12.5,T.muted,'center','bottom');
   }
-  /* 木板 */
-  rect0(pl0,PY_TOP,pl1-pl0,PH,rgba(T.p2,0.26),T.p2,1.6);
+  /* 木板（长度恒为 L） */
+  rect0(x2p,PY_TOP,pw,PH,rgba(T.p2,0.26),T.p2,1.6);
+  /* 板长标尺：全程这个数不变 */
+  var lyL=GY+28;
+  if(x2p+pw>SX0-10&&x2p<SX1+10){
+    line(x2p,lyL-6,x2p,lyL+6,T.tick,1); line(x2p+pw,lyL-6,x2p+pw,lyL+6,T.tick,1);
+    arrow(x2p,lyL,x2p+pw-5,lyL,T.muted,1.2,4); arrow(x2p+pw,lyL,x2p+5,lyL,T.muted,1.2,4);
+    rtextBox([{t:'L = ',v:0},{t:num(P.L,1),v:0},{t:' m'}],x2p+pw/2,lyL+8,12.5,T.muted,'center','top');
+  }
   /* 木块 */
-  rect0(x1p,BY_TOP,BW,BH,rgba(T.p1,0.30),T.p1,1.6);
-  /* 速度箭头（放在各自物体内部，长度真实反映速度大小） */
-  var VS=6.0, cy1=BY_TOP+BH/2, cy2=PY_TOP+PH/2;
+  rect0(x1p,yb,bw,bh,rgba(T.p1,0.30),T.p1,1.6);
+  /* 速度箭头（长度真实反映速度大小） */
+  var VS=6.0, cy1=yb+bh/2, cy2=PY_TOP+PH/2;
   if(Math.abs(out.v1)>0.02){
-    arrow(x1p+BW/2,cy1,x1p+BW/2+out.v1*VS,T.p1,2.2,5);
+    arrow(x1p+bw/2,cy1,x1p+bw/2+sgn(out.v1)*clamp(Math.abs(out.v1)*VS,10,56),T.p1,2.2,5);
   }
   if(Math.abs(out.v2)>0.02){
-    arrow(x2p+18,cy2,x2p+18+out.v2*VS,T.p2,2.2,5);
+    arrow(x2p+Math.min(14,pw*0.2),cy2,x2p+Math.min(14,pw*0.2)+sgn(out.v2)*clamp(Math.abs(out.v2)*VS,10,pw*0.8),T.p2,2.2,5);
   }
   /* 摩擦力（绿色，方向即实际方向） */
   if(showF){
-    var u=out.u, sg=u>0?-1:(u<0?1:0);   /* 块所受摩擦与相对速度反向 */
-    if(sg!==0){
-      arrow(x1p+BW/2,BY_TOP+BH-6,x1p+BW/2+sg*30,BY_TOP+BH-6,T.p3,1.8,4.5);
-      arrow(x2p+46,PY_TOP+5,x2p+46-sg*30,PY_TOP+5,T.p3,1.8,4.5);
+    var FL=clamp(28,pw*0.5,28);
+    if(out.off){
+      if(Math.abs(out.v1)>1e-6) arrow(x1p+bw/2,yb+bh-5,x1p+bw/2-sgn(out.v1)*FL,yb+bh-5,T.p3,1.8,4.5);
+      if(Math.abs(out.v2)>1e-6) arrow(x2p+pw*0.55,PY_TOP+PH-5,x2p+pw*0.55-sgn(out.v2)*FL,PY_TOP+PH-5,T.p3,1.8,4.5);
+    }else{
+      var u=out.u, sg=u>0?-1:(u<0?1:0);   /* 块所受摩擦与相对速度反向 */
+      if(sg!==0){
+        arrow(x1p+bw/2,yb+bh-5,x1p+bw/2+sg*FL,yb+bh-5,T.p3,1.8,4.5);
+        arrow(x2p+pw*0.55,PY_TOP+5,x2p+pw*0.55-sg*FL,PY_TOP+5,T.p3,1.8,4.5);
+      }
+      var fg=0;
+      if(Math.abs(out.v2)>1e-6) fg=-sgn(out.v2);
+      else if(sg!==0) fg=sg;
+      else fg=0;
+      if(fg!==0) arrow(x2p+pw*0.55,PY_TOP+PH-5,x2p+pw*0.55+fg*FL,PY_TOP+PH-5,T.p3,1.8,4.5);
     }
-    var fg=0;
-    if(Math.abs(out.v2)>1e-6) fg=-sgn(out.v2);
-    else if(sg!==0) fg=sg;
-    else fg=0;
-    if(fg!==0) arrow(x2p+46,PY_TOP+PH-5,x2p+46+fg*30,PY_TOP+PH-5,T.p3,1.8,4.5);
   }
-  /* 相对位移标记 */
+  /* 木块跑出画面时给个指向 */
+  if(x1p+bw<SX0-2||x1p>SX1+2){
+    var lbl=[{t:'木块 ',v:0},{t:'x',v:1},{t:'₁ = ',v:0},{t:num(out.x1,1),v:0},{t:' m'}];
+    if(x1p>SX1+2) rtextBox(lbl,SX1-6,GY+52,12.5,T.p1,'right','top');
+    else rtextBox(lbl,SX0+6,GY+52,12.5,T.p1,'left','top');
+  }
+  /* 木板跑出画面时同样给指向 */
+  if(x2p+pw<SX0-2||x2p>SX1+2){
+    var lb2=[{t:'木板 ',v:0},{t:'x',v:1},{t:'₂ = ',v:0},{t:num(out.x2,1),v:0},{t:' m'}];
+    if(x2p>SX1+2) rtextBox(lb2,SX1-6,GY+68,12.5,T.p2,'right','top');
+    else rtextBox(lb2,SX0+6,GY+68,12.5,T.p2,'left','top');
+  }
+  /* 相对位移标记（端点跑出画面时钳到屏边，避免一根横线横穿整个画面） */
   var dx=out.x1-out.x2;
-  if(Math.abs(dx)*SCALE>6){
-    var ya=GY+46, xa=Xs(out.x2), xb=Xs(out.x1);
-    line(xa,ya-6,xa,ya+6,T.tick,1); line(xb,ya-6,xb,ya+6,T.tick,1);
-    arrow(xa,ya,xb-sgn(dx)*5,ya,T.fg,1.3,4);
-    arrow(xb,ya,xa+sgn(dx)*5,ya,T.fg,1.3,4);
-    rtextBox([{t:'Δx = ',v:0},{t:num(dx,2),v:0},{t:' m'}],(xa+xb)/2,ya+8,12.5,T.fg,'center','top');
+  if(Math.abs(dx)*SCALE>6&&x1p>SX0-40&&x1p<SX1+40){
+    var ya=GY+52, xa=Xs(out.x2), xb=Xs(out.x1);
+    var ca=clamp(xa,SX0+4,SX1-4), cb=clamp(xb,SX0+4,SX1-4);
+    if(xa>=SX0-4&&xa<=SX1+4){ line(xa,ya-6,xa,ya+6,T.tick,1); arrow(ca,ya,cb-sgn(dx)*5,ya,T.fg,1.3,4); }
+    if(xb>=SX0-4&&xb<=SX1+4){ line(xb,ya-6,xb,ya+6,T.tick,1); arrow(cb,ya,ca+sgn(dx)*5,ya,T.fg,1.3,4); }
+    line(ca,ya,cb,ya,T.fg,1.3);
+    rtextBox([{t:'Δx = ',v:0},{t:num(dx,2),v:0},{t:' m'}],(ca+cb)/2,ya+8,12.5,T.fg,'center','top');
   }
 }
 
@@ -551,16 +631,19 @@ function drawGraph(T){
     tPrev=(i===0?0:n[i-1].t);
     uStart=(n[i].v1-n[i].v2)-(n[i].a1-n[i].a2)*(n[i].t-tPrev);
     if(Math.abs(n[i].v1-n[i].v2)<1e-9&&Math.abs(uStart)>1e-6&&Math.abs(n[i].v1)>1e-9) marks.push([n[i].t,'共速']);
+    if(n[i].off&&(i===0||!n[i-1].off)) marks.push([tPrev,'滑离']);   /* 滑离发生在该段的起点 */
   }
   var last=n[n.length-1];
   if(build.endHum&&Math.abs(last.v1)<1e-9&&Math.abs(last.v2)<1e-9) marks.push([tEnd,'全停']);
+  marks.sort(function(a,b){return a[0]-b[0];});
   var lastX=-999;
-  for(i=0;i<marks.length&&i<2;i++){
+  for(i=0;i<marks.length&&i<3;i++){
     var mx=Xt(marks[i][0]);
     if(mx-lastX<26) continue;
     lastX=mx;
     dash([4,4]); line(mx,GYT,mx,GYB,T.muted,1.1); dash();
-    rtextBox([marks[i][1]],mx,GYB-7,12.5,T.muted,'center','bottom');
+    var tx=clamp(mx,GX0+24,GX1-24);
+    rtextBox([marks[i][1]],tx,GYB-7,12.5,T.muted,'center','bottom');
   }
   /* 当前点 */
   var out=at(tCur), cx=Xt(tCur);
@@ -588,12 +671,16 @@ function draw(){
 
 /* ===== 读数 ===== */
 function stateText(out){
+  if(out.off){
+    if(Math.abs(out.v1)<1e-6&&Math.abs(out.v2)<1e-6) return '已滑离木板，两者均静止';
+    return '已滑离木板，各自只受地面摩擦';
+  }
   if(Math.abs(out.v1)<1e-6&&Math.abs(out.v2)<1e-6) return '两者均已静止';
   if(Math.abs(out.u)<1e-6) return '共速，一起减速';
   return (out.u>0?'木块相对木板向前滑':'木块相对木板向后滑');
 }
 function diffHint(){
-  var names={m1:'m₁',v1:'v₁',mu1:'μ₁',m2:'m₂',v2:'v₂',mu2:'μ₂'}, ch=[], k;
+  var names={m1:'m₁',v1:'v₁',mu1:'μ₁',m2:'m₂',v2:'v₂',mu2:'μ₂',L:'L'}, ch=[], k;
   for(k in P){ if(P.hasOwnProperty(k)&&P[k]!==PREV[k]) ch.push(names[k]); }
   for(k in P){ if(P.hasOwnProperty(k)) PREV[k]=P[k]; }
   if(!ch.length) return '拖动滑块改参数（自动回到 t=0）；拖时间滑块可逐帧查看。';
@@ -605,12 +692,14 @@ function resultLine(){
           'μ₁m₁g 较小，地面静摩擦顶得住，木板保持静止，木块在板上独滑';
   var last=NODES[NODES.length-1];
   var st=build.endHum?'全过程 '+num(tEnd,2)+' s 后静止':'40 s 内未停止';
-  return cmp+'；'+st+'，相对滑动路程 '+num(last.s,2)+' m。';
+  var off=build.tOff>=0?'；木块在 '+num(build.tOff,2)+' s 滑离木板':
+          '；相对位移最大 '+num(Math.abs(last.x1-last.x2),2)+' m，未滑离（板长 '+num(P.L,1)+' m）';
+  return cmp+'；'+st+'，相对滑动路程 '+num(last.s,2)+' m'+off+'。';
 }
 function upd(){
   o1.textContent=num(P.m1,1); o2.textContent=num(P.v1,1);
   o3.textContent=num(P.mu1,2); o4.textContent=num(P.m2,1);
-  o5.textContent=num(P.v2,1); o6.textContent=num(P.mu2,2);
+  o5.textContent=num(P.v2,1); o6.textContent=num(P.mu2,2); o7.textContent=num(P.L,1);
   oT.textContent=num(tCur,2)+' s';
   var out=at(tCur);
   rT.textContent=num(tCur,2)+' s';
@@ -623,6 +712,7 @@ function upd(){
   rSL.textContent=num(out.s,2)+' m';
   rST.textContent=build.endHum?num(tEnd,2)+' s':'＞40 s';
   rState.textContent=stateText(out);
+  rOF.textContent=build.tOff>=0?num(build.tOff,2)+' s':'未滑离';
   rF1.textContent=num(P.mu1*P.m1*G,2)+' N';
   rF2.textContent=num(P.mu2*(P.m1+P.m2)*G,2)+' N';
   hint.textContent=diffHintCache;
@@ -639,7 +729,7 @@ function bind(s,key,dec){
   });
 }
 bind(s1,'m1',1); bind(s2,'v1',1); bind(s3,'mu1',2);
-bind(s4,'m2',1); bind(s5,'v2',1); bind(s6,'mu2',2);
+bind(s4,'m2',1); bind(s5,'v2',1); bind(s6,'mu2',2); bind(s7,'L',1);
 sT.addEventListener('input',function(){
   tCur=parseFloat(sT.value); playing=false; bPlay.textContent='播放';
 });
@@ -649,8 +739,8 @@ bPlay.addEventListener('click',function(){
   bPlay.textContent=playing?'暂停':'播放';
 });
 bReset.addEventListener('click',function(){
-  s1.value='1'; s2.value='6'; s3.value='0.2'; s4.value='2'; s5.value='0'; s6.value='0.1';
-  P.m1=1; P.v1=6; P.mu1=0.2; P.m2=2; P.v2=0; P.mu2=0.1;
+  s1.value='1'; s2.value='6'; s3.value='0.2'; s4.value='2'; s5.value='0'; s6.value='0.1'; s7.value='10';
+  P.m1=1; P.v1=6; P.mu1=0.2; P.m2=2; P.v2=0; P.mu2=0.1; P.L=10;
   for(var k in P){ if(P.hasOwnProperty(k)) PREV[k]=P[k]; }
   syncOut(); tCur=0; playing=true; bPlay.textContent='暂停';
   diffHintCache='拖动滑块改参数（自动回到 t=0）；拖时间滑块可逐帧查看。';
@@ -691,7 +781,7 @@ function resize(){
 }
 window.addEventListener('resize',resize);
 P.m1=parseFloat(s1.value); P.v1=parseFloat(s2.value); P.mu1=parseFloat(s3.value);
-P.m2=parseFloat(s4.value); P.v2=parseFloat(s5.value); P.mu2=parseFloat(s6.value);
+P.m2=parseFloat(s4.value); P.v2=parseFloat(s5.value); P.mu2=parseFloat(s6.value); P.L=parseFloat(s7.value);
 showF=kF.checked; showA=kA.checked; showG=kG.checked;
 build(); resize(); upd();
 if(D.fonts){D.fonts.load('italic 14px KaTeX_Math'); D.fonts.load('14px KaTeX_Main');}
