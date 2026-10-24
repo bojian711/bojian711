@@ -89,6 +89,50 @@
         }
         .pill-link:hover { background: #edf5ff; border-color: #bfd8f7; transform: translateY(-1px); }
 
+        /* 二级目录导航条 */
+        .cat-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: -4px 0 6px;
+        }
+        .cat-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 999px;
+            background: var(--chip);
+            color: var(--chip-text);
+            font-size: 13.5px;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .cat-chip:hover { background: #e8f1fd; color: var(--link); }
+        .cat-chip .count {
+            font-size: 11.5px;
+            color: var(--muted);
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 999px;
+            padding: 0 6px;
+            line-height: 1.5;
+        }
+
+        /* 二级分类小节 */
+        .cat-section { margin-bottom: 30px; scroll-margin-top: 24px; }
+        .cat-section:last-child { margin-bottom: 0; }
+        .cat-head {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            margin: 0 0 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed var(--line);
+        }
+        .cat-title { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; color: var(--subtle); }
+        .cat-num { font-size: 12.5px; color: var(--muted); }
+        .cat-empty { color: #9aa0a8; font-size: 14px; margin: 0; }
+
         .project-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
         .project-card {
             background: rgba(255, 255, 255, 0.72);
@@ -96,7 +140,7 @@
             border-radius: 18px;
             padding: 18px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.032);
-            min-height: 168px;
+            min-height: 150px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -114,7 +158,7 @@
 
         @media (prefers-reduced-motion: reduce) {
             html { scroll-behavior: auto; }
-            .pill-link, .project-card { transition: none; }
+            .pill-link, .project-card, .cat-chip { transition: none; }
         }
         @media (max-width: 900px) {
             .project-grid { grid-template-columns: 1fr 1fr; }
@@ -157,67 +201,178 @@
 
         <section class="card" id="projects">
             <h2>物理动态交互</h2>
-            <div class="project-grid">
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./vernier-caliper.html">游标卡尺读数</a></div>
-                        <div class="project-desc">拖动游标，练习主尺与游标读数</div>
+
+            <div class="cat-nav">
+                <a class="cat-chip" href="#cat-apparatus">实验器材 <span class="count">2</span></a>
+                <a class="cat-chip" href="#cat-math">数学知识 <span class="count">3</span></a>
+                <a class="cat-chip" href="#cat-mechanics">力学模拟 <span class="count">8</span></a>
+                <a class="cat-chip" href="#cat-EM">电磁学模拟 <span class="count">1</span></a>
+                <a class="cat-chip" href="#cat-optics">光学模拟 <span class="count">3</span></a>
+                <a class="cat-chip" href="#cat-thermal">热学模拟 <span class="count">0</span></a>
+                <a class="cat-chip" href="#cat-modern">近代物理模拟 <span class="count">0</span></a>
+            </div>
+
+            <div class="cat-section" id="cat-apparatus">
+                <div class="cat-head">
+                    <span class="cat-title">实验器材</span>
+                    <span class="cat-num">共 2 项</span>
+                </div>
+                <div class="project-grid">
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./vernier-caliper.html">游标卡尺读数</a></div>
+                            <div class="project-desc">拖动游标，练习主尺与游标读数</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./micrometer-reading.html">螺旋测微器读数</a></div>
+                            <div class="project-desc">旋转微分筒，练习螺旋测微器读数</div>
+                        </div>
                     </div>
                 </div>
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./micrometer-reading.html">螺旋测微器读数</a></div>
-                        <div class="project-desc">旋转微分筒，练习螺旋测微器读数</div>
+            </div>
+
+            <div class="cat-section" id="cat-math">
+                <div class="cat-head">
+                    <span class="cat-title">数学知识</span>
+                    <span class="cat-num">共 3 项</span>
+                </div>
+                <div class="project-grid">
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./sine-graph.html">正弦型函数</a></div>
+                            <div class="project-desc">调节参数，观察正弦型函数图像变化</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./vector-addition.html">平面矢量的加法</a></div>
+                            <div class="project-desc">拖出任意多个矢量，按平行四边形或三角形法则分步求和</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./vector-scaling.html">平面矢量的倍乘</a></div>
+                            <div class="project-desc">在网格上拖出矢量，输入系数观察倍乘结果</div>
+                        </div>
                     </div>
                 </div>
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./sine-graph.html">正弦型函数</a></div>
-                        <div class="project-desc">调节参数，观察正弦型函数图像变化</div>
+            </div>
+
+            <div class="cat-section" id="cat-mechanics">
+                <div class="cat-head">
+                    <span class="cat-title">力学模拟</span>
+                    <span class="cat-num">共 8 项</span>
+                </div>
+                <div class="project-grid">
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./line-pursuit.html">同一直线上的相遇与追及</a></div>
+                            <div class="project-desc">调节初速度与加速度，可选减速到零后静止或反向加速，按钮切换地面参考系与以 1 号为参考系，观察追及、相遇与 v-t 图</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./oblique-projectile.html">斜抛运动</a></div>
+                            <div class="project-desc">调节抛出高度、初速度大小与方向角，观察轨迹、位移与速度的斜交分解三角形、射程与包络线</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./block-on-plank.html">板块模型</a></div>
+                            <div class="project-desc">木块—木板 v-t 图象，观察相对滑动与共速过程</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./ball-groove-motion.html">小球与光滑球槽</a></div>
+                            <div class="project-desc">小球在光滑球槽内的运动演示</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./spring-oscillator.html">水平弹簧振子</a></div>
+                            <div class="project-desc">x-t、v-t、a-t 三图对比，观察简谐振动的相位关系</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./two-mass-spring.html">弹簧双振子</a></div>
+                            <div class="project-desc">弹簧连接的双振子 v-t 图像演示</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./sand-pendulum.html">沙摆描绘振动图像</a></div>
+                            <div class="project-desc">沙摆运动，描出简谐振动图像</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./wave-superposition.html">波的叠加演示</a></div>
+                            <div class="project-desc">观察两列波叠加时的干涉加强与减弱</div>
+                        </div>
                     </div>
                 </div>
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./sand-pendulum.html">沙摆描绘振动图像</a></div>
-                        <div class="project-desc">沙摆运动，描出简谐振动图像</div>
+            </div>
+
+            <div class="cat-section" id="cat-EM">
+                <div class="cat-head">
+                    <span class="cat-title">电磁学模拟</span>
+                    <span class="cat-num">共 1 项</span>
+                </div>
+                <div class="project-grid">
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./charged-particle-bfield.html">带电粒子在有界磁场中的圆周运动</a></div>
+                            <div class="project-desc">调节磁场与粒子参数，观察圆周运动的半径、周期与出射方向</div>
+                        </div>
                     </div>
                 </div>
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./light-refraction.html">光的折射与全反射</a></div>
-                        <div class="project-desc">改变入射角，观察折射与全反射</div>
+            </div>
+
+            <div class="cat-section" id="cat-optics">
+                <div class="cat-head">
+                    <span class="cat-title">光学模拟</span>
+                    <span class="cat-num">共 3 项</span>
+                </div>
+                <div class="project-grid">
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./light-refraction.html">光的折射与全反射</a></div>
+                            <div class="project-desc">改变入射角，观察折射与全反射</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./double-slit.html">杨氏双缝干涉</a></div>
+                            <div class="project-desc">立体视角调节缝间距、缝屏距离与光的频率，观察屏上条纹疏密与颜色</div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <div>
+                            <div class="project-title"><a href="./single-slit-diffraction.html">单缝与圆孔衍射</a></div>
+                            <div class="project-desc">立体视角观察单缝与圆孔衍射的图样变化</div>
+                        </div>
                     </div>
                 </div>
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./vector-scaling.html">平面矢量的倍乘</a></div>
-                        <div class="project-desc">在网格上拖出矢量，输入系数观察倍乘结果</div>
-                    </div>
+            </div>
+
+            <div class="cat-section" id="cat-thermal">
+                <div class="cat-head">
+                    <span class="cat-title">热学模拟</span>
+                    <span class="cat-num">共 0 项</span>
                 </div>
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./vector-addition.html">平面矢量的加法</a></div>
-                        <div class="project-desc">拖出任意多个矢量，按平行四边形或三角形法则分步求和</div>
-                    </div>
+                <p class="cat-empty">暂无演示，持续更新中。</p>
+            </div>
+
+            <div class="cat-section" id="cat-modern">
+                <div class="cat-head">
+                    <span class="cat-title">近代物理模拟</span>
+                    <span class="cat-num">共 0 项</span>
                 </div>
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./double-slit.html">杨氏双缝干涉</a></div>
-                        <div class="project-desc">立体视角调节缝间距、缝屏距离与光的频率，观察屏上条纹疏密与颜色</div>
-                    </div>
-                </div>
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./line-pursuit.html">同一直线上的相遇与追及</a></div>
-                        <div class="project-desc">调节初速度与加速度，可选减速到零后静止或反向加速，按钮切换地面参考系与以 1 号为参考系，观察追及、相遇与 v-t 图</div>
-                    </div>
-                </div>
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./oblique-projectile.html">斜抛运动</a></div>
-                        <div class="project-desc">调节抛出高度、初速度大小与方向角，观察轨迹、位移与速度的斜交分解三角形、射程与包络线</div>
-                    </div>
-                </div>
+                <p class="cat-empty">暂无演示，持续更新中。</p>
             </div>
         </section>
 
@@ -235,7 +390,7 @@
     </main>
 
     <footer class="footer">
-        © 2026 bojian711 · 托管于 <a href="https://github.com/bojian711/bojian711" target="_blank" rel="noopener">GitHub Pages</a>
+        © 2026 bojian711 · 托管于 <a href="https://bojian711.github.io/bojian711/" target="_blank" rel="noopener">GitHub Pages</a>
     </footer>
 </body>
 </html>
