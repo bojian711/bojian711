@@ -71,12 +71,12 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
     <div class='row' style='margin-top:7px'>
       <div class='ctl'>
         <span class='lb'><span class='v c1'>v</span><sub class='n'>1</sub> /(m/s)</span>
-        <input id='sv1' type='range' min='-3' max='3' step='0.1' value='3'>
-        <output id='oV1'>3.0</output>
+        <input id='sv1' type='range' min='-2' max='2' step='0.1' value='2'>
+        <output id='oV1'>2.0</output>
       </div>
       <div class='ctl'>
         <span class='lb'><span class='v c2'>v</span><sub class='n'>2</sub> /(m/s)</span>
-        <input id='sv2' type='range' min='-3' max='3' step='0.1' value='-1'>
+        <input id='sv2' type='range' min='-2' max='2' step='0.1' value='-1'>
         <output id='oV2'>−1.0</output>
       </div>
     </div>
@@ -88,6 +88,9 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       </div>
       <button id='bPlay'>暂停</button>
       <button id='bReset'>复位</button>
+      <span class='lb n' style='margin-left:6px'>参考系：</span>
+      <button id='bCm' class='on'>质心参考系</button>
+      <button id='bGr'>地面参考系</button>
     </div>
     <div class='row' style='margin-top:7px'>
       <div class='ctl' style='flex:1 1 100%'>
@@ -124,19 +127,20 @@ var GY=118, SCX=450, SC=48, L0=4.0, BALLR=14;
 var AY=GY-2*BALLR-12;   /* 速度箭头轨道（两球同高） */
 /* 图像区 */
 var GX0=64, GX1=876, GY0=210, GY1=512;
-var TMAX=6, VMAX=8;
+var TMAX=6, VMAX=6;
 var PXT=(GX1-GX0)/TMAX, PVs=(GY1-GY0)/(2*VMAX), GMID=(GY0+GY1)/2;
 
 /* ===== 状态 ===== */
-var DEF={m1:2,m2:2,v1:3,v2:-1,k:20};
-var P={m1:2,m2:2,v1:3,v2:-1,k:20};
+var DEF={m1:2,m2:2,v1:2,v2:-1,k:20};
+var P={m1:2,m2:2,v1:2,v2:-1,k:20};
 var tA=0, running=true, last=0, HALO='#ffffff';
 var showFull=true, showV=true;
 var hintKey='def';
+var frame='cm';   /* 'cm' 质心参考系 / 'gr' 地面参考系 */
 
 var oM1=$('oM1'), oM2=$('oM2'), oV1=$('oV1'), oV2=$('oV2'), oK=$('oK');
 var oT=$('oT'), oW=$('oW'), oVc=$('oVc'), oA=$('oA'), hint=$('hint');
-var bPlay=$('bPlay'), bReset=$('bReset');
+var bPlay=$('bPlay'), bReset=$('bReset'), bCm=$('bCm'), bGr=$('bGr');
 var sm1=$('sm1'), sm2=$('sm2'), sv1=$('sv1'), sv2=$('sv2'), sk=$('sk'), st=$('st'), oTi=$('oTi');
 var kFull=$('kFull'), kV=$('kV');
 
@@ -322,21 +326,35 @@ function velArrow(x,y,v,col,sub){
 function drawScene(Tt){
   var k,x;
   rtext(['光滑水平面（摩擦不计）'],8,24,12,Tt.muted,'left','alphabetic');
-  rtext(['视窗跟随质心'],892,24,12,Tt.muted,'right','alphabetic');
-  /* 地面与刻度（随质心运动滚动） */
+  rtext([frame==='cm'?'质心参考系（质心不动）':'地面参考系（地面不动）'],892,24,12,Tt.muted,'right','alphabetic');
+  /* 相机（Xp：相机相对世界原点的位置，px）
+     质心系：跟随质心，质心恒在画面中央。
+     地面系：相机固定在地面上不动，位置取「整条轨迹 + 两球极限偏移」装得下的居中值。 */
+  var rmax=L0+Math.abs(u0_)/om_;
+  var d1m=(P.m2/M_)*rmax*SC, d2m=-(P.m1/M_)*rmax*SC;
+  var LIM=450-BALLR-16, D=VC_*TMAX*SC;
+  var lo=(D>0?D:0)+d1m-LIM, hi=(D>0?0:D)+LIM+d2m;
+  var Xp;
+  if(frame==='cm') Xp=VC_*tA*SC;
+  else if(lo>hi) Xp=(lo+hi)/2;
+  else Xp=clamp(VC_*TMAX/2*SC,lo,hi);
+  var comS=SCX+VC_*tA*SC-Xp;
+  /* 地面与刻度：刻度固定在地面上，质心系下随相机反向滚动 */
   line(0,GY,900,GY,Tt.axis,1.4);
-  for(k=Math.floor(VC_*tA-SCX/SC)-1;k<=Math.ceil(VC_*tA+(900-SCX)/SC)+1;k++){
-    x=SCX+(k-VC_*tA)*SC;
+  for(k=Math.floor((Xp-SCX)/SC)-1;k<=Math.ceil((Xp+900-SCX)/SC)+1;k++){
+    x=SCX+k*SC-Xp;
     if(x<-12||x>912) continue;
     line(x,GY,x-8,GY+9,Tt.grid,1.2);
   }
   /* 质心参考线：与下方的质心三角标记在同一竖直线上 */
-  dash([5,5]);
-  line(SCX,28,SCX,GY+26,Tt.muted,1.2);
-  dash([]);
-  /* 两球（等大，质心固定在 SCX） */
+  if(comS>-20&&comS<920){
+    dash([5,5]);
+    line(comS,28,comS,GY+26,Tt.muted,1.2);
+    dash([]);
+  }
+  /* 两球（等大） */
   var rr=rof(tA);
-  var x1=SCX+(P.m2/M_)*rr*SC, x2=SCX-(P.m1/M_)*rr*SC;
+  var x1=comS+(P.m2/M_)*rr*SC, x2=comS-(P.m1/M_)*rr*SC;
   var yc=GY-BALLR;
   drawSpring(x1,yc,x2,Tt.muted);
   ball(x1,yc,BALLR,Tt.p1,'1');
@@ -344,10 +362,12 @@ function drawScene(Tt){
   velArrow(x1,AY,v1of(tA),Tt.p1,'1');
   velArrow(x2,AY,v2of(tA),Tt.p2,'2');
   /* 质心标记 */
-  ctx.fillStyle=Tt.muted;
-  ctx.beginPath(); ctx.moveTo(SCX,GY+13); ctx.lineTo(SCX-5.5,GY+23); ctx.lineTo(SCX+5.5,GY+23);
-  ctx.closePath(); ctx.fill();
-  rtext(['质心'],SCX,GY+38,11.5,Tt.muted,'center','alphabetic');
+  if(comS>-20&&comS<920){
+    ctx.fillStyle=Tt.muted;
+    ctx.beginPath(); ctx.moveTo(comS,GY+13); ctx.lineTo(comS-5.5,GY+23); ctx.lineTo(comS+5.5,GY+23);
+    ctx.closePath(); ctx.fill();
+    rtext(['质心'],comS,GY+38,11.5,Tt.muted,'center','alphabetic');
+  }
 }
 
 /* ===== v-t 图 ===== */
@@ -447,7 +467,9 @@ var HINTS={
   m2:'仅 <span class=v>m</span><sub>2</sub> 变：两球的振幅分配与周期都变；<span class=v>m</span><sub>2</sub> 越小，球 2 的速度振幅越大。',
   v1:'仅 <span class=v>v</span><sub>1</sub> 变：质心速度 <span class=v>V</span> 与振幅都变，但周期不变——周期只由 <span class=v>m</span><sub>1</sub>、<span class=v>m</span><sub>2</sub>、<span class=v>k</span> 决定。',
   v2:'仅 <span class=v>v</span><sub>2</sub> 变：质心速度 <span class=v>V</span> 与振幅都变，但周期不变。',
-  k:'仅 <span class=v>k</span> 变：振荡快慢变（周期 <span class=v>T</span> 反比于 √<span class=v>k</span>），速度曲线的振幅与平均高度 <span class=v>V</span> 都不变。'
+  k:'仅 <span class=v>k</span> 变：振荡快慢变（周期 <span class=v>T</span> 反比于 √<span class=v>k</span>），速度曲线的振幅与平均高度 <span class=v>V</span> 都不变。',
+  cm:'质心参考系：竖直线即质心，两球只在质心两侧往复，看不出整体平移。相对运动与地面系完全相同。',
+  gr:'地面参考系：地面与刻度静止，两球随质心整体平移，同时叠加相对振动；两条曲线的平均高度就是质心速度 <span class=v>V</span>。'
 };
 function upd(){
   recompute();
@@ -475,11 +497,19 @@ st.addEventListener('input',function(){
 });
 kFull.addEventListener('change',function(){showFull=kFull.checked;});
 kV.addEventListener('change',function(){showV=kV.checked;});
+function setFrame(f){
+  frame=f;
+  bCm.className=(f==='cm')?'on':'';
+  bGr.className=(f==='gr')?'on':'';
+  hintKey=f;
+}
+bCm.addEventListener('click',function(){setFrame('cm'); upd();});
+bGr.addEventListener('click',function(){setFrame('gr'); upd();});
 bPlay.addEventListener('click',function(){running=!running; bPlay.textContent=running?'暂停':'播放';});
 bReset.addEventListener('click',function(){
   P.m1=DEF.m1; P.m2=DEF.m2; P.v1=DEF.v1; P.v2=DEF.v2; P.k=DEF.k;
   sm1.value=DEF.m1; sm2.value=DEF.m2; sv1.value=DEF.v1; sv2.value=DEF.v2; sk.value=DEF.k;
-  hintKey='def'; tA=0; st.value='0'; upd();
+  hintKey='def'; tA=0; st.value='0'; setFrame('cm'); upd();
 });
 
 /* ===== 主循环 ===== */
