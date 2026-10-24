@@ -39,6 +39,10 @@ button{background:var(--btn);color:var(--fg);border:1px solid var(--line);
   border-radius:7px;padding:5px 13px;font-size:13px;cursor:pointer}
 button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
 .chk{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted);cursor:pointer}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:none;border-radius:0;padding:5px 14px;font-size:13px;opacity:.62}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--accent,#a3563c);color:#fff;opacity:1}
 .readout{display:flex;flex-wrap:wrap;gap:3px 20px;margin-top:7px;font-size:13px;line-height:1.7}
 .rule{margin-top:6px;padding-top:7px;border-top:1px solid var(--line);font-size:13px;line-height:1.75}
 .hint{margin-top:6px;font-size:12.5px;color:var(--muted);min-height:1.6em}
@@ -88,6 +92,10 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <label class='chk'><input id='kRev' type='checkbox'>减速到 0 后反向加速（不勾选则静止）</label>
     </div>
     <div class='row' style='margin-top:8px'>
+      <div class='seg' role='group' aria-label='参考系切换'>
+        <button id='mG' class='on'>地面参考系</button>
+        <button id='mR'>以 1 号为参考系</button>
+      </div>
       <button id='bPlay'>暂停</button>
       <button id='bReset'>复位</button>
       <div class='ctl' style='flex:3 1 260px'>
@@ -106,7 +114,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span><span class='v'>Δv</span> = <span class='n' id='rDV'>—</span></span>
       <span>相遇：<span class='n' id='rMeet'>—</span></span>
     </div>
-    <div class='rule'>1 号从原点出发，2 号在其后方 <span class='v'>d</span> 米处。v-t 图线下的面积是位移，两条图线之间的面积差就是间距的变化，间距减到 0 即相遇；减速的图线落到 <span class='v'>t</span> 轴后：默认保持为 0，勾选「反向加速」则穿过 0 沿反方向加速。以 1 号为参考系时，2 号走到 <span class='n'>0</span> 处即相遇。</div>
+    <div class='rule'>1 号从原点出发，2 号在其后方 <span class='v'>d</span> 米处。v-t 图线下的面积是位移，两条图线之间的面积差就是间距的变化，间距减到 0 即相遇；减速的图线落到 <span class='v'>t</span> 轴后：默认保持为 0，勾选「反向加速」则穿过 0 沿反方向加速。用按钮切换参考系：以 1 号为参考系时，2 号走到 <span class='n'>0</span> 处即相遇。</div>
     <div class='hint' id='hint'>拖动滑块改变参数（自动回到 t=0）；拖时间滑块可逐帧查看。</div>
   </div>
 </div>
@@ -120,7 +128,7 @@ var cv=$('cv'), ctx=cv.getContext('2d');
 /* ===== 固定标尺 ===== */
 var LW=920, LH=580;
 var TX0=86, TX1=858;              /* 轨道横向范围 */
-var G_CY=92, R_CY=214;            /* 两条轨道的 y */
+var TR_CY=150;                    /* 单条轨道的 y（模式切换，一次只画一条）*/
 var PX0=86, PX1=880, YT=286, YB=548;  /* v-t 绘图区 */
 
 /* ===== 状态 ===== */
@@ -133,6 +141,17 @@ var s1=$('s1'), s2=$('s2'), s3=$('s3'), s4=$('s4'), s5=$('s5'), sT=$('sT');
 var o1=$('o1'), o2=$('o2'), o3=$('o3'), o4=$('o4'), o5=$('o5'), oT=$('oT');
 var rT=$('rT'), rX1=$('rX1'), rX2=$('rX2'), rDX=$('rDX');
 var rV1=$('rV1'), rV2=$('rV2'), rDV=$('rDV'), rMeet=$('rMeet');
+var mG=$('mG'), mR=$('mR');
+/* 参考系模式：ground | rel，初值从按钮 class 读取 */
+var MODE=mG.classList.contains('on')?'ground':'rel';
+function setMode(m){
+  MODE=m;
+  mG.classList.toggle('on',m==='ground');
+  mR.classList.toggle('on',m==='rel');
+  draw();
+}
+mG.addEventListener('click',function(){setMode('ground');});
+mR.addEventListener('click',function(){setMode('rel');});
 var hint=$('hint'), bPlay=$('bPlay'), bReset=$('bReset'), kRel=$('kRel'), kRev=$('kRev');
 
 /* ===== 物理模型：a<0 减速；默认 v 到 0 后静止，勾选 kRev 后反向加速 ===== */
@@ -348,9 +367,14 @@ function vsub(x,y,size,color,base,sub){
   ctx.font=fontOf(false,size*0.75); ctx.fillText(sub,x+wB+1,y+3);
   return wB+1+wS;
 }
-function objCirc(px,cy,color,label,filled,T,r){
+function objCirc(px,cy,color,label,filled,T,r,side){
   if(filled) ring(px,cy,r,color,HALO,2);
   else ring(px,cy,r,T.bg,color,2.5);
+  if(side==='left'){
+    /* 两圈重叠时把数字挪到圈外左侧，避免被另一个圆盖掉 */
+    rtextBox([{t:label}],px-r-5,cy,11.5,filled?T.p2:color,'right','middle');
+    return;
+  }
   ctx.font=fontOf(false,r>8?11:10); ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillStyle=filled?T.bg:color;
   ctx.fillText(label,px,cy+0.5);
@@ -360,7 +384,7 @@ function objCirc(px,cy,color,label,filled,T,r){
 /* ===== 地面参考系 ===== */
 function drawGround(T){
   rtext([{t:'地面参考系'}],24,40,14,T.fg);
-  var cy=G_CY,px,v,i;
+  var cy=TR_CY,px,v,i;
   line(TX0-6,cy,TX1+8,cy,T.axis,1.4);
   arrowHead(TX1+9,cy,1,T.axis,5.5);
   rtext([{t:'x',v:1},{t:'/m'}],TX1+16,cy+5,13,T.muted);
@@ -389,14 +413,15 @@ function drawGround(T){
   if(Math.abs(gX(x1c)-gX(0))>1) line(gX(0),cy,gX(x1c),cy,T.p1,4);
   if(Math.abs(gX(x2c)-gX(-P.d))>1) line(gX(-P.d),cy,gX(x2c),cy,T.p2,4);
   ctx.restore();
-  objCirc(gX(x1c),cy,T.p1,'1',true,T,10);
+  var far=Math.abs(gX(x1c)-gX(x2c))>18;
+  objCirc(gX(x1c),cy,T.p1,'1',true,T,10,far?'':'left');
   objCirc(gX(x2c),cy,T.p2,'2',true,T,6.5);
 }
 
 /* ===== 以 1 号为参考系 ===== */
 function drawRelative(T){
-  rtext([{t:'以 1 号为参考系'}],24,162,14,T.fg);
-  var cy=R_CY,px,v,i;
+  rtext([{t:'以 1 号为参考系'}],24,40,14,T.fg);
+  var cy=TR_CY,px,v,i;
   line(TX0-6,cy,TX1+8,cy,T.axis,1.4);
   arrowHead(TX1+9,cy,1,T.axis,5.5);
   rtext([{t:'Δ'},{t:'x',v:1},{t:'/m'}],TX1+16,cy+5,13,T.muted);
@@ -410,7 +435,8 @@ function drawRelative(T){
   ctx.save(); ctx.globalAlpha=0.30; ctx.lineCap='round';
   if(Math.abs(rX(xr)-rX(-P.d))>1) line(rX(-P.d),cy,rX(xr),cy,T.p2,4);
   ctx.restore();
-  objCirc(rX(0),cy,T.p1,'1',false,T,10);
+  var far=Math.abs(rX(xr)-rX(0))>18;
+  objCirc(rX(0),cy,T.p1,'1',false,T,10,far?'':'left');
   objCirc(rX(xr),cy,T.p2,'2',true,T,6.5);
 }
 
@@ -512,8 +538,7 @@ function draw(){
   ctx.save();
   ctx.setTransform(cv.width/LW,0,0,cv.height/LH,0,0);
   ctx.clearRect(0,0,LW,LH);
-  drawGround(T);
-  drawRelative(T);
+  if(MODE==='ground') drawGround(T); else drawRelative(T);
   drawVT(T);
   ctx.restore();
 }
