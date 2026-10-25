@@ -121,6 +121,7 @@ button.plain{background:var(--btn);color:var(--fg);border:1px solid var(--line);
         <div id='aiCfg' style='display:none;margin-top:6px'>
           <div class='lb'>视觉模型服务（OpenAI 兼容接口）</div>
           <div class='seg' id='segPreset'>
+            <button data-v='deepseek'>DeepSeek</button>
             <button data-v='glm'>智谱 GLM-4V（免费额度）</button>
             <button data-v='qwen'>阿里百炼 Qwen-VL</button>
             <button data-v='kimi'>月之暗面 Kimi</button>
@@ -1407,6 +1408,7 @@ $('dz').addEventListener('drop',function(e){
 
 /* ===== AI 识别题目特征 ===== */
 var AI_PRESETS={
+  deepseek:{base:'https://api.deepseek.com',model:'deepseek-flash'},
   glm:{base:'https://open.bigmodel.cn/api/paas/v4',model:'glm-4v-flash'},
   qwen:{base:'https://dashscope.aliyuncs.com/compatible-mode/v1',model:'qwen-vl-plus'},
   kimi:{base:'https://api.moonshot.cn/v1',model:'moonshot-v1-8k-vision-preview'},
@@ -1416,8 +1418,8 @@ var store=(function(){
   try{ if(typeof localStorage!=='undefined'&&localStorage) return localStorage; }catch(e){}
   var m={}; return {getItem:function(k){ return (k in m)?m[k]:null; },setItem:function(k,v){ m[k]=String(v); }};
 })();
-var aiPreset=store.getItem('fa_ai_preset')||'glm';
-if(!AI_PRESETS[aiPreset]) aiPreset='glm';
+var aiPreset=store.getItem('fa_ai_preset')||'deepseek';
+if(!AI_PRESETS[aiPreset]) aiPreset='deepseek';
 var aiBusy=false;
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function aiStat(t,bad){
