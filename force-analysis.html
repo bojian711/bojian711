@@ -73,6 +73,11 @@ button.plain{background:var(--btn);color:var(--fg);border:1px solid var(--line);
   background:var(--bg);font-size:12.5px;line-height:1.7}
 .fcard .fh{font-weight:700}
 .fcard.no{opacity:.72}
+.tinp{flex:1 1 120px;min-width:60px;background:var(--bg);color:var(--fg);
+  border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12.5px}
+.aires{border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:7px 0;
+  background:var(--bg);font-size:12.5px;line-height:1.7}
+.aires .bad{color:var(--p1);font-weight:700}
 .dz{border:1.5px dashed var(--line);border-radius:8px;padding:10px;text-align:center;
   color:var(--muted);font-size:12.5px;margin:6px 0;cursor:pointer}
 #ccv{border:1px solid var(--line);border-radius:6px;cursor:crosshair;touch-action:none}
@@ -109,7 +114,26 @@ button.plain{background:var(--btn);color:var(--fg);border:1px solid var(--line);
           <button class='act' id='bCrop'>应用裁剪</button>
           <button class='plain' id='bCropReset' style='margin-left:6px'>重选</button>
         </div>
-        <div class='hint'>在图上拖出方框，只保留研究对象和连接关系（斜面、绳、弹簧……），裁掉题干文字、选项等无用信息。截图只在本机浏览器里显示，不上传。也可以直接跳过本步。</div>
+        <div id='aiRow' style='display:none;margin-top:6px'>
+          <button class='act' id='bAI'>AI 识别题目特征</button>
+          <button class='plain' id='bAISet' style='margin-left:6px'>识别设置</button>
+        </div>
+        <div id='aiCfg' style='display:none;margin-top:6px'>
+          <div class='lb'>视觉模型服务（OpenAI 兼容接口）</div>
+          <div class='seg' id='segPreset'>
+            <button data-v='glm'>智谱 GLM-4V（免费额度）</button>
+            <button data-v='qwen'>阿里百炼 Qwen-VL</button>
+            <button data-v='kimi'>月之暗面 Kimi</button>
+            <button data-v='custom'>自定义</button>
+          </div>
+          <div class='ctl'><span>接口地址</span><input class='tinp' id='tBase' spellcheck='false'></div>
+          <div class='ctl'><span>API Key</span><input class='tinp' id='tKey' type='password' spellcheck='false'></div>
+          <div class='ctl'><span>模型名</span><input class='tinp' id='tModel' spellcheck='false'></div>
+          <div class='hint'>Key 只保存在本机浏览器。点「AI 识别」时截图会发给你配置的服务商；若浏览器报跨域（CORS）错误，换支持浏览器直连的服务商，或在接口地址里填自己的代理。</div>
+        </div>
+        <div id='aiStat' class='hint'></div>
+        <div id='aiResult' class='aires' style='display:none'></div>
+        <div class='hint'>在图上拖出方框，只保留研究对象和连接关系（斜面、绳、弹簧……），裁掉题干文字、选项等无用信息，再点「AI 识别题目特征」自动填写第 1 步；识别结果务必核对，拿不准的项会标注「待核」。截图只在本机显示，不上传到本页服务器。也可以跳过本步直接手填。</div>
       </div>
 
       <div id='sec1' style='display:none'>
@@ -1292,13 +1316,14 @@ $('bFReset').addEventListener('click',function(){ FREVEAL=0; refresh(); });
 
 /* ===== 第 0 步：截图与裁剪 ===== */
 var ccv=$('ccv'), cctx=ccv.getContext('2d');
-var img=null, drag=null, fit={x:0,y:0,w:0,h:0};
+var img=null, imgDataUrl='', drag=null, fit={x:0,y:0,w:0,h:0};
 function loadImg(dataUrl){
   var im=new Image();
   im.onload=function(){
-    img=im;
+    img=im; imgDataUrl=dataUrl;
     ccv.style.display='block';
     $('cropBtns').style.display='block';
+    $('aiRow').style.display='block';
     drawCrop();
   };
   im.src=dataUrl;
@@ -1380,6 +1405,196 @@ $('dz').addEventListener('drop',function(e){
   rd.readAsDataURL(f);
 });
 
+/* ===== AI 识别题目特征 ===== */
+var AI_PRESETS={
+  glm:{base:'https://open.bigmodel.cn/api/paas/v4',model:'glm-4v-flash'},
+  qwen:{base:'https://dashscope.aliyuncs.com/compatible-mode/v1',model:'qwen-vl-plus'},
+  kimi:{base:'https://api.moonshot.cn/v1',model:'moonshot-v1-8k-vision-preview'},
+  custom:{base:'',model:''}
+};
+var store=(function(){
+  try{ if(typeof localStorage!=='undefined'&&localStorage) return localStorage; }catch(e){}
+  var m={}; return {getItem:function(k){ return (k in m)?m[k]:null; },setItem:function(k,v){ m[k]=String(v); }};
+})();
+var aiPreset=store.getItem('fa_ai_preset')||'glm';
+if(!AI_PRESETS[aiPreset]) aiPreset='glm';
+var aiBusy=false;
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function aiStat(t,bad){
+  var el=$('aiStat'); el.textContent=t;
+  el.style.color=bad?'var(--p1)':'var(--muted)';
+}
+function aiLoad(){
+  setSeg('segPreset',aiPreset);
+  $('tBase').value=store.getItem('fa_ai_base')||AI_PRESETS[aiPreset].base;
+  $('tKey').value=store.getItem('fa_ai_key')||'';
+  $('tModel').value=store.getItem('fa_ai_model')||AI_PRESETS[aiPreset].model;
+}
+function aiSave(){
+  store.setItem('fa_ai_preset',aiPreset);
+  store.setItem('fa_ai_base',$('tBase').value.trim());
+  store.setItem('fa_ai_key',$('tKey').value.trim());
+  store.setItem('fa_ai_model',$('tModel').value.trim());
+}
+segWire('segPreset',function(v){
+  aiPreset=v;
+  if(v!=='custom'){ $('tBase').value=AI_PRESETS[v].base; $('tModel').value=AI_PRESETS[v].model; }
+  aiSave();
+});
+['tBase','tKey','tModel'].forEach(function(id){ $(id).addEventListener('change',aiSave); });
+$('bAISet').addEventListener('click',function(){
+  $('aiCfg').style.display=($('aiCfg').style.display==='none')?'block':'none';
+});
+var AI_PROMPT='你是一名中学物理老师。请阅读这张力学题目的截图，提取受力分析所需的几何与力学特征。\n'
++'只输出一个 JSON 对象（标准 JSON），不要输出任何其他文字或解释。字段说明：\n'
++'mode：研究对象模式，single=单物体，double=两个物体组成的系统，spring=单根轻弹簧。\n'
++'layout：仅 double 需要，stack=叠放（一个压在一个上面），line=并排（绳或杆相连）。\n'
++'support：支承方式，horiz=水平面，incline=斜面，wall=竖直墙，hang=天花板悬挂，free=悬空（无支承）。\n'
++'theta：斜面倾角的度数，数字；非斜面或题中未给出则 null。\n'
++'attach：物体上的附加连接，none=无，rope=还连着绳，spring=还连着弹簧。\n'
++'phi：绳与水平方向的夹角度数；无绳则 null。\n'
++'hasF：是否有重力、弹力、摩擦力之外的题给已知外力（如拉力、推力 F），true 或 false。\n'
++'alpha：该外力 F 的方向角，自水平向右方向逆时针计量的度数；无 F 则 null。\n'
++'rough：接触面是否粗糙；题目说光滑则 false，说粗糙或未说明且有摩擦迹象则 true。\n'
++'state：static=静止或匀速（平衡），accel=沿面匀加速。\n'
++'adir：仅 accel 需要，up=沿面上行，down=沿面下行。\n'
++'goal：仅 double 需要，inner=求两物体之间的作用力，outer=求外力或加速度。\n'
++'sprState：仅 spring 需要，tension=拉伸，compress=压缩。\n'
++'unsure：字符串数组，列出你无法从图上确定、需要人工核对的特征名称；没有则给空数组。\n'
++'summary：一句话概括题意。\n'
++'拿不准的字段一律填 null，并把该项写进 unsure，不要猜测。';
+function aiImage(){
+  return new Promise(function(res){
+    var du=($('prevBar').style.display==='flex'&&$('imgPrev').src.length>100)?$('imgPrev').src:imgDataUrl;
+    if(!du){ res(''); return; }
+    var im=new Image();
+    im.onload=function(){
+      var k=Math.min(1,1024/Math.max(im.width,im.height));
+      var c=D.createElement('canvas');
+      c.width=Math.max(1,Math.round(im.width*k));
+      c.height=Math.max(1,Math.round(im.height*k));
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+      res(c.toDataURL('image/jpeg',0.85));
+    };
+    im.onerror=function(){ res(''); };
+    im.src=du;
+  });
+}
+function aiApply(j){
+  var rows=[];
+  function one(name,val,ok){ rows.push({name:name,val:val,ok:ok}); }
+  function num(v){ return (typeof v==='number'&&isFinite(v))?v:null; }
+  var modes={single:'单物体',double:'双物体',spring:'单根弹簧'};
+  if(j.mode&&modes[j.mode]){ MODE=j.mode; setSeg('segMode',MODE); one('对象模式',modes[MODE],true); }
+  else one('对象模式','待核',false);
+  if(MODE==='double'){
+    var lays={stack:'叠放（B 在 A 上）',line:'并排（绳相连）'};
+    if(j.layout&&lays[j.layout]){ LAYOUT=j.layout; setSeg('segLayout',LAYOUT); one('双物体布局',lays[LAYOUT],true); }
+    else one('双物体布局','待核',false);
+    var goals={inner:'求 A、B 间作用力',outer:'求外力 / 加速度'};
+    if(j.goal&&goals[j.goal]){ GOAL=j.goal; setSeg('segGoal',GOAL); one('求解目标',goals[GOAL],true); }
+    else one('求解目标','待核',false);
+  }
+  if(MODE==='spring'){
+    var sps={tension:'拉伸',compress:'压缩'};
+    if(j.sprState&&sps[j.sprState]){ SPRST=j.sprState; setSeg('segSprState',SPRST); one('弹簧状态',sps[SPRST],true); }
+    else one('弹簧状态','待核',false);
+  }
+  if(MODE!=='spring'){
+    var sups={horiz:'水平面',incline:'斜面',wall:'竖直墙',hang:'悬挂',free:'悬空'};
+    if(MODE==='double'){ delete sups.wall; delete sups.hang; delete sups.free; }
+    if(j.support&&sups[j.support]){ SUPPORT=j.support; setSeg('segSupport',SUPPORT); one('支承方式',sups[SUPPORT],true); }
+    else one('支承方式','待核',false);
+    if(SUPPORT==='incline'){
+      var th=num(j.theta);
+      if(th!==null){ THETA=Math.min(45,Math.max(10,Math.round(th))); sTheta.value=THETA; one('斜面倾角 θ',THETA+'°'+(Math.abs(th-THETA)>0.5?'（已夹到量程）':''),true); }
+      else one('斜面倾角 θ','待核',false);
+    }
+    if(MODE==='single'&&(SUPPORT==='horiz'||SUPPORT==='incline')){
+      var ats={none:'无',rope:'绳',spring:'弹簧'};
+      if(SUPPORT!=='horiz') delete ats.spring;
+      if(j.attach&&ats[j.attach]){ ATTACH=j.attach; setSeg('segAttach',ATTACH); one('附加连接',ats[ATTACH],true); }
+      else { ATTACH='none'; setSeg('segAttach','none'); one('附加连接','无',true); }
+      if(ATTACH==='rope'){
+        var ph=num(j.phi);
+        if(ph!==null){ PHI=Math.min(75,Math.max(15,Math.round(ph))); sPhi.value=PHI; one('绳与水平夹角 φ',PHI+'°',true); }
+        else one('绳与水平夹角 φ','待核',false);
+      }
+    }
+    if(typeof j.hasF==='boolean'){ HASF=j.hasF; setSeg('segF',HASF?'yes':'no'); one('已知外力 F',HASF?'有':'无',true); }
+    else one('已知外力 F','待核',false);
+    if(HASF){
+      var al=num(j.alpha);
+      if(al!==null){ ALPHA=Math.min(360,Math.max(0,Math.round(al/15)*15)); sAlpha.value=ALPHA; one('F 的方向角 α',ALPHA+'°'+(Math.abs(al-ALPHA)>0.5?'（已取整到 15°）':''),true); }
+      else one('F 的方向角 α','待核',false);
+    }
+    if(typeof j.rough==='boolean'){ ROUGH=j.rough; kRough.checked=ROUGH; one('接触面',ROUGH?'粗糙':'光滑',true); }
+    else one('接触面粗糙与否','待核',false);
+    if(j.state==='static'||j.state==='accel'){ STATE=j.state; setSeg('segState',STATE); one('运动状态',STATE==='static'?'静止（平衡）':'沿面匀加速',true); }
+    else one('运动状态','待核',false);
+    if(STATE==='accel'){
+      var ads={up:'沿面上行',down:'沿面下行'};
+      if(j.adir&&ads[j.adir]){ ADIR=j.adir; setSeg('segADir',ADIR); one('加速方向',ads[ADIR],true); }
+      else one('加速方向','待核',false);
+    }
+  }
+  cfgChanged();
+  var h='';
+  if(j.summary) h+='<div style=margin-bottom:4px><b>题意：</b>'+esc(j.summary)+'</div>';
+  var i, bad=0;
+  for(i=0;i<rows.length;i++){
+    h+='<div>· '+rows[i].name+'：'+(rows[i].ok?esc(rows[i].val):'<span class=bad>待核</span>')+'</div>';
+    if(!rows[i].ok) bad++;
+  }
+  var un=(j.unsure instanceof Array)?j.unsure:[];
+  for(i=0;i<un.length;i++) h+='<div class=bad>· 模型自述不确定：'+esc(un[i])+'</div>';
+  h+='<div style=margin-top:5px>'+(bad?('有 '+bad+' 项待核，请逐项核对。'):'全部识别完成，仍请核对一遍。')
+    +'<button class=act id=bAIGo style=margin-left:8px>去核对特征</button></div>';
+  var box=$('aiResult');
+  box.innerHTML=h;
+  box.style.display='block';
+  var bgo=$('bAIGo');
+  if(bgo) bgo.addEventListener('click',function(){ setStep(1); });
+  aiStat(bad?('识别完成，'+bad+' 项待核。'):'识别完成。');
+}
+$('bAI').addEventListener('click',function(){
+  if(aiBusy) return;
+  aiSave();
+  var key=$('tKey').value.trim();
+  var base=$('tBase').value.trim().replace(/\/+$/,'');
+  var model=$('tModel').value.trim();
+  if(!key||!base||!model){
+    $('aiCfg').style.display='block';
+    aiStat('先填接口地址、API Key 和模型名。',true);
+    return;
+  }
+  aiBusy=true;
+  aiStat('识别中（约 5–20 秒）…');
+  aiImage().then(function(du){
+    if(!du){ aiBusy=false; aiStat('没有可识别的图片，先粘贴或拖入题目截图。',true); return; }
+    return window.fetch(base+'/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({model:model,temperature:0.1,messages:[{role:'user',content:[
+        {type:'text',text:AI_PROMPT},
+        {type:'image_url',image_url:{url:du}}
+      ]}]})
+    }).then(function(r){
+      if(!r.ok) return r.text().then(function(t){ throw new Error('HTTP '+r.status+'：'+t.slice(0,200)); });
+      return r.json();
+    }).then(function(resp){
+      var txt=(resp&&resp.choices&&resp.choices[0]&&resp.choices[0].message&&resp.choices[0].message.content)||'';
+      var a=txt.indexOf('{'), b=txt.lastIndexOf('}');
+      if(a<0||b<=a) throw new Error('模型没有返回 JSON：'+txt.slice(0,160));
+      aiApply(JSON.parse(txt.slice(a,b+1)));
+      aiBusy=false;
+    });
+  }).catch(function(e){
+    aiBusy=false;
+    aiStat('识别失败：'+((e&&e.message)||e)+'（若浏览器拦截了跨域请求也会报这个错，可换服务商或用代理地址）',true);
+  });
+});
+
 /* ===== 启动 ===== */
 W.addEventListener('resize',function(){ resize(); draw(); });
 var lastRO=0;
@@ -1394,6 +1609,7 @@ if(D.fonts){ D.fonts.load('italic 14px KaTeX_Math'); D.fonts.load('14px KaTeX_Ma
 resetForces();
 syncForm();
 resize();
+aiLoad();
 setStep(1);
 })();
 </script>
