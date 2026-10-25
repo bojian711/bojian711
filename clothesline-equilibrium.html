@@ -37,9 +37,8 @@ canvas{display:block;width:100%;height:640px;touch-action:none;cursor:default}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:8px 12px}
 .ctl{min-width:0;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 9px;display:flex;align-items:center;gap:7px;font-size:13px}
 .ctl label{white-space:nowrap;color:var(--fg)}
-.ctl input[type=number]{width:76px;min-width:0;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:13px KaTeX_Main,Georgia,serif}
-.ctl input[type=range]{flex:1 1 72px;min-width:58px;max-width:180px;accent-color:var(--p4)}
-.ctl output{font:13px KaTeX_Main,Georgia,serif;min-width:44px;text-align:right}
+.ctl input[type=range]{flex:1 1 72px;min-width:56px;max-width:180px;accent-color:var(--p4)}
+.ctl output{font:13px KaTeX_Main,Georgia,serif;min-width:40px;text-align:right}
 .unit{font:12px KaTeX_Main,Georgia,serif;color:var(--muted)}
 .actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:9px}
 button{background:var(--btn);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:5px 13px;font-size:13px;cursor:pointer}
@@ -53,7 +52,7 @@ button:hover{border-color:var(--p2)}
 .c1{color:var(--p1);font-weight:700}.c2{color:var(--p2);font-weight:700}.c3{color:var(--p3);font-weight:700}.c4{color:var(--p4);font-weight:700}
 @media (max-width:720px){
   .wrap{padding:5px}.head{display:block}.assume{text-align:left;margin-top:3px}.title{font-size:16px}
-  .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.ctl{padding:6px 7px}.ctl input[type=number]{width:62px}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.ctl{padding:6px 7px}.ctl output{min-width:36px}
   .readout{grid-template-columns:1fr 1fr;gap:3px 10px}.drag-tip{font-size:11px}
 }
 @media (max-width:470px){.grid{grid-template-columns:1fr}.readout{grid-template-columns:1fr}}
@@ -67,17 +66,17 @@ button:hover{border-color:var(--p2)}
   </div>
   <div class='canvas-wrap'>
     <canvas id='cv' aria-label='晾衣绳受力与位形图'></canvas>
-    <div class='drag-tip'>拖动墙上的 A、B 悬点；箭头按同一力标尺绘制；平衡点移动会留下轨迹</div>
+    <div class='drag-tip'>滑块改参数，拖动 A、B 改悬点高度；箭头按同一力标尺绘制；平衡点移动会留下轨迹</div>
   </div>
   <div class='panel'>
     <div class='grid'>
-      <div class='ctl'><label for='iD'>墙距 <span class='v c2'>d</span></label><input id='iD' type='number' min='3' max='8.5' step='0.1' value='6'><span class='unit'>m</span></div>
-      <div class='ctl'><label for='iL'>绳长 <span class='v c1'>l</span></label><input id='iL' type='number' min='3.2' max='10' step='0.1' value='7.5'><span class='unit'>m</span></div>
-      <div class='ctl'><label for='iM'>衣物质量 <span class='v c3'>m</span></label><input id='iM' type='number' min='0.5' max='50' step='0.5' value='5'><span class='unit'>kg</span></div>
-      <div class='ctl'><label for='iK'>恒力比 <span class='v c4'>F</span><span class='n'>/(</span><span class='v'>mg</span><span class='n'>)</span></label><input id='iK' type='number' min='0' max='3' step='0.05' value='0.4'></div>
-      <div class='ctl'><label for='iYA'>A 高度 <span class='v'>y</span><span class='n'>₁</span></label><input id='iYA' type='number' min='3.8' max='6.2' step='0.05' value='6'><span class='unit'>m</span></div>
-      <div class='ctl'><label for='iYB'>B 高度 <span class='v'>y</span><span class='n'>₂</span></label><input id='iYB' type='number' min='3.8' max='6.2' step='0.05' value='6'><span class='unit'>m</span></div>
-      <div class='ctl'><label for='iTheta'>力向 <span class='v c4'>θ</span></label><input id='iTheta' type='number' min='-180' max='180' step='1' value='0'><span class='unit'>°</span></div>
+      <div class='ctl'><label for='iD'>墙距 <span class='v c2'>d</span></label><input id='iD' type='range' min='3' max='8.5' step='0.1' value='6'><output id='oDv'>6.0</output><span class='unit'>m</span></div>
+      <div class='ctl'><label for='iL'>绳长 <span class='v c1'>l</span></label><input id='iL' type='range' min='3.2' max='10' step='0.1' value='7.5'><output id='oLv'>7.5</output><span class='unit'>m</span></div>
+      <div class='ctl'><label for='iM'>质量 <span class='v c3'>m</span></label><input id='iM' type='range' min='0.5' max='50' step='0.5' value='5'><output id='oMv'>5.0</output><span class='unit'>kg</span></div>
+      <div class='ctl'><label for='iK'>恒力比 <span class='v c4'>F</span><span class='n'>/(</span><span class='v'>mg</span><span class='n'>)</span></label><input id='iK' type='range' min='0' max='3' step='0.05' value='0.4'><output id='oKv'>0.40</output></div>
+      <div class='ctl'><label for='iYA'>A 高 <span class='v'>y</span><span class='n'>₁</span></label><input id='iYA' type='range' min='3.8' max='6.2' step='0.05' value='6'><output id='oYAv'>6.00</output><span class='unit'>m</span></div>
+      <div class='ctl'><label for='iYB'>B 高 <span class='v'>y</span><span class='n'>₂</span></label><input id='iYB' type='range' min='3.8' max='6.2' step='0.05' value='6'><output id='oYBv'>6.00</output><span class='unit'>m</span></div>
+      <div class='ctl'><label for='sTheta'>力向 <span class='v c4'>θ</span></label><input id='sTheta' type='range' min='-180' max='180' step='1' value='0'><output id='oTheta'>0°</output></div>
     </div>
     <div class='actions'>
       <button id='bReset'>恢复默认</button>
@@ -96,7 +95,7 @@ button:hover{border-color:var(--p2)}
     </div>
     <div class='status' id='status'>参数有效。</div>
     <div class='rule'>因果关系：<span class='v'>d</span>、<span class='v'>l</span> 和悬点决定可取位形的椭圆；重力与额外恒力的合力方向决定衣物落在椭圆上的位置；<span class='v'>m</span> 只按比例改变各力，不改变位形。悬点高度变化时，平衡点在椭圆族上移动，留下轨迹。</div>
-    <div class='hint' id='hint'>拖动 A、B 可改变两侧悬点高度，轨迹记录平衡点。</div>
+    <div class='hint' id='hint'>拖动滑块改参数，拖动 A、B 改悬点高度，平衡点移动会留下轨迹。</div>
   </div>
 </div>
 <script>
@@ -106,7 +105,8 @@ var D=document;
 function $(id){return D.getElementById(id);}
 var cv=$('cv'),ctx=cv.getContext('2d');
 var LW=1000,LH=640,CX=500,Y0=590,UNIT=50,G=9.8,PI=Math.PI,TAU=2*PI;
-var iD=$('iD'),iL=$('iL'),iM=$('iM'),iK=$('iK'),iTheta=$('iTheta'),iYA=$('iYA'),iYB=$('iYB');
+var iD=$('iD'),iL=$('iL'),iM=$('iM'),iK=$('iK'),sTheta=$('sTheta'),iYA=$('iYA'),iYB=$('iYB');
+var oDv=$('oDv'),oLv=$('oLv'),oMv=$('oMv'),oKv=$('oKv'),oYAv=$('oYAv'),oYBv=$('oYBv'),oTheta=$('oTheta');
 var oYA=$('oYA'),oYB=$('oYB'),oD=$('oD'),oL1=$('oL1'),oL2=$('oL2'),oR=$('oR'),oT=$('oT'),oPX=$('oPX'),oPY=$('oPY');
 var status=$('status'),hint=$('hint'),bReset=$('bReset'),bClear=$('bClear'),kResultant=$('kResultant'),kTrace=$('kTrace');
 var P={d:6,l:7.5,m:5,k:0.4,theta:0,yA:6,yB:6};
@@ -196,7 +196,12 @@ function solve(){
 }
 function syncInputs(){
   P.d=finite(parseFloat(iD.value),P.d);P.l=finite(parseFloat(iL.value),P.l);P.m=finite(parseFloat(iM.value),P.m);P.k=finite(parseFloat(iK.value),P.k);
-  P.theta=finite(parseFloat(iTheta.value),P.theta);P.yA=clamp(finite(parseFloat(iYA.value),P.yA),3.8,6.2);P.yB=clamp(finite(parseFloat(iYB.value),P.yB),3.8,6.2);
+  P.theta=finite(parseFloat(sTheta.value),P.theta);P.yA=clamp(finite(parseFloat(iYA.value),P.yA),3.8,6.2);P.yB=clamp(finite(parseFloat(iYB.value),P.yB),3.8,6.2);
+  syncOutputs();
+}
+function syncOutputs(){
+  oDv.textContent=num(P.d,1);oLv.textContent=num(P.l,1);oMv.textContent=num(P.m,1);oKv.textContent=num(P.k,2);
+  oYAv.textContent=num(P.yA,2);oYBv.textContent=num(P.yB,2);oTheta.textContent=num(P.theta,0)+'°';
 }
 function drawWall(x,Tm){
   var y1=72,y2=602;ctx.fillStyle=Tm.wall;ctx.globalAlpha=0.18;ctx.fillRect(x-15,y1,30,y2-y1);ctx.globalAlpha=1;
@@ -209,11 +214,21 @@ function drawAnchor(x,y,label,color,Tm,active,side,placed){
   if(placed)placed.push(boxOf([{t:label,v:true}],tx,y-11,15,al,'bottom'));
   rtextBox([{t:label,v:true}],tx,y-11,15,color,al,'bottom');
 }
-function drawCloth(x,y,Tm,placed){
+function drawCloth(x,y,Tm){
   line(x,y+7,x,y+16,Tm.rope,1.4);ctx.fillStyle=Tm.p3;ctx.globalAlpha=0.18;ctx.strokeStyle=Tm.p3;ctx.lineWidth=1.5;
-  ctx.beginPath();ctx.moveTo(x-17,y+17);ctx.lineTo(x-27,y+29);ctx.lineTo(x-19,y+36);ctx.lineTo(x-14,y+31);ctx.lineTo(x-14,y+54);ctx.lineTo(x+14,y+54);ctx.lineTo(x+14,y+31);ctx.lineTo(x+19,y+36);ctx.lineTo(x+27,y+29);ctx.lineTo(x+17,y+17);ctx.closePath();ctx.fill();ctx.globalAlpha=1;ctx.stroke();
-  rtext([{t:'m',v:true}],x,y+43,14,Tm.p3,'center','middle',false);
-  if(placed)placed.push(boxOf([{t:'m',v:true}],x,y+43,14,'center','middle'));
+  ctx.beginPath();ctx.moveTo(x-17,y+17);ctx.lineTo(x-27,y+29);ctx.lineTo(x-19,y+36);ctx.lineTo(x-14,y+31);ctx.lineTo(x-14,y+54);ctx.lineTo(x+14,y+54);ctx.lineTo(x+14,y+31);ctx.lineTo(x+19,y+36);ctx.lineTo(x+27,y+29);ctx.lineTo(x+17,y+17);  ctx.closePath();ctx.fill();ctx.globalAlpha=1;ctx.stroke();
+}
+/* 衣物贴近悬点时，m 会撞上 A/B 标签：在悬点标签之后画，并按候选位避让 */
+function drawClothLabel(x,y,Tm,placed){
+  var ps=[{t:'m',v:true}],cands=[{x:x,y:y+43},{x:x,y:y+62},{x:x,y:y-30},{x:x+34,y:y+43},{x:x-34,y:y+43}],
+      i,c,b,chosen=null;
+  for(i=0;i<cands.length;i++){
+    c=cands[i];b=boxOf(ps,c.x,c.y,14,'center','middle');
+    if(b.x1<4||b.x2>LW-4||b.y1<4||b.y2>LH-4)continue;
+    if(!placed.some(function(q){return boxesOverlap(b,q);})){chosen={c:c,b:b};break;}
+  }
+  if(!chosen){c=cands[0];chosen={c:c,b:boxOf(ps,c.x,c.y,14,'center','middle')};}
+  placed.push(chosen.b);rtext(ps,chosen.c.x,chosen.c.y,14,Tm.p3,'center','middle',false);
 }
 function boxesOverlap(a,b){return Math.min(a.x2,b.x2)-Math.max(a.x1,b.x1)-2>0&&Math.min(a.y2,b.y2)-Math.max(a.y1,b.y1)-2>0;}
 /* 与 rtextBox 的文字墨迹范围对齐：字身上沿 = 基线 −0.8·size，下沿 = 基线 +0.36·size，
@@ -311,8 +326,9 @@ function draw(){
   var qx=sx(SOL.Q.x),qy=sy(SOL.Q.y);
   drawTrace(Tm);
   line(xA,yA,qx,qy,Tm.rope,3.2);line(qx,qy,xB,yB,Tm.rope,3.2);
-  drawCloth(qx,qy,Tm,placed);
+  drawCloth(qx,qy,Tm);
   drawAnchor(xA,yA,'A',Tm.p1,Tm,drag===1,1,placed);drawAnchor(xB,yB,'B',Tm.p1,Tm,drag===2,-1,placed);
+  drawClothLabel(qx,qy,Tm,placed);
   if(SOL.Q.x<0||SOL.Q.x>P.d)placed.push(boxOf(['理想平衡点位于墙外'],LW/2,616,13,'center','bottom'));
   drawForces(SOL,Tm,qx,qy,placed);
   if(SOL.Q.x<0||SOL.Q.x>P.d)rtextBox(['理想平衡点位于墙外'],LW/2,616,13,Tm.warn,'center','bottom');
@@ -344,22 +360,23 @@ function refresh(key){
 }
 function refreshAnchors(){syncHeights();SOL=solve();updateReadout();pushTrace();draw();}
 function syncHeights(){
-  iYA.value=num(P.yA,2).replace('\u2212','-');iYB.value=num(P.yB,2).replace('\u2212','-');
+  iYA.value=P.yA.toFixed(2);iYB.value=P.yB.toFixed(2);
+  oYAv.textContent=num(P.yA,2);oYBv.textContent=num(P.yB,2);
 }
-function bindNumber(el,key){el.addEventListener('input',function(){refresh(key);});el.addEventListener('change',function(){refresh(key);});}
+function bindRange(el,key){el.addEventListener('input',function(){refresh(key);});}
 function bindAnchor(el,key,slot){
   function onEdit(){TRC=slot;refresh(key);}
-  el.addEventListener('input',onEdit);el.addEventListener('change',onEdit);
+  el.addEventListener('input',onEdit);
 }
-bindNumber(iD,'d');bindNumber(iL,'l');bindNumber(iM,'m');bindNumber(iK,'k');bindNumber(iTheta,'theta');
+bindRange(iD,'d');bindRange(iL,'l');bindRange(iM,'m');bindRange(iK,'k');bindRange(sTheta,'theta');
 bindAnchor(iYA,'yA',1);bindAnchor(iYB,'yB',2);
 kResultant.addEventListener('change',function(){draw();});
 kTrace.addEventListener('change',function(){draw();});
 bClear.addEventListener('click',clearTrace);
 bReset.addEventListener('click',function(){
-  P={d:6,l:7.5,m:5,k:0.4,theta:0,yA:6,yB:6};iD.value='6';iL.value='7.5';iM.value='5';iK.value='0.4';iTheta.value='0';
+  P={d:6,l:7.5,m:5,k:0.4,theta:0,yA:6,yB:6};iD.value='6';iL.value='7.5';iM.value='5';iK.value='0.4';sTheta.value='0';
   kResultant.checked=true;kTrace.checked=true;syncHeights();TRA=[[],[],[]];
-  hint.textContent='已恢复默认参数；拖动 A、B 可改变悬点高度，轨迹会被记录。';refresh('');
+  hint.textContent='已恢复默认参数；拖动滑块改参数，拖动 A、B 改悬点高度，轨迹会被记录。';refresh('');
 });
 function canvasPoint(ev){var r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left)*LW/(r.width||1),y:(ev.clientY-r.top)*LH/(r.height||1)};}
 cv.addEventListener('pointerdown',function(ev){
