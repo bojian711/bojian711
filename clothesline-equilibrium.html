@@ -73,7 +73,7 @@ button:hover{border-color:var(--p2)}
       <div class='ctl'><label for='iD'>墙距 <span class='v c2'>d</span></label><input id='iD' type='range' min='3' max='8.5' step='0.1' value='6'><output id='oDv'>6.0</output><span class='unit'>m</span></div>
       <div class='ctl'><label for='iL'>绳长 <span class='v c1'>l</span></label><input id='iL' type='range' min='3.2' max='10' step='0.1' value='7.5'><output id='oLv'>7.5</output><span class='unit'>m</span></div>
       <div class='ctl'><label for='iM'>质量 <span class='v c3'>m</span></label><input id='iM' type='range' min='0.5' max='50' step='0.5' value='5'><output id='oMv'>5.0</output><span class='unit'>kg</span></div>
-      <div class='ctl'><label for='iK'>恒力比 <span class='v c4'>F</span><span class='n'>/(</span><span class='v'>mg</span><span class='n'>)</span></label><input id='iK' type='range' min='0' max='3' step='0.05' value='0.4'><output id='oKv'>0.40</output></div>
+      <div class='ctl'><label for='iK'>恒力比 <span class='v c4'>F</span><span class='n'>/(</span><span class='v'>mg</span><span class='n'>)</span></label><input id='iK' type='range' min='0' max='3' step='0.05' value='0'><output id='oKv'>0.00</output></div>
       <div class='ctl'><label for='iYA'>A 高 <span class='v'>y</span><span class='n'>₁</span></label><input id='iYA' type='range' min='3.8' max='6.2' step='0.05' value='6'><output id='oYAv'>6.00</output><span class='unit'>m</span></div>
       <div class='ctl'><label for='iYB'>B 高 <span class='v'>y</span><span class='n'>₂</span></label><input id='iYB' type='range' min='3.8' max='6.2' step='0.05' value='6'><output id='oYBv'>6.00</output><span class='unit'>m</span></div>
       <div class='ctl'><label for='sTheta'>力向 <span class='v c4'>θ</span></label><input id='sTheta' type='range' min='-180' max='180' step='1' value='0'><output id='oTheta'>0°</output></div>
@@ -109,7 +109,7 @@ var iD=$('iD'),iL=$('iL'),iM=$('iM'),iK=$('iK'),sTheta=$('sTheta'),iYA=$('iYA'),
 var oDv=$('oDv'),oLv=$('oLv'),oMv=$('oMv'),oKv=$('oKv'),oYAv=$('oYAv'),oYBv=$('oYBv'),oTheta=$('oTheta');
 var oYA=$('oYA'),oYB=$('oYB'),oD=$('oD'),oL1=$('oL1'),oL2=$('oL2'),oR=$('oR'),oT=$('oT'),oPX=$('oPX'),oPY=$('oPY');
 var status=$('status'),hint=$('hint'),bReset=$('bReset'),bClear=$('bClear'),kResultant=$('kResultant'),kTrace=$('kTrace');
-var P={d:6,l:7.5,m:5,k:0.4,theta:0,yA:6,yB:6};
+var P={d:6,l:7.5,m:5,k:0,theta:0,yA:6,yB:6};
 var SOL=null,HALO='#ffffff',drag=0,lastKey='';
 var TRA=[[],[],[]],TRC=0,LAST=0,TRACE_MAX=420;
 function clamp(v,a,b){return v<a?a:(v>b?b:v);}
@@ -282,7 +282,7 @@ function drawForces(S,Tm,qx,qy,placed){
   placeForceLabel([{t:'T',v:true}],a2.x,a2.y,Tm.p2,a2.x>=x?1:-1,placed);
   placeForceLabel([{t:'mg',v:true}],wg.x,wg.y,Tm.p3,1,placed);
   if(S.F>0.02)placeForceLabel([{t:'F',v:true}],fg.x,fg.y,Tm.p4,fg.x>=x?1:-1,placed);
-  if(kResultant.checked&&S.R>0.02){
+  if(kResultant.checked&&S.R>0.02&&S.F>0.02){
     var rr={x:x+ks*S.W.x,y:y-ks*S.W.y};dash([6,5]);vector(x,y,rr.x,rr.y,Tm.muted,1.6,7);dash();
     placeForceLabel([{t:'R',v:true}],rr.x,rr.y,Tm.muted,rr.x>=x?1:-1,placed);
   }
@@ -340,7 +340,7 @@ function updateReadout(){
   oL1.textContent=num(SOL.r1,2);oL2.textContent=num(SOL.r2,2);oR.textContent=num(SOL.R,1);oT.textContent=num(SOL.T,1);oPX.textContent=num(SOL.Q.x,2);oPY.textContent=num(SOL.Q.y,2);
   if(SOL.zero){status.className='status warn';status.textContent='重力与额外恒力恰好抵消：平衡位置不唯一，张力可为 0；图中位置仅作示意。';}
   else if(SOL.Q.x<0||SOL.Q.x>P.d){status.className='status warn';status.textContent='数学上的理想平衡点位于墙外；真实衣物会先与墙接触，本模型未计接触力。';}
-  else{status.className='status';status.textContent='平衡成立：两侧张力等大，四个力的矢量和为 0。';}
+  else{status.className='status';status.textContent=P.k>0.02?'平衡成立：两侧张力等大，四个力的矢量和为 0。':'平衡成立：两侧张力等大，三个力的矢量和为 0。';}
 }
 function makeHint(key){
   if(key==='d')return '墙距改变：椭圆的焦点间距改变，绳的松弛程度与张力随之改变。';
@@ -374,7 +374,7 @@ kResultant.addEventListener('change',function(){draw();});
 kTrace.addEventListener('change',function(){draw();});
 bClear.addEventListener('click',clearTrace);
 bReset.addEventListener('click',function(){
-  P={d:6,l:7.5,m:5,k:0.4,theta:0,yA:6,yB:6};iD.value='6';iL.value='7.5';iM.value='5';iK.value='0.4';sTheta.value='0';
+  P={d:6,l:7.5,m:5,k:0.4,theta:0,yA:6,yB:6};iD.value='6';iL.value='7.5';iM.value='5';iK.value='0';sTheta.value='0';
   kResultant.checked=true;kTrace.checked=true;syncHeights();TRA=[[],[],[]];
   hint.textContent='已恢复默认参数；拖动滑块改参数，拖动 A、B 改悬点高度，轨迹会被记录。';refresh('');
 });
