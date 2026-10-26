@@ -39,6 +39,7 @@ canvas{display:block;width:100%;height:400px}
 .ctl output{font-family:KaTeX_Main,Georgia,serif;min-width:46px;text-align:right}
 /* 滑块封顶：换行后落单的控制器不会把轨道拉满整行 */
 input[type=range]{flex:1 1 60px;accent-color:var(--p2);min-width:44px;max-width:230px}
+input[type=radio]{accent-color:var(--p2)}
 button{background:var(--btn);color:var(--fg);border:1px solid var(--line);
   border-radius:7px;padding:5px 13px;font-size:13px;cursor:pointer}
 button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
@@ -79,6 +80,10 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
         <input id='sTh' type='range' min='-30' max='30' step='1' value='0'><output id='oTh'>0</output></div>
       <div class='ctl'><span class='lb c3'>摩擦因数 <span class='v'>μ</span></span>
         <input id='sMu' type='range' min='0' max='1' step='0.01' value='0.2'><output id='oMu'>0.2</output></div>
+      <div class='ctl'><span class='lb c1'>初始位置</span>
+        <label class='chk'><input id='kLow' type='radio' name='pEnd' checked><span id='lLow'>最下方</span></label>
+        <label class='chk'><input id='kHigh' type='radio' name='pEnd'><span id='lHigh'>最上方</span></label>
+      </div>
       <div class='ctl'>
         <button id='bPlay' class='on'>开始</button><button id='bReset'>复位</button>
       </div>
@@ -97,7 +102,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span>结果 <span class='n' id='rEnd'>—</span></span>
       <span>离开带面后 <span class='n' id='rFly'>—</span></span>
     </div>
-    <div class='rule'>滑动段的加速度只由 <span class='v c3'>μ</span> 与 <span class='v'>θ</span> 决定（<span class='n'>±μg cosθ − g sinθ</span>），与 <span class='v'>m</span> 无关；质量只改变摩擦力与摩擦生热。</div>
+    <div class='rule'>滑动段的加速度只由 <span class='v c3'>μ</span> 与 <span class='v'>θ</span> 决定（<span class='n'>±μg cosθ − g sinθ</span>），与 <span class='v'>m</span> 无关；质量只改变摩擦力与摩擦生热。物块可摆在最下方或最上方，<span class='v'>v</span><span class='n sb'>0</span> 是速率，方向沿带面指向带内。</div>
     <div class='hint' id='hint'>设定各项参数后，按「开始」按钮播放。</div>
   </div>
 </div>
@@ -118,8 +123,8 @@ var SRD=20, SLEGL=26, SRIB=22;
 var SHMIN=250, SHMAX=450;
 
 /* ===== 状态 ===== */
-var P={vb:2,ab:0,m:2,v0:0,mu:0.2,L:6,th:0};
-var DEF={vb:2,ab:0,m:2,v0:0,mu:0.2,L:6,th:0};
+var P={vb:2,ab:0,m:2,v0:0,mu:0.2,L:6,th:0,end:'low'};
+var DEF={vb:2,ab:0,m:2,v0:0,mu:0.2,L:6,th:0,end:'low'};
 var R=null, PR=null, PP=null, FI=null;
 var TM=4, VLO=-1, VHI=3, VT=0.5, TT=0.5, BASEY=250, TSHOW=4;
 var tCur=0, wait=0, running=false, last=0, started=false;
@@ -301,6 +306,25 @@ function theme(){
   };
 }
 
+/* ===== 端点命名：x 增大方向在 θ ≥ 0 时朝高端，θ < 0 时朝低端 =====
+   物块可从最低端或最高端放上，初速一律沿带面指向带内。 */
+function upIsPlus(){return P.th>=-0.5;}
+function xOfEnd(p){
+  var hip=p.th>=-0.5;
+  return ((p.end==='high')===hip)?p.L:0;
+}
+function vInitOf(p){
+  var s=p.th>=-0.5?1:-1;
+  return ((p.end==='high')?-s:s)*p.v0;
+}
+/* atL：是否 x = L 那一端 */
+function endName(atL){
+  if(Math.abs(P.th)<0.5) return atL?'右端':'左端';
+  return (atL===upIsPlus())?'上端':'下端';
+}
+function exitEndName(){return endName(R.exitType==='out');}
+function startEndName(){return endName(P.end==='high'?upIsPlus():!upIsPlus());}
+
 /* ===== 物理内核：分段匀变速 + 事件（共速 / 离开端点） ===== */
 function rootPos(A,B,C){
   var r=[];
@@ -330,7 +354,7 @@ function solve(p){
     }
     return u>0?{a:aDn,stick:false}:{a:aUp,stick:false};
   }
-  var segs=[], t=0, x=0, v=p.v0, guard=0;
+  var segs=[], t=0, x=xOfEnd(p), v=vInitOf(p), guard=0;
   var srel=0, exitType=null, tEnd=0, vEnd=v, xEnd=0, tSync=null;
   while(guard++<400){
     var u=v-vbAt(t), A=accOf(u), a=A.a;
@@ -341,8 +365,12 @@ function solve(p){
     }
     var hu=null, du=a-p.ab;
     if(Math.abs(du)>1e-12){var hh=-u/du; if(hh>1e-9) hu=hh;}
-    var hL=rootPos(0.5*a,v,x-p.L), hLow=null;
-    if(x<=0&&(v<0||(Math.abs(v)<1e-12&&a<0))) hLow=0;
+    /* 到 x = L 端：起点就在该端且速度/加速度朝外时，放上即离开 */
+    var hL;
+    if(x>=p.L-1e-12&&(v>0||(Math.abs(v)<1e-12&&a>0))) hL=0;
+    else hL=rootPos(0.5*a,v,x-p.L);
+    var hLow;
+    if(x<=1e-12&&(v<0||(Math.abs(v)<1e-12&&a<0))) hLow=0;
     else hLow=rootPos(0.5*a,v,x);
     var cand=[];
     if(hu!==null) cand.push({h:hu,k:'u'});
@@ -366,7 +394,7 @@ function solve(p){
   if(exitType===null){exitType='cap'; tEnd=t; vEnd=v; xEnd=x;}
   function stateAt(tt){
     var i,sg,hh;
-    if(tt<=0) return {v:p.v0,x:0,vb:p.vb,a:segs.length?segs[0].a:0};
+    if(tt<=0) return {v:vInitOf(p),x:xOfEnd(p),vb:p.vb,a:segs.length?segs[0].a:0};
     for(i=0;i<segs.length;i++){
       sg=segs[i];
       if(tt<=sg.t1+1e-12||i===segs.length-1){
@@ -376,7 +404,8 @@ function solve(p){
     }
     return {v:vEnd,x:xEnd,vb:vbAt(tEnd),a:0};
   }
-  var lo=Math.min(0,p.v0,p.vb,vbAt(tEnd)), hi=Math.max(0,p.v0,p.vb,vbAt(tEnd));
+  var vi=vInitOf(p);
+  var lo=Math.min(0,vi,p.vb,vbAt(tEnd)), hi=Math.max(0,vi,p.vb,vbAt(tEnd));
   for(var i=0;i<segs.length;i++){
     lo=Math.min(lo,segs[i].v0,segs[i].v0+segs[i].a*(segs[i].t1-segs[i].t0));
     hi=Math.max(hi,segs[i].v0,segs[i].v0+segs[i].a*(segs[i].t1-segs[i].t0));
@@ -507,9 +536,20 @@ function drawFlyZone(T,tv){
   ctx.fillRect(x0,PY0,x1-x0,PY1-PY0); ctx.restore();
   var lab=FI.cut?'飞出画面':(FI.kind+'阶段');
   var mid=clamp((x0+x1)/2,PLOTX0+46,PLOTX1-46);
+  /* 带速线可能横穿整段阴影区（tEnd≈0 时尤其），标签挑一个不压线的纵坐标 */
+  var cands=[PY0+36,PY0+70,PY1-66,PY1-98],yc=null,k,tt;
+  for(var ci=0;ci<cands.length;ci++){
+    if(Math.abs(cands[ci]-(BASEY+16))<24) continue;   /* 别落到 t 轴刻度上 */
+    var hitL=false;
+    for(k=0;k<=6;k++){
+      tt=R.tEnd+(tv-R.tEnd)*k/6;
+      if(Math.abs(Y(R.vbAt(tt))-cands[ci])<12) hitL=true;
+    }
+    if(!hitL){yc=cands[ci]; break;}
+  }
+  if(yc===null) yc=PY0+36;
   tryLabel([{t:lab,v:false}],
-    [[mid,PY0+36,'center','middle'],[mid,PY1-20,'center','middle'],
-     [mid,PY0+66,'center','middle']],13,T.p1);
+    [[mid,yc,'center','middle'],[mid,yc-16,'center','middle'],[mid,yc+16,'center','middle']],13,T.p1);
 }
 function drawMarks(T,tv){
   var i,sg,px,used=[];
@@ -531,7 +571,7 @@ function drawMarks(T,tv){
     }
   }
   /* 起点 */
-  px=X(0); var py0=Y(P.v0);
+  px=X(0); var py0=Y(vInitOf(P));
   OCC.push([px-7,py0-7,14,14]);
   dot(px,py0,4,T.p1);
   /* 共速点 */
@@ -543,12 +583,11 @@ function drawMarks(T,tv){
       [[pxS,pyS-20,'center','bottom'],[pxS+14,pyS-4,'left','middle'],
        [pxS-14,pyS-4,'right','middle'],[pxS,pyS+20,'center','top']],13,T.p1);
   }
-  /* 离开点 */
-  if(tv>=R.tEnd-1e-9){
+  /* 离开点：放上即离开时它与起点重合，标了只会跟起点标签挤在一起 */
+  if(tv>=R.tEnd-1e-9&&R.tEnd>1e-9){
     var pxE=X(R.tEnd), pyE=Y(R.vEnd), tag;
-    if(R.exitType==='back') tag='掉回入口';
-    else if(R.exitType==='stop') tag='停下';
-    else tag='离开出口';
+    if(R.exitType==='stop') tag='停下';
+    else tag='离开'+exitEndName();
     OCC.push([pxE-8,pyE-8,16,16]);
     ring(pxE,pyE,5.5,T.p1,HALO,2);
     tryLabel([{t:tag,v:false}],
@@ -619,12 +658,14 @@ function flyLine(){
   return '离开带面后做'+FI.kind+'：离地 '+num(FI.hm,2)+' m，'+num(FI.tf,2)+' s 落地，水平位移 '+num(FI.dxm,2)+' m'+tail;
 }
 function conclusion(){
-  if(R.exitType==='stop') return '物体中途停下，停在距入口 '+num(R.xEnd,2)+' m 处';
-  if(R.exitType==='back') return '未能送到出口，'+num(R.tEnd,2)+' s 从入口端掉回';
+  var far=endName(R.exitType==='out'?false:true);
+  if(R.exitType==='stop') return '物体中途停下，停在距'+far+' '+num(R.xEnd,2)+' m 处';
+  if(R.exitType!=='cap'&&R.tEnd<=1e-9) return '放上即离开带面：'+startEndName()+'这一侧受力指向带外';
   if(R.exitType==='cap') return '超过 60 s 仍未离开传送带';
-  if(R.stickFromStart) return '放上即与带共速，'+num(R.tEnd,2)+' s 从出口端送达';
-  if(R.tSync===null) return '全程相对滑动（未共速），'+num(R.tEnd,2)+' s 从出口端离开';
-  return '第 '+num(R.tSync,2)+' s 共速，'+num(R.tEnd,2)+' s 从出口端送达，末速 '+num(R.vEnd,2)+' m·s⁻¹';
+  var en=exitEndName();
+  if(R.stickFromStart) return '放上即与带共速，'+num(R.tEnd,2)+' s 从'+en+'离开';
+  if(R.tSync===null) return '全程相对滑动（未共速），'+num(R.tEnd,2)+' s 从'+en+'离开';
+  return '第 '+num(R.tSync,2)+' s 共速，'+num(R.tEnd,2)+' s 从'+en+'离开，末速 '+num(R.vEnd,2)+' m·s⁻¹';
 }
 function drawFoot(T){
   /* 结论等曲线画完再给，播到一半就摆出答案没有意义 */
@@ -632,7 +673,8 @@ function drawFoot(T){
     rtext(ctext(conclusion()),PLOTX0,362,13,T.fg,'left','alphabetic',false);
     if(FI) rtext(ctext(flyLine()),PLOTX0,379,13,T.p1,'left','alphabetic',false);
   }
-  rtext([{t:'g',v:true}].concat(ctext(' = 10 m·s⁻²　沿传送方向为正，物体自入口端放上')),
+  var axn=Math.abs(P.th)<0.5?'沿带面水平向右为正':'由下端指向上端为正';
+  rtext([{t:'g',v:true}].concat(ctext(' = 10 m·s⁻²　'+axn+'，物体自'+startEndName()+'放上')),
     PLOTX1,FI?362:378,12.5,T.muted,'right','alphabetic',false);
 }
 /* 未按「开始」时绘图区留白，只留坐标框与图例。
@@ -660,7 +702,7 @@ function sFit(){
     if(q[1]<mny)mny=q[1]; if(q[1]>mxy)mxy=q[1];
   }
   var OX0=(SW-(mxx-mnx))/2-mnx, OY0=(h-(mxy-mny))/2-mny;
-  /* 地面取在低侧机脚下方：θ>0 时低端在入口侧，θ<0 时低端在出口侧 */
+  /* 地面取在低侧机脚下方：θ>0 时低端在 x=0 侧，θ<0 时低端在 x=L 侧 */
   var lowX=sn>0?-(SRD+4):(Ls+SRD+4);
   var gy=66*ca-lowX*sn+16;
   return {s:Ls/P.L, Ls:Ls, th:th, h:h, OX0:OX0, OY0:OY0, gy:gy};
@@ -832,19 +874,27 @@ function drawScene(T){
       }
     }
     ctx.restore();
+    /* 两个滚筒登记为占位：位移很小时 x/h 读数会正好落在滚筒上 */
+    for(i=0;i<2;i++){
+      var cxr=i?Ls:0;
+      var sxr=OX0+cxr*ca+SRD*sn, syr=OY0-cxr*sn+SRD*ca;
+      OCC.push([sxr-SRD-1,syr-SRD-1,2*SRD+2,2*SRD+2]);
+    }
     /* 标签一律水平绘制，位置由旋转换算，避免跟着倾角歪 */
     var DYV=[0,-15,-30,15,-45,30], DYS=[0,16,-16,32,-32];
     for(i=0;i<LB.length;i++){
       q=[OX0+LB[i][0]*ca+LB[i][1]*sn,OY0-LB[i][0]*sn+LB[i][1]*ca];
       placeS(LB[i][2],LB[i][4],q[0],q[1],12.5,LB[i][3],DYV);
     }
+    /* 端名随倾角走：θ>0 时 x=0 是下端，θ<0 时反过来；水平带只说左右 */
+    var n0=endName(false), nL=endName(true), atL0=(xOfEnd(P)===P.L);
     q=[OX0-(SRD+22)*ca+62*sn,OY0+(SRD+22)*sn+62*ca];
-    placeS([{t:'入口',v:false}],'center',q[0],q[1],12.5,T.muted,DYS);
+    placeS([{t:atL0?n0:n0+'（放上）',v:false}],'center',q[0],q[1],12.5,T.muted,DYS);
     q=[OX0+(Ls+SRD+22)*ca+62*sn,OY0-(Ls+SRD+22)*sn+62*ca];
-    placeS([{t:'出口',v:false}],'center',q[0],q[1],12.5,T.muted,DYS);
+    placeS([{t:atL0?nL+'（放上）':nL,v:false}],'center',q[0],q[1],12.5,T.muted,DYS);
     q=[OX0+Ls/2*ca+yR2*sn,OY0-Ls/2*sn+yR2*ca];
     placeS([{t:'L',v:true},{t:' = '+num(P.L,1)+' m',v:false}],'center',q[0],q[1],12.5,T.muted,[0,16,-16]);
-    /* 倾角：出口端外侧画水平参考线与夹角弧 */
+    /* 倾角：x=L 端外侧画水平参考线与夹角弧 */
     if(Math.abs(P.th)>0.5){
       q=[OX0+Ls*ca,OY0-Ls*sn];
       dash([4,4]); line(q[0],q[1],q[0]+66,q[1],T.muted,1); dash();
@@ -866,9 +916,13 @@ function drawScene(T){
         line(lx,FI.y0,lx,Math.max(FI.y0+6,yG-BH-5),T.muted,1);   /* 到物块顶部为止，别从物块里穿过去 */
         dash();
         var xSide=lx>=FI.x0?1:-1, al=xSide>0?'left':'right';
-        placeAny([{t:'x',v:true},{t:' = '+num(FI.dxm,2)+' m',v:false}],
-          'center',(FI.x0+lx)/2,FI.y0-15,12.5,T.p1,
-          [[0,0],[0,-17],[0,17],[0,-34],[xSide*40,0],[-xSide*40,0],[xSide*40,-17]]);
+        /* 水平位移为 0（竖直下落）时不标 x，一条零长度的尺寸线没有信息量 */
+        if(Math.abs(FI.dxm)>0.02)
+          /* 先往侧面挪（贴着水平尺寸线），实在不行再上下挪，免得读数飞到带面上去 */
+          placeAny([{t:'x',v:true},{t:' = '+num(FI.dxm,2)+' m',v:false}],
+            'center',(FI.x0+lx)/2,FI.y0-15,12.5,T.p1,
+            [[0,0],[xSide*44,0],[xSide*88,0],[0,-17],[xSide*44,-17],
+             [xSide*88,-17],[0,17],[0,-34],[xSide*44,17]]);
         placeAny([{t:'h',v:true},{t:' = '+num(FI.hm,2)+' m',v:false}],
           al,lx+xSide*9,(FI.y0+yG)/2,12.5,T.muted,
           [[0,0],[0,-19],[0,19],[0,-38],[0,38],[-xSide*18,0]]);
@@ -915,7 +969,9 @@ function segText(sg,i){
   var dt=sg.t1-sg.t0, dir;
   if(sg.stick) dir='随带运动（静摩擦）';
   else if(R.f<1e-9) dir='无摩擦，只受重力分量';
-  else dir=(Math.abs(sg.a-R.aUp)<1e-9)?'滑动，摩擦沿传送方向':'滑动，摩擦逆传送方向';
+  else dir=(Math.abs(sg.a-R.aUp)<1e-9)
+    ?'滑动，摩擦指向'+(upIsPlus()?'高端':'低端')
+    :'滑动，摩擦指向'+(upIsPlus()?'低端':'高端');
   return '<span class=tg>'+String(i+1)+'</span>'
     +'<span class=n>Δt = '+num(dt,2)+' s</span>'
     +'<span class=n>a = '+snum(sg.a,2)+' m·s<sup>−2</sup></span>'
@@ -937,9 +993,8 @@ function updPanel(){
   rQ.innerHTML='<span class=n>'+num(R.Q,1)+'</span> <span class=n>J</span>';
   rF.innerHTML='<span class=n>'+num(R.f,1)+'</span> <span class=n>N</span>';
   var txt;
-  if(R.exitType==='out') txt='<span class=n>'+num(R.tEnd,2)+' s</span> 从出口端离开，末速 <span class=n>'+num(R.vEnd,2)+'</span> m·s<sup>−1</sup>';
-  else if(R.exitType==='back') txt='<span class=n>'+num(R.tEnd,2)+' s</span> 从入口端掉回，末速 <span class=n>'+num(R.vEnd,2)+'</span> m·s<sup>−1</sup>';
-  else if(R.exitType==='stop') txt='<span class=n>'+num(R.tEnd,2)+' s</span> 停在带上，距入口 <span class=n>'+num(R.xEnd,2)+'</span> m';
+  if(R.exitType==='out'||R.exitType==='back') txt='<span class=n>'+num(R.tEnd,2)+' s</span> 从'+exitEndName()+'离开，末速 <span class=n>'+num(R.vEnd,2)+'</span> m·s<sup>−1</sup>';
+  else if(R.exitType==='stop') txt='<span class=n>'+num(R.tEnd,2)+' s</span> 停在带上，距'+endName(false)+' <span class=n>'+num(R.xEnd,2)+'</span> m';
   else txt='超过 60 s 仍未离开';
   rEnd.innerHTML=txt;
   if(!FI) rFly.innerHTML='<span class=n>—</span>';
@@ -962,8 +1017,8 @@ function syncText(){
   return '共速时刻 '+num(a,2)+' → '+num(b,2)+' s';
 }
 function updHint(){
-  var keys=['vb','ab','m','v0','mu','L','th'], names={
-    vb:'带速',ab:'带加速度',m:'质量',v0:'物体初速',mu:'摩擦因数',L:'带长',th:'倾角'};
+  var keys=['vb','ab','m','v0','mu','L','th','end'], names={
+    vb:'带速',ab:'带加速度',m:'质量',v0:'物体初速',mu:'摩擦因数',L:'带长',th:'倾角',end:'初始位置'};
   var ch=[],i,k;
   if(!PP){hint.textContent='设定各项参数后，按「开始」按钮播放：赭色是物体，钢蓝是传送带；物体从带端离开后只受重力，做抛体运动直到落地。'; PP={}; for(k in P) PP[k]=P[k]; PR=R; return;}
   for(i=0;i<keys.length;i++) if(P[keys[i]]!==PP[keys[i]]) ch.push(keys[i]);
@@ -978,6 +1033,7 @@ function updHint(){
     else if(k==='v0') msg='初速 '+num(PP.v0,1)+' → '+num(P.v0,1)+' m·s⁻¹：赭色线的起点变，初始相对速度决定头一段摩擦朝哪边，'+syncText()+'。';
     else if(k==='L') msg='带长 '+num(PP.L,1)+' → '+num(P.L,1)+' m：两条线的形状完全不变，只是截断时刻 '+num(PR.tEnd,2)+' → '+num(R.tEnd,2)+' s。';
     else if(k==='th') msg='倾角 '+num(PP.th,0)+'° → '+num(P.th,0)+'°：重力分量 g sinθ = '+num(R.gs,2)+' m·s⁻² 并入加速度，最大静摩擦项 μg cosθ = '+num(R.mugc,2)+' m·s⁻²，'+syncText()+'。';
+    else if(k==='end') msg='初始位置改到'+startEndName()+'：物体从带面另一端放上，初速方向随之反向，滑动段加速度不变，全程 '+num(PR.tEnd,2)+' → '+num(R.tEnd,2)+' s，'+syncText()+'。';
   }else{
     msg='同时改了 '+ch.map(function(x){return names[x];}).join('、')+'：'+syncText()+'，全程 '+num(PR.tEnd,2)+' → '+num(R.tEnd,2)+' s。';
   }
@@ -985,7 +1041,14 @@ function updHint(){
   PP={}; for(k in P) PP[k]=P[k]; PR=R;
 }
 
+/* 水平带没有高低之分，两个选项改用左右 */
+function syncEndLabels(){
+  var hz=Math.abs(P.th)<0.5;
+  $('lLow').textContent=hz?'左端':'最下方';
+  $('lHigh').textContent=hz?'右端':'最上方';
+}
 function recompute(){
+  syncEndLabels();
   R=solve(P);
   FI=flyCalc(sFit());
   fitScale();
@@ -1018,8 +1081,16 @@ function bindSlider(el,key){
     readSliders(); arm(); recompute();
   });
 }
+/* 初始位置：摆在最下方还是最上方，初速一律沿带面指向带内 */
+function bindEnd(el,val){
+  el.addEventListener('change',function(){
+    if(!el.checked) return;
+    P.end=val; arm(); recompute();
+  });
+}
 bindSlider(sVb,'vb'); bindSlider(sAb,'ab'); bindSlider(sL,'L'); bindSlider(sTh,'th');
 bindSlider(sM,'m'); bindSlider(sV0,'v0'); bindSlider(sMu,'mu');
+bindEnd($('kLow'),'low'); bindEnd($('kHigh'),'high');
 bPlay.addEventListener('click',function(){
   if(running){ running=false; }
   else{
@@ -1033,6 +1104,7 @@ bReset.addEventListener('click',function(){
   for(k in DEF) P[k]=DEF[k];
   sVb.value=String(DEF.vb); sAb.value=String(DEF.ab); sL.value=String(DEF.L);
   sTh.value=String(DEF.th); sM.value=String(DEF.m); sV0.value=String(DEF.v0); sMu.value=String(DEF.mu);
+  $('kLow').checked=(DEF.end==='low'); $('kHigh').checked=(DEF.end==='high');
   arm(); recompute();
 });
 $('kRel').addEventListener('change',function(){SHOW_REL=!!$('kRel').checked;});
