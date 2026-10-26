@@ -224,6 +224,44 @@ function tryPut(ps,size,color,cands,align,base,maxOv){
   }
   return false;
 }
+
+/* ---- 实线登记：矢量值标签可压虚线，不可压实线 ---- */
+var SOLID=[];
+function solidReset(){SOLID=[];}
+function solidSeg(x1,y1,x2,y2){
+  var L=Math.sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)), n=Math.max(2,Math.ceil(L/4)), i;
+  for(i=0;i<=n;i++) SOLID.push([x1+(x2-x1)*i/n, y1+(y2-y1)*i/n]);
+}
+function solidHit(b){
+  var i,p;
+  for(i=0;i<SOLID.length;i++){
+    p=SOLID[i];
+    if(p[0]>b.x-1.5&&p[0]<b.x+b.w+1.5&&p[1]>b.y-1.5&&p[1]<b.y+b.h+1.5) return true;
+  }
+  return false;
+}
+/* 数值标签紧贴矢量尖端：沿方向排在箭头之外，横向逐级让位 */
+function tipPut(ps,size,color,vx,vy,tx,ty){
+  var u=unit(vx,vy), nx=-u[1], ny=u[0], cands=[], d, k, offs=[0,-13,13,-26,26], i, x, y, b;
+  if(u[0]===0&&u[1]===0){
+    cands=[[tx+18,ty-16],[tx-18,ty-16],[tx+18,ty+18],[tx-18,ty+18]];
+  } else {
+    for(d=10;d<=38;d+=7) for(k=0;k<offs.length;k++)
+      cands.push([tx+u[0]*d+nx*offs[k], ty+u[1]*d+ny*offs[k]]);
+  }
+  for(i=0;i<cands.length;i++){
+    x=cands[i][0]; y=cands[i][1];
+    b=pBox(ps,x,y,size,'center','middle');
+    if(b.x<3||b.y<3||b.x+b.w>OCCW-3||b.y+b.h>OCCH-3) continue;
+    if(occArea(b.x,b.y,b.w,b.h)<0.5&&!solidHit(b)){
+      rtextBox(ps,x,y,size,color,'center','middle');
+      occAdd(b.x-2.5,b.y-1.5,b.w+5,b.h+3);
+      return true;
+    }
+  }
+  /* 兜底：退回沿杆老位置 */
+  return tryPutAway(ps,size,color,vecLabel(vx,vy),APX,APY);
+}
 /* 宽标签专用：候选点落在锚点左侧就右对齐、右侧就左对齐，让整条标签「背向锚点」展开。
    居中放置时，宽标签的远端会甩回锚点附近，把 A′、α 之类的短标签压住（2026-10-25 实测）。 */
 function tryPutAway(ps,size,color,cands,ax,ay,maxOv){
@@ -595,6 +633,12 @@ function drawB(T){
     ring(s.Px,s.Py,4.5,T.p2,T.p2,1.2);
     arrow(APX,APY,s.Px,s.Py,T.p2,2.8,11);
   }
+  /* 登记实线（供矢量值标签避让）：分场、总场、弦，以及 α 弧 */
+  solidReset();
+  solidSeg(APX,APY,s.Fx,s.Fy);
+  solidSeg(APX,APY,s.Gx,s.Gy);
+  if(ST>=5) solidSeg(APX,APY,s.Px,s.Py);
+  if(ST>=6) solidSeg(s.Fx,s.Fy,s.Gx,s.Gy);
 
   /* α 弧：先落位（它贴着弧画，位置最受限），其余标签再让它 */
   if(Math.abs(s.E1)>0.02&&Math.abs(s.E2)>0.02){
@@ -602,6 +646,9 @@ function drawB(T){
     while(dd>PI) dd-=2*PI;
     while(dd<-PI) dd+=2*PI;
     arc2(APX,APY,aF,aG,40,T.fg,1.3);
+    for(kk=0;kk<18;kk++)
+      solidSeg(APX+Math.cos(aF+dd*kk/18)*40, APY+Math.sin(aF+dd*kk/18)*40,
+               APX+Math.cos(aF+dd*(kk+1)/18)*40, APY+Math.sin(aF+dd*(kk+1)/18)*40);
     var am=aF+dd/2, ac=[], rr, kk;
     for(kk=0;kk<=2;kk++) for(rr=54;rr<=90;rr+=18)
       ac.push([APX+Math.cos(am+(kk===0?0:(kk===1?0.30:-0.30)))*rr,APY+Math.sin(am+(kk===0?0:(kk===1?0.30:-0.30)))*rr]);
@@ -623,10 +670,10 @@ function drawB(T){
     sideLabel(s.Fx,s.Fy,s.Gx,s.Gy),'center','middle');
   var lab1=(ST>=6)?[{t:'E',v:true},{t:'1',sub:true}]:[{t:'E',v:true},{t:'1',sub:true},' = ',nm(s.E1,2)];
   var lab2=(ST>=6)?[{t:'E',v:true},{t:'2',sub:true}]:[{t:'E',v:true},{t:'2',sub:true},' = ',nm(s.E2,2)];
-  tryPutAway(lab1,14,T.p1,vecLabel(s.Fx-APX,s.Fy-APY),APX,APY);
-  tryPutAway(lab2,14,T.p3,vecLabel(s.Gx-APX,s.Gy-APY),APX,APY);
-  if(ST>=5) tryPutAway([{t:'E',v:true},' = ',nm(s.Emag,2)],14.5,T.p2,
-    vecLabel(s.Px-APX,s.Py-APY),APX,APY);
+  tipPut(lab1,14,T.p1,s.Fx-APX,s.Fy-APY,s.Fx,s.Fy);
+  tipPut(lab2,14,T.p3,s.Gx-APX,s.Gy-APY,s.Gx,s.Gy);
+  if(ST>=5) tipPut([{t:'E',v:true},' = ',nm(s.Emag,2)],14.5,T.p2,
+    s.Px-APX,s.Py-APY,s.Px,s.Py);
   drawFormula(T,s);
 }
 /* 端点字母：优先放在箭头尖端之外，其次两侧 */
