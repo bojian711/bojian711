@@ -27,7 +27,7 @@ body{background:var(--bg);color:var(--fg);border:none;
 .v{font-family:KaTeX_Math,Georgia,serif;font-style:italic}
 .n{font-family:KaTeX_Main,Georgia,serif}
 .wrap{width:100%;max-width:960px;margin:0 auto;padding:6px 6px 10px}
-canvas{display:block;width:100%;height:480px}
+canvas{display:block;width:100%;height:430px}
 .head{padding:2px 4px 6px;font-size:15px;line-height:1.7}
 .panel{background:var(--panel);border-radius:10px;padding:9px 12px 11px;margin-top:6px}
 .row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
@@ -50,11 +50,10 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
 .c2{color:var(--p2);font-weight:700}
 .c3{color:var(--p3);font-weight:700}
 .sep{margin-top:7px}
-</style>
-</head>
+</style></head>
 <body>
 <div class='wrap'>
-  <div class='head'>飞机投球：水平飞行（加速度 <span class='v'>a</span>），每隔 <span class='v'>T</span> 相对自身静止释放一个小球，不计空气阻力，<span class='n'>g = 10 m/s<sup>2</sup></span>。同一个过程，地面观察者和飞行员看到的<b>单个小球轨迹</b>不同，但<b>各球之间的相对位置</b>完全相同。</div>
+  <div class='head'>飞机水平飞行（加速度 <span class='v'>a</span>），每隔 <span class='v'>T</span> 相对自身静止释放一个小球，不计空气阻力，<span class='n'>g = 10 m/s<sup>2</sup></span>。地面观察者看到<b>地面静止、飞机和小球一起向右飞过</b>；飞行员看到<b>飞机静止、地面向后加速退去</b>。单球的轨迹随参考系而变，各球之间的相对位置不变。</div>
   <canvas id='cv'></canvas>
   <div class='panel'>
     <div class='row'>
@@ -79,8 +78,8 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
         <input id='sTl' type='range' min='0.3' max='1.2' step='0.1' value='0.6'>
         <output id='oTl'>0.6</output><span class='n'>s</span>
       </div>
-      <div class='ctl'><span class='lb'>飞行高度 <span class='v'>h</span></span>
-        <input id='sH' type='range' min='30' max='100' step='5' value='60'>
+      <div class='ctl'><span class='lb'>飞机高度 <span class='v'>h</span></span>
+        <input id='sH' type='range' min='20' max='150' step='5' value='60'>
         <output id='oH'>60</output><span class='n'>m</span>
       </div>
     </div>
@@ -92,8 +91,10 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span>相对飞机位移 <span class='n'>Δ</span><span class='v'>x</span><span class='n'> = </span><span class='n' id='roDX'>—</span><span class='n'> m，Δ</span><span class='v'>y</span><span class='n'> = </span><span class='n' id='roDY'>—</span><span class='n'> m</span></span>
       <span>相对飞机速度 <span class='n' id='roDV'>—</span></span>
       <span>共线直线偏离竖直 <span class='v'>θ</span><span class='n'> = arctan(</span><span class='v'>a</span><span class='n'>/</span><span class='v'>g</span><span class='n'>) = </span><span class='n' id='roTh'>16.7°</span></span>
+      <span>球1 落地点距抛点 <span class='n' id='roR'>—</span></span>
+      <span>各球落点距各自抛点 <span class='n' id='roRs'>—</span></span>
     </div>
-    <div class='rule'>看点：切换参考系时，<span class='c1'>这条直线</span>与 <span class='n'>Δ</span><span class='v'>x</span>、<span class='n'>Δ</span><span class='v'>y</span> 三行<b>一动不动</b>（相对运动与参考系无关）；<b>变的是单个球的轨迹</b>——地面系为抛物线，飞机系是一条直线（因为 <span class='n'>Δ</span><span class='v'>y</span><span class='n'>/Δ</span><span class='v'>x</span><span class='n'> = </span><span class='v'>g</span><span class='n'>/</span><span class='v'>a</span><span class='n'> 恒定）。</span></div>
+    <div class='rule'>看点：切换参考系时，<span class='c1'>这条直线</span>与 <span class='n'>Δ</span><span class='v'>x</span>、<span class='n'>Δ</span><span class='v'>y</span>、落点距离三行<b>一动不动</b>（相对运动与参考系无关）；<b>变的是单个球的轨迹</b>——地面系为抛物线，飞机系是一条直线（<span class='n'>Δ</span><span class='v'>y</span><span class='n'>/Δ</span><span class='v'>x</span><span class='n'> = </span><span class='v'>g</span><span class='n'>/</span><span class='v'>a</span> 恒定）。两种模式下这张图形状完全相同，只是画面是"地面不动"还是"跟着飞机走"。</div>
     <div class='hint' id='hint'>先设参数，点「开始」投放；播放过程中随时切换参考系——同一个时刻换视角，球的相对位置一模一样。</div>
   </div>
 </div>
@@ -104,25 +105,26 @@ var D=document;
 function $(id){return D.getElementById(id);}
 var cv=$('cv'), ctx=cv.getContext('2d');
 
-/* ===== 常量：固定标尺（不随参数变化） ===== */
-var LW=640, LH=480;
-var GY=424;          // 地面线的屏幕纵坐标
-var S=3.2;           // px / m，恒定
-var PLX=430;         // 投球参考点（＝飞机此刻所在）的屏幕横坐标，视角锁定飞机
-var GG=10;           // 重力加速度
-var NB=6;            // 投放次数
-var PDY=-19;         // 机身中心相对投球参考点的竖直偏移（参考点在机腹之下）
+/* ===== 画布与标尺 ===== */
+var LW=640, LH=430;
+var GY=358;          // 地面线的屏幕纵坐标
+var PLX=404;         // 飞机参考系：飞机固定的屏幕横坐标
+var GX0=62;          // 地面参考系：飞机起点（世界 x = 0）的屏幕横坐标
+var GG=10, NB=6;
+var PDY=-14.5;       // 机身中心相对投放点（机腹）的竖直偏移，使球刚好挂在机腹下
+var S=2.5;           // px/m，两种模式共用，随参数由 fitScale 定
 
 /* ===== 控件 ===== */
 var sV=$('sV'), sA=$('sA'), sTl=$('sTl'), sH=$('sH');
 var oV=$('oV'), oA=$('oA'), oTl=$('oTl'), oH=$('oH');
 var roT=$('roT'), roV=$('roV'), roTr=$('roTr'), roXY=$('roXY');
 var roDX=$('roDX'), roDY=$('roDY'), roDV=$('roDV'), roTh=$('roTh');
+var roR=$('roR'), roRs=$('roRs');
 var bPlay=$('bPlay'), bReset=$('bReset');
 var kLoop=$('kLoop'), kTr=$('kTr'), kRP=$('kRP');
 var mG=$('mG'), mP=$('mP'), hint=$('hint');
 
-/* ===== 状态（初值一律从控件属性读） ===== */
+/* ===== 状态 ===== */
 function pf(el,d){var v=parseFloat(el&&el.value); return isFinite(v)?v:d;}
 var P={v0:pf(sV,20),ac:pf(sA,3),itv:pf(sTl,0.6),hh:pf(sH,60)};
 var MODE='ground';
@@ -200,7 +202,6 @@ function rtextBox(ps,x,y,size,color,align,base){
   return w;
 }
 var OCC=[];
-var ov=function(a,b){return a[0]<b[0]+b[2]&&b[0]<a[0]+a[2]&&a[1]<b[1]+b[3]&&b[1]<a[1]+a[3];};
 function fits(x,y,w,h,tol,maxY){
   var t=tol||0,i;
   for(i=0;i<OCC.length;i++){
@@ -210,7 +211,6 @@ function fits(x,y,w,h,tol,maxY){
   if(maxY!==undefined&&y+h>maxY) return false;
   return true;
 }
-/* 候选位逐个试，全撞则弃画 */
 function tryTxt(ps,x,y,size,color,align,base,cands,box,maxY){
   var w=rtWidth(ps,size),i,c,sx,sy,top,h=size*1.1;
   for(i=0;i<cands.length;i++){
@@ -259,20 +259,15 @@ function ring(x,y,r,fill,stroke,lw){
 }
 
 /* ===== 物理 ===== */
-function sOf(i){return i*P.itv;}                       // 第 i 个球的投放时刻
-function tFall(){return Math.sqrt(2*P.hh/GG);}          // 落地所需时间
-function tEnd(){return sOf(NB-1)+tFall()+0.8;}          // 一轮总时长
-function vPln(t){return P.v0+P.ac*t;}                   // 飞机对地速度
-function xPln(t){return P.v0*t+0.5*P.ac*t*t;}           // 飞机对地位移
-function xBal(u,s){return P.v0*u+P.ac*s*u-0.5*P.ac*s*s;}// 球在地面系中的横坐标
-function hOf(u,s){var q=u-s; return P.hh-0.5*GG*q*q;}   // 球离地高度
+function sOf(i){return i*P.itv;}
+function tFall(){return Math.sqrt(2*P.hh/GG);}
+function tEnd(){return sOf(NB-1)+tFall()+0.8;}
+function vPln(t){return P.v0+P.ac*t;}
+function xPln(t){return P.v0*t+0.5*P.ac*t*t;}
+function xBal(u,s){return P.v0*u+P.ac*s*u-0.5*P.ac*s*s;}
+function hOf(u,s){var q=u-s; return P.hh-0.5*GG*q*q;}
 function landX(s){return xBal(s+tFall(),s);}
-/* 相对飞机的水平位移：飞机系按各自时刻取相对量，地面系统一减当前飞机位置 */
-function dxOf(u,s){return MODE==='plane'?-0.5*P.ac*Math.pow(u-s,2):(xBal(u,s)-xPln(tCur));}
-function dxStatic(xw){return xw-xPln(tCur);}            // 地面上的静止物（坐标与参考系无关）
-function PYp(){return GY-P.hh*S;}                       // 飞机的屏幕纵坐标
-function sxOf(dx){return PLX+dx*S;}
-function syOf(hh){return GY-hh*S;}
+function Rof(s){return (P.v0+P.ac*s)*tFall();}
 function tau(i){return tCur-sOf(i);}
 function flying(i){return started&&tau(i)>=0&&tau(i)<tFall();}
 function pickHi(){
@@ -280,44 +275,86 @@ function pickHi(){
   for(var i=0;i<NB;i++){ if(flying(i)){HI=i;break;} }
 }
 
+/* ===== 相机 =====
+   地面系：世界坐标原点（飞机出发点）固定在 GX0，地面静止不动；
+   飞机系：相机跟住飞机，飞机固定在 PLX，地面在画面中后退。
+   两种模式共用同一个比例尺 S，所以图形完全相同，只是平移不同。 */
+function fitScale(){
+  var span=Math.max(1,xPln(tEnd()));
+  var sX=(LW-GX0-58)/span;            // 整个飞行过程横向塞进画面
+  var sY=(GY-64)/Math.max(1,P.hh);    // 机高留出标题空间
+  return clamp(Math.min(sX,sY),0.3,12);
+}
+function camW(){return MODE==='ground'?(PLX-GX0)/S:xPln(tCur);}
+function sx(xw){return PLX+(xw-camW())*S;}
+function sy(hh){return GY-hh*S;}
+function planeX(){return sx(xPln(tCur));}
+/* 轨迹回放：飞机系里历史点要按「该时刻的飞机位置」映射（拖尾才重合成直线） */
+function sxAt(xw,u){return MODE==='plane'?PLX+(xw-xPln(u))*S:sx(xw);}
+function PYp(){return GY-P.hh*S;}
+function tickStep(){
+  var c=[2,5,10,20,25,50,100,200,500], i;
+  for(i=0;i<c.length;i++){ if(c[i]*S>=46) return c[i]; }
+  return 1000;
+}
+
 /* ===== 绘制 ===== */
 function drawGround(T){
   ctx.fillStyle=T.earth; ctx.fillRect(0,GY,LW,LH-GY);
   line(0,GY,LW,GY,T.axis,1.6);
-  var Xr=xPln(tCur), lo=Xr+(0-PLX)/S, hi=Xr+(LW-PLX)/S;
-  var k,m0=Math.ceil(lo/10)*10, m1=Math.floor(hi/10)*10, XMj=20;
-  for(k=m0;k<=m1;k+=10){
-    var sx=PLX+(k-Xr)*S;
-    if(sx<5||sx>LW-5) continue;
-    var mj=(k%XMj===0);
-    line(sx,GY,sx,GY+(mj?12:7),mj?T.tick:T.tick2,1.3);
+  var st=tickStep(), sub=st/5, n, x, pxs;
+  var xLo=camW()+(8-PLX)/S, xHi=camW()+(LW-8-PLX)/S;
+  if(sub*S>=7){
+    for(n=Math.ceil(xLo/sub);n<=Math.floor(xHi/sub);n++){
+      if(n%5===0) continue;
+      pxs=sx(n*sub);
+      line(pxs,GY,pxs,GY+6,T.tick2,1.2);
+    }
   }
-  for(k=Math.ceil(lo/XMj)*XMj;k<=m1;k+=XMj){
-    var sx2=PLX+(k-Xr)*S;
-    if(sx2<26||sx2>LW-26) continue;
-    rtextBox([num(k,0)],sx2,GY+18,10.5,T.muted,'center','top');
+  for(n=Math.ceil(xLo/st);n<=Math.floor(xHi/st);n++){
+    x=n*st; pxs=sx(x);
+    if(pxs<22||pxs>LW-22) continue;
+    line(pxs,GY,pxs,GY+12,T.tick,1.4);
+    rtextBox([num(x,0)],pxs,GY+17,10.5,T.muted,'center','top');
   }
+}
+/* 高度标注（左侧竖虚线） */
+function drawAlt(T){
+  var py=PYp(), x=26;
+  if(GY-py<18) return;
+  dash([5,4]); line(x,GY,x,py,T.muted,1.1); dash();
+  line(x-4,GY,x+4,GY,T.muted,1.3); line(x-4,py,x+4,py,T.muted,1.3);
+  /* 标注沿尺寸线竖排，避开飞机系 x′ 标签 */
+  var my=(GY+py)/2, rest=' = '+num(P.hh,0)+' m', w1,w2,x0;
+  ctx.save(); ctx.translate(x,my); ctx.rotate(-Math.PI/2);
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.font=fontOf(true,10.5); w1=ctx.measureText('h').width;
+  ctx.font=fontOf(false,10.5); w2=ctx.measureText(rest).width;
+  x0=-(w1+w2)/2;
+  if(HALO){
+    ctx.strokeStyle=HALO; ctx.lineWidth=4; ctx.lineJoin='round';
+    ctx.font=fontOf(true,10.5); ctx.strokeText('h',x0,0);
+    ctx.font=fontOf(false,10.5); ctx.strokeText(rest,x0+w1,0);
+  }
+  ctx.fillStyle=T.muted;
+  ctx.font=fontOf(true,10.5); ctx.fillText('h',x0,0);
+  ctx.font=fontOf(false,10.5); ctx.fillText(rest,x0+w1,0);
+  ctx.restore();
 }
 /* 飞机系的水平参考轴 x′ */
 function drawAxisX(T){
   if(MODE!=='plane') return;
-  dash([6,5]); line(48,PYp(),PLX,PYp(),T.p3,1.3); dash();
+  dash([6,5]); line(44,PYp(),PLX,PYp(),T.p3,1.3); dash();
 }
 function drawTrails(T){
-  var i,s,slope,ic,uA,uB,uu,Nn,x0,y0,x1,y1,px,py,hi,v;
+  var i,s,uA,uB,dd,Nn,v,uu,px,py,hi;
   for(i=0;i<NB;i++){
     s=sOf(i);
     uA=s; uB=Math.min(tCur,s+tFall());
     if(!(uB>uA+1e-6)) continue;
-    if(MODE==='ground'){
-      slope=P.v0+P.ac*s; ic=-0.5*P.ac*s*s-xPln(tCur);
-      var uLo=((-70-PLX)/S-ic)/slope, uHi=((LW+30-PLX)/S-ic)/slope;
-      uA=Math.max(uA,uLo); uB=Math.min(uB,uHi);
-      if(!(uB>uA+1e-6)) continue;
-    }
-    x0=sxOf(dxOf(uA,s)); y0=syOf(hOf(uA,s));
-    x1=sxOf(dxOf(uB,s)); y1=syOf(hOf(uB,s));
-    var dd=Math.sqrt((x1-x0)*(x1-x0)+(y1-y0)*(y1-y0));
+    var x0=sxAt(xBal(uA,s),uA), y0=sy(hOf(uA,s));
+    var x1=sxAt(xBal(uB,s),uB), y1=sy(hOf(uB,s));
+    dd=Math.sqrt((x1-x0)*(x1-x0)+(y1-y0)*(y1-y0));
     Nn=clamp(Math.ceil(dd/4)+14,24,420);
     hi=(i===HI);
     ctx.save();
@@ -327,28 +364,31 @@ function drawTrails(T){
     ctx.beginPath();
     for(v=0;v<=Nn;v++){
       uu=uA+(uB-uA)*v/Nn;
-      px=sxOf(dxOf(uu,s)); py=syOf(hOf(uu,s));
+      px=sxAt(xBal(uu,s),uu); py=sy(hOf(uu,s));
       if(v===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
     }
     ctx.stroke(); ctx.restore();
   }
 }
-/* 任一时刻：飞机与各在空中的球共线（延伸端点统一在此算，避免压地面） */
+/* 任一时刻：飞机与各在空中的球共线 */
 function lineEnd(){
   if(HI<0) return null;
-  var s=sOf(HI);
-  var bx=sxOf(dxOf(tCur,s)), by=Math.min(syOf(hOf(tCur,s)),GY-6.5);
-  var dx=bx-PLX, dy=by-PYp(), L=Math.sqrt(dx*dx+dy*dy);
+  var s=sOf(HI), pX=planeX(), pY=PYp();
+  var bx=sx(xBal(tCur,s)), by=Math.min(sy(hOf(tCur,s)),GY-6.5);
+  var dx=bx-pX, dy=by-pY, L=Math.sqrt(dx*dx+dy*dy);
   if(L<12) return null;
-  var f=1, eyMax=GY-20-by;
-  if(eyMax<4) f=0; else if(20*dy/L>eyMax) f=eyMax/(20*dy/L);
-  return [bx,by,20*dx/L*f,20*dy/L*f];
+  var f=1, ux=20*dx/L, uy=20*dy/L;
+  var eyMax=GY-20-by;
+  if(eyMax<4) f=0; else if(uy>eyMax) f=eyMax/uy;
+  var exMax=(LW-8)-(bx+ux);
+  if(exMax<0) f=Math.max(0,f+exMax/ux);
+  return [bx,by,ux*f,uy*f];
 }
 function drawLine(T){
   var le=lineEnd();
   if(!le) return;
-  var pY=PYp();
-  dash([7,5]); line(PLX,pY,le[0]+le[2],le[1]+le[3],T.p1,1.5); dash();
+  var pX=planeX(), pY=PYp();
+  dash([7,5]); line(pX,pY,le[0]+le[2],le[1]+le[3],T.p1,1.5); dash();
   if(le[2]*le[2]+le[3]*le[3]>=144) dot(le[0]+le[2],le[1]+le[3],3,T.p1);
 }
 function drawLanded(T){
@@ -356,9 +396,9 @@ function drawLanded(T){
   for(i=0;i<NB;i++){
     s=sOf(i);
     if(!(tCur>=s+tf)) continue;
-    var sx=sxOf(dxStatic(landX(s)));
-    if(sx<8||sx>LW-8) continue;
-    dot(sx,GY-5,3.6,T.tick);
+    var px=sx(landX(s));
+    if(px<8||px>LW-8) continue;
+    dot(px,GY-4,3.4,T.tick);
   }
 }
 function drawBalls(T){
@@ -366,8 +406,8 @@ function drawBalls(T){
   for(i=0;i<NB;i++){
     if(!flying(i)) continue;
     s=sOf(i);
-    px=sxOf(dxOf(tCur,s)); py=Math.min(syOf(hOf(tCur,s)),GY-6.5);
-    if(px<10||px>LW-10) continue;
+    px=sx(xBal(tCur,s)); py=Math.min(sy(hOf(tCur,s)),GY-6.5);
+    if(px<8||px>LW-8) continue;
     if(i===HI) ring(px,py,6.6,T.p1,T.p1,2);
     else ring(px,py,5.6,T.p1,T.halo,1.6);
   }
@@ -375,87 +415,120 @@ function drawBalls(T){
 /* 高亮球的 Δx / Δy 直角标注 */
 function drawDelta(T){
   if(HI<0) return;
-  var s=sOf(HI), pY=PYp();
-  var bx=sxOf(dxOf(tCur,s)), by=Math.min(syOf(hOf(tCur,s)),GY-6.5);
-  if(Math.abs(bx-PLX)<26) return;
+  var s=sOf(HI), pX=planeX(), pY=PYp();
+  var bx=sx(xBal(tCur,s)), by=Math.min(sy(hOf(tCur,s)),GY-6.5);
+  if(Math.abs(bx-pX)<26) return;
   dash([5,4]);
-  line(PLX,pY,PLX,by,T.p1,1.3);
-  line(PLX,by,bx,by,T.p1,1.3);
+  line(pX,pY,pX,by,T.p1,1.3);
+  line(pX,by,bx,by,T.p1,1.3);
   dash();
 }
 function drawRelease(T){
-  var i,s,sx;
+  var i,s,px;
   if(MODE==='plane'){
-    if(kRP.checked&&started) ring(PLX,PYp(),6,T.halo,T.p3,1.8);
+    if(kRP.checked&&started) ring(planeX(),PYp(),6,T.halo,T.p3,1.8);
     return;
   }
   for(i=0;i<NB;i++){
     s=sOf(i);
     if(!(tCur>=s)) continue;
-    sx=sxOf(dxStatic(xPln(s)));
-    if(sx<8||sx>LW-8) continue;
-    ring(sx,PYp(),4.6,T.halo,T.p3,1.7);
+    px=sx(xPln(s));
+    if(px<8||px>LW-8) continue;
+    ring(px,PYp(),4.6,T.halo,T.p3,1.7);
   }
 }
+/* 地面系：第一球的落点距离（抛点 → 落点） */
+function drawRange(T){
+  if(MODE!=='ground'||!started) return;
+  if(!(tCur>=tFall())) return;
+  var a=sx(0), b=sx(landX(0)), y=GY+40;
+  if(b-a<34||a<12||b>LW-12) return;
+  line(a,GY+15,a,y,T.muted,1); line(b,GY+15,b,y,T.muted,1);
+  line(a,y,b,y,T.muted,1);
+  line(a,y-4,a,y+4,T.muted,1.3); line(b,y-4,b,y+4,T.muted,1.3);
+  rtextBox([{t:'R',v:true},{t:' = ',v:false},{t:num(Rof(0),1),v:false},{t:' m',v:false}],
+    (a+b)/2,y,10.5,T.muted,'center','middle');
+}
+/* 飞机：侧面简笔（机头朝右） */
 function drawPlane(T){
-  var px=PLX, py=PYp()+PDY;
+  var cx=planeX(), cy=PYp()+PDY;
   ctx.save();
-  ctx.fillStyle=T.halo; ctx.strokeStyle=T.axis; ctx.lineWidth=2; ctx.lineJoin='round';
+  ctx.translate(cx,cy);
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.fillStyle=T.halo; ctx.strokeStyle=T.fg; ctx.lineWidth=1.3;
+  /* 机翼：侧面可见的后掠薄片 */
   ctx.beginPath();
-  ctx.moveTo(px+40,py+1);
-  ctx.bezierCurveTo(px+24,py-15,px+2,py-15,px-16,py-12);
-  ctx.lineTo(px-29,py-10);
-  ctx.lineTo(px-35,py-5);
-  ctx.lineTo(px-33,py+3);
-  ctx.bezierCurveTo(px-8,py+13,px+16,py+12,px+30,py+7);
+  ctx.moveTo(13,4.2); ctx.lineTo(-25,17.6); ctx.lineTo(-32,15.2); ctx.lineTo(1,2.2);
   ctx.closePath(); ctx.fill(); ctx.stroke();
+  /* 平尾 */
   ctx.beginPath();
-  ctx.moveTo(px-24,py-11); ctx.lineTo(px-33,py-27); ctx.lineTo(px-17,py-10);
+  ctx.moveTo(-32,-1.6); ctx.lineTo(-50,-8.8); ctx.lineTo(-52,-6.4); ctx.lineTo(-36,0.9);
   ctx.closePath(); ctx.fill(); ctx.stroke();
+  /* 垂尾 */
   ctx.beginPath();
-  ctx.moveTo(px+6,py+3); ctx.lineTo(px-16,py+17); ctx.lineTo(px-4,py+5);
+  ctx.moveTo(-26,-7.6); ctx.lineTo(-38.5,-27); ctx.lineTo(-44.5,-26); ctx.lineTo(-36.5,-7.8);
   ctx.closePath(); ctx.fill(); ctx.stroke();
-  dot(px+18,py-3,2.2,T.tick);
+  /* 机身 */
+  ctx.beginPath();
+  ctx.moveTo(45,0.2);
+  ctx.bezierCurveTo(43,-5.4,37,-8.4,29,-8.7);
+  ctx.lineTo(-21,-8.6);
+  ctx.bezierCurveTo(-33,-8.4,-42,-7.0,-46.5,-4.4);
+  ctx.lineTo(-46.5,-2.4);
+  ctx.bezierCurveTo(-39,-0.2,-31,3.4,-23,5.9);
+  ctx.bezierCurveTo(-12,8.4,10,8.6,29,7.6);
+  ctx.bezierCurveTo(39,7.0,44,4.8,45,0.2);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  /* 发动机短舱 + 吊挂 */
+  ctx.beginPath();
+  if(ctx.ellipse) ctx.ellipse(-16,15.4,10,4.4,0,0,Math.PI*2);
+  else ctx.arc(-16,15.4,7,0,Math.PI*2);
+  ctx.fill(); ctx.stroke();
+  /* 舷窗与驾驶舱窗 */
+  var i;
+  for(i=0;i<11;i++) dot(23-i*4.6,-4.4,0.95,T.axis);
+  ctx.fillStyle=T.fg; ctx.beginPath();
+  ctx.moveTo(38.6,-6.6); ctx.lineTo(43.2,-2.8); ctx.lineTo(37.6,-2.4); ctx.lineTo(35.2,-5.8);
+  ctx.closePath(); ctx.fill();
   ctx.restore();
 }
 /* 所有文字最后画 */
 function drawText(T){
-  var i,s,bx,by,pY=PYp();
+  var i,s,bx,by,pY=PYp(),pX=planeX();
   if(MODE==='ground'){
-    rtext(['地面参考系（地面观察者）'],16,26,12,T.fg);
-    rtext(['视角跟随飞机：地面正相对画面后退'],16,44,10.5,T.muted);
+    rtext(['地面参考系：地面静止，飞机向右飞过'],16,26,12,T.fg);
+    rtext(['画面不跟飞机，落点留在原处'],16,44,10.5,T.muted);
   }else{
-    rtext(['飞机参考系（飞行员视角）'],16,26,12,T.fg);
-    rtext(['飞机静止不动：地面向后加速退去'],16,44,10.5,T.muted);
+    rtext(['飞机参考系：飞机静止，地面向后加速退去'],16,26,12,T.fg);
+    rtext(['视角跟住飞机，所以地面在画面里后退'],16,44,10.5,T.muted);
   }
   if(kRP.checked){
     rtext([MODE==='ground'?'各次抛点（绿圈）在地面系中沿水平方向分散':'各次抛点（绿圈）在本参考系中重合于飞机'],
       16,62,10.5,T.p3);
   }
-  if(MODE==='plane') rtextBox([{t:'x',v:true},{t:'\u2032',v:true}],42,PYp()-9,11,T.p3,'center','bottom');
-  rtext(['飞机'],PLX,PYp()-52,11,T.fg,'center','middle',true);
+  if(MODE==='plane') rtextBox([{t:'x',v:true},{t:'\u2032',v:true}],38,PYp()-9,11,T.p3,'center','bottom');
+  tryTxt(['飞机'],pX,pY-40,11,T.fg,'center','middle',
+    [[0,0],[0,-16],[-34,0],[34,0],[-34,-16],[34,-16]]);
   if(!started){
-    rtext(['设定参数后按「开始」投放小球'],PLX*0.55,GY-150,11.5,T.muted,'center','middle');
+    rtext(['设定参数后按「开始」投放小球'],LW*0.55,GY-150,11.5,T.muted,'center','middle');
     return;
   }
-  /* Δx / Δy */
   if(HI>=0){
     s=sOf(HI);
-    bx=sxOf(dxOf(tCur,s)); by=Math.min(syOf(hOf(tCur,s)),GY-6.5);
-    if(Math.abs(bx-PLX)>=26){
-      tryTxt([{t:'\u0394',v:false},{t:'x',v:true}],(PLX+bx)/2,by-7,11,T.p1,'center','bottom',
+    bx=sx(xBal(tCur,s)); by=Math.min(sy(hOf(tCur,s)),GY-6.5);
+    if(Math.abs(bx-pX)>=26){
+      tryTxt([{t:'\u0394',v:false},{t:'x',v:true}],(pX+bx)/2,by-7,11,T.p1,'center','bottom',
         [[0,0],[0,-16],[24,0],[-24,0]],true,GY-6);
-      tryTxt([{t:'\u0394',v:false},{t:'y',v:true}],PLX+9,(pY+by)/2,11,T.p1,'left','middle',
+      tryTxt([{t:'\u0394',v:false},{t:'y',v:true}],pX+9,(pY+by)/2,11,T.p1,'left','middle',
         [[0,0],[10,0],[0,-20],[0,20]],true,GY-6);
     }
     tryTxt(['球'+String(HI+1)],bx+12,by-2,10.5,T.p1,'left','middle',
       [[0,0],[0,18],[-2,-20],[20,-16]],true,GY-6);
   }
-  /* 共线标注：取直线 62% 处沿法向外推，位置稳定、不随球的深浅跳 */
   var le=lineEnd();
   if(le){
-    var qx=PLX+0.62*(le[0]-PLX), qy=PYp()+0.62*(le[1]-PYp());
-    var ddx=le[0]-PLX, ddy=le[1]-PYp(), LL=Math.sqrt(ddx*ddx+ddy*ddy);
+    var qx=pX+0.62*(le[0]-pX), qy=pY+0.62*(le[1]-pY);
+    var ddx=le[0]-pX, ddy=le[1]-pY, LL=Math.sqrt(ddx*ddx+ddy*ddy);
     var nx=ddy/LL, ny=-ddx/LL;
     tryTxt(['各球共线'],qx+18*nx,qy+18*ny,11,T.p1,'left','middle',
       [[0,0],[0,16],[0,-14],[8,0]],false,GY-6);
@@ -463,15 +536,18 @@ function drawText(T){
 }
 function draw(){
   var T=theme();
+  S=fitScale();
   HALO=T.bg;
   ctx.save();
   ctx.setTransform(cv.width/LW,0,0,cv.height/LH,0,0);
   ctx.clearRect(0,0,LW,LH);
   OCC.length=0;
   drawGround(T);
+  drawAlt(T);
   drawAxisX(T);
   if(started&&kTr.checked) drawTrails(T);
   drawLine(T);
+  drawRange(T);
   drawLanded(T);
   drawBalls(T);
   drawDelta(T);
@@ -484,13 +560,16 @@ function draw(){
 /* ===== 读数 ===== */
 function degTxt(){return num(Math.atan(P.ac/GG)*180/Math.PI,1)+'\u00B0';}
 function upd(){
-  var i,tf=tFall();
+  var i,tf=tFall(),arr=[];
   pickHi();
   oV.textContent=num(P.v0,0); oA.textContent=num(P.ac,1);
   oTl.textContent=num(P.itv,1); oH.textContent=num(P.hh,0);
   roT.textContent=num(Math.min(tCur,tEnd()),2);
   roV.textContent=num(vPln(Math.min(tCur,tEnd())),1);
   roTh.textContent=degTxt();
+  roR.textContent='R = '+num(Rof(0),1)+' m';
+  for(i=0;i<NB;i++) arr.push(num(Rof(sOf(i)),1));
+  roRs.textContent=arr.join(' / ')+' m';
   if(HI<0){
     roTr.innerHTML='跟踪 <span class=n>\u2014</span>';
     roXY.innerHTML='坐标 <span class=n>\u2014</span>';
@@ -523,7 +602,7 @@ function setHint(html){hint.innerHTML=html;}
 function diffHint(key){
   if(key==='v0'){
     setHint('<span class=v>v</span><span class=n><sub>0</sub></span> 由 '+ntag(prev.v0,0)+' 改为 '+ntag(P.v0,0)+
-      '：相对位移、相对速度三行<span class=n>没动</span>，画面里球的分布也<span class=n>没动</span>；变的只有拖尾的水平跨度（水平速度 '+ntag(P.v0,0)+' + '+ntag(P.ac,1)+'<span class=n>⋅</span><span class=v>s</span>）。');
+      '：相对位移、相对速度、落点距离三行<span class=n>没动</span>（落点距离由下落时间和球抛出时相对地面的速度决定），画面里球的相对分布也<span class=n>没动</span>；变的只有落点离抛点更远、整幅图缩了比例。');
   }else if(key==='ac'){
     setHint('<span class=v>a</span> 由 '+ntag(prev.ac,1)+' 改为 '+ntag(P.ac,1)+'：直线偏离竖直由 '+
       ntag(Math.atan(prev.ac/GG)*180/Math.PI,1)+' 变为 '+ntag(Math.atan(P.ac/GG)*180/Math.PI,1)+
@@ -533,7 +612,8 @@ function diffHint(key){
       ' s：同一条直线上球的<span class=n>疏密</span>变了（沿直线的距离 ∝ <span class=v>τ</span><span class=n><sup>2</sup></span> 之差），直线方向与 '+ntag(Math.atan(P.ac/GG)*180/Math.PI,1)+'° 的倾角不变。');
   }else if(key==='hh'){
     setHint('高度 <span class=v>h</span> 由 '+ntag(prev.hh,0)+' 改为 '+ntag(P.hh,0)+' m：下落时间由 '+
-      ntag(Math.sqrt(2*prev.hh/GG),2)+' 变为 '+ntag(tFall(),2)+' s，同时在空中的球数、拖尾长度跟着变；直线倾角不变。');
+      ntag(Math.sqrt(2*prev.hh/GG),2)+' 变为 '+ntag(tFall(),2)+' s，落点距离按 <span class=n>√</span><span class=v>h</span> 成比例变化（球1 由 '+
+      ntag((P.v0)*Math.sqrt(2*prev.hh/GG),1)+' 变为 '+ntag(Rof(0),1)+' m），同时在空中的球数、拖尾长度跟着变；直线倾角不变。');
   }
   prev.v0=P.v0; prev.ac=P.ac; prev.itv=P.itv; prev.hh=P.hh;
 }
@@ -561,8 +641,8 @@ bReset.addEventListener('click',function(){
 function setMode(m){
   MODE=m;
   setOn(mG,m==='ground'); setOn(mP,m==='plane');
-  if(m==='ground') setHint('切到地面系：拖尾是<span class=n>抛物线</span>（水平速度恒定、竖直速度均匀增大）。留意此刻球的相对位置与刚才完全相同。');
-  else setHint('切到飞机系：拖尾重合为<span class=n>一条直线</span>（<span class=n>Δ</span><span class=v>y</span><span class=n>/Δ</span><span class=v>x</span><span class=n> = </span><span class=v>g</span><span class=n>/</span><span class=v>a</span><span class=n> 恒定）。上面 Δ</span><span class=v>x</span><span class=n>、Δ</span><span class=v>y</span><span class=n> 三行一个字都没变。</span>');
+  if(m==='ground') setHint('切到地面系：<span class=n>地面不动</span>，飞机向右飞过、拖尾是抛物线（水平速度恒定、竖直速度均匀增大）。球此刻的相对位置与刚才完全一样，只是整幅图挪了个位置。');
+  else setHint('切到飞机系：视角跟住飞机，<span class=n>地面向后加速退去</span>，六条拖尾重合为<span class=n>一条直线</span>（<span class=n>Δ</span><span class=v>y</span><span class=n>/Δ</span><span class=v>x</span><span class=n> = </span><span class=v>g</span><span class=n>/</span><span class=v>a</span> 恒定）。相对位移、落点距离一个字都没变。');
   draw();
 }
 mG.addEventListener('click',function(){setMode('ground');});
@@ -581,7 +661,7 @@ function step(ts){
     if(tCur>=te){
       if(kLoop.checked) tCur=0;
       else {tCur=te; running=false; done=true;
-        setHint('一轮投完。现在来回切换参考系，盯住这条直线和 <span class=n>Δ</span><span class=v>x</span><span class=n>、Δ</span><span class=v>y</span><span class=n> 三行——它们一动不动；动的只是每个球拖出来的轨迹。</span>');
+        setHint('一轮投完。现在来回切换参考系：地面系里落点留在地上不动，飞机系的画面跟着飞机走——两种视角下球之间的相对位置始终一样。');
       }
     }
   }
