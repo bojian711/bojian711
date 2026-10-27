@@ -149,6 +149,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <label class='chk'><input id='kGrid' type='checkbox'>网格</label>
       <label class='chk'><input id='kGhost' type='checkbox'>保留旧轨迹</label>
       <button id='bGClear'>清除旧轨迹</button>
+      <button id='bChord'>弦矢量</button>
     </div>
     <div class='readout'>
       <span><span class='v'>r</span><span class='n'> = </span><span class='n' id='oR'>—</span></span>
@@ -156,8 +157,10 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span><span class='v'>θ</span><span class='n'> = </span><span class='n' id='oTh'>—</span></span>
       <span><span class='v'>t</span><span class='n'> = </span><span class='n' id='oTi'>—</span></span>
       <span><span class='v'>f</span><span class='n'> = </span><span class='n' id='oF'>—</span></span>
+      <span><span class='v'>L</span><span class='n'> = </span><span class='n' id='oCh'>—</span></span>
+      <span><span class='v'>δ</span><span class='n'> = </span><span class='n' id='oCt'>—</span></span>
     </div>
-    <div class='rule'><span class='v'>r</span><span class='n'> 由 </span><span class='v'>mv</span><span class='n'>/</span><span class='n'>(</span><span class='n'>|</span><span class='v'>q</span><span class='n'>|</span><span class='v'>B</span><span class='n'>) 定，</span><span class='v'>T</span><span class='n'> 与 </span><span class='v'>v</span><span class='n'> 无关；偏转角 </span><span class='v'>θ</span><span class='n'> 由场区边界与 </span><span class='v'>r</span><span class='n'> 共同决定，</span><span class='v'>t</span><span class='n'> = </span><span class='v'>θT</span><span class='n'>/360°。</span></div>
+    <div class='rule'><span class='v'>r</span><span class='n'> 由 </span><span class='v'>mv</span><span class='n'>/</span><span class='n'>(</span><span class='n'>|</span><span class='v'>q</span><span class='n'>|</span><span class='v'>B</span><span class='n'>) 定，</span><span class='v'>T</span><span class='n'> 与 </span><span class='v'>v</span><span class='n'> 无关；偏转角 </span><span class='v'>θ</span><span class='n'> 由场区边界与 </span><span class='v'>r</span><span class='n'> 共同决定，</span><span class='v'>t</span><span class='n'> = </span><span class='v'>θT</span><span class='n'>/360°；弦长 </span><span class='v'>L</span><span class='n'> = 2</span><span class='v'>r</span><span class='n'>·sin(</span><span class='v'>θ</span><span class='n'>/2)，弦切角 </span><span class='v'>δ</span><span class='n'> = </span><span class='v'>θ</span><span class='n'>/2。</span></div>
     <div class='hint' id='hint'>在图上点击可设入射点，按住拖动可定入射方向；拖动滑块改变参数。</div>
   </div>
 </div>
@@ -196,11 +199,11 @@ var DIR=parseFloat($('sdr').value);        /* 入射方向角（圆形场区为�
 var spd=1, running=true;
 var fam='none';                            /* none | zoom | roll */
 var ZF=[0.55,0.72,0.86,1,1.18,1.42];       /* 放缩圆：速率倍数 */
-var RD=[-60,-40,-20,0,20,40,60];           /* 滚动圆：方向偏移（度） */
+var RD=[], kk0; for(kk0=0;kk0<24;kk0++) RD.push(kk0*15);  /* 滚动圆：方向偏移（度），24 支扫一周 */
 
 /* ===== 运动状态 ===== */
 var parts=[], refIdx=0;
-var showTraj=true, showVec=true, showGrid=false, showGhost=false;
+var showTraj=true, showVec=true, showGrid=false, showGhost=false, showChord=false;
 var ghosts=[];                 /* 旧轨迹快照，最多 6 组，用于改参数前后对比 */
 
 /* ===== 小工具 ===== */
@@ -381,10 +384,12 @@ function inside(x,y){
 /* ===== 粒子与推进 ===== */
 function mkPart(vv,ang){
   var ux=Math.cos(ang), uy=Math.sin(ang), ins=inside(x0,y0);
-  return {x:x0, y:y0, ux:ux, uy:uy, vv:vv, r:radiusOf(vv), inF:ins,
+  var P={x:x0, y:y0, ux:ux, uy:uy, vv:vv, r:radiusOf(vv), inF:ins,
     traj:[[x0,y0]], t:0, th:0, thOut:null, tOut:null,
     entryP:ins?[x0,y0]:null, entryD:ins?[ux,uy]:null,
-    exitP:null, exitD:null, captured:false, endT:-1, fin:false, ci:-1};
+    exitP:null, exitD:null, captured:false, endT:-1, fin:false, ci:-1, orbC:null};
+  if(ins) P.orbC=centerOf(P);
+  return P;
 }
 function reset(){
   var i, a0=dirRad();
@@ -394,7 +399,7 @@ function reset(){
     refIdx=3;
   }else if(fam==='roll'){
     for(i=0;i<RD.length;i++) parts.push(mkPart(v0,a0+RD[i]*PI/180));
-    refIdx=3;
+    refIdx=0;
   }else{
     parts.push(mkPart(v0,a0)); refIdx=0;
   }
@@ -440,6 +445,7 @@ function advPart(P,dt){
         P.x=px+P.ux*h2; P.y=py+P.uy*h2;
         P.inF=true;
         if(!P.entryP){ P.entryP=[P.x,P.y]; P.entryD=[P.ux,P.uy]; }
+        P.orbC=centerOf(P);
         P.traj.push([P.x,P.y]);
       }
     }
@@ -538,8 +544,8 @@ function drawOrbits(T){
   ctx.save(); ctx.globalAlpha=0.22; dash([5,5]);
   for(i=0;i<parts.length;i++){
     P=parts[i];
-    if(!P.entryP) continue;
-    c0=centerOf(P); col=colOf(T,P);
+    if(!P.orbC) continue;
+    c0=P.orbC; col=colOf(T,P);
     ctx.strokeStyle=col; ctx.lineWidth=1.2;
     ctx.beginPath(); ctx.arc(X(c0[0]),Y(c0[1]),P.r*PX,0,TAU); ctx.stroke();
   }
@@ -553,8 +559,8 @@ function drawParts(T){
   }
   for(i=0;i<parts.length;i++){
     P=parts[i];
-    if(!P.entryP) continue;
-    c0=centerOf(P); cx=X(c0[0]); cy=Y(c0[1]); col=colOf(T,P);
+    if(!P.orbC) continue;
+    c0=P.orbC; cx=X(c0[0]); cy=Y(c0[1]); col=colOf(T,P);
     line(cx-5,cy,cx+5,cy,col,1.2);
     line(cx,cy-5,cx,cy+5,col,1.2);
   }
@@ -571,6 +577,16 @@ function drawCircle(T){
   dash([4,4]);
   line(px,py,cx,cy,T.muted,1.2);
   dash();
+}
+function drawChord(T){
+  if(!showChord) return;
+  var i,P;
+  for(i=0;i<parts.length;i++){
+    P=parts[i];
+    if(!P.entryP||!P.exitP) continue;
+    arrow2(X(P.entryP[0]),Y(P.entryP[1]),X(P.exitP[0]),Y(P.exitP[1]),
+      colOf(T,P),i===refIdx?2.4:1.4);
+  }
 }
 function drawCLabel(T){
   var P=parts[refIdx];
@@ -698,6 +714,7 @@ function draw(){
   drawGhosts(T);
   drawOrbits(T);
   drawParts(T);
+  drawChord(T);
   drawCircle(T);
   drawInject(T);
   drawShapeLabel(T);
@@ -734,7 +751,8 @@ function upd(){
   $('oT').textContent=num(periodNs(),1)+' ns';
   $('oF').innerHTML=sciHTML(forceE13(P?P.vv:v0)*1e-13,2)+'<span class=n> N</span>';
   if(!P){
-    $('oTh').textContent='—'; $('oTi').textContent='—'; return;
+    $('oTh').textContent='—'; $('oTi').textContent='—';
+    $('oCh').textContent='—'; $('oCt').textContent='—'; return;
   }
   if(P.thOut===null){
     $('oTh').textContent=P.captured?num(P.th*180/PI,0)+'°（持续绕行）':'—';
@@ -742,6 +760,15 @@ function upd(){
   }else{
     $('oTh').textContent=num(P.thOut*180/PI,1)+'°';
     $('oTi').textContent=num(P.tOut*1e9,2)+' ns';
+  }
+  if(P.entryP&&P.exitP){
+    var chx=P.exitP[0]-P.entryP[0], chy=P.exitP[1]-P.entryP[1];
+    var Lc=hyp(chx,chy);
+    $('oCh').textContent=num(Lc,2)+' cm';
+    var dd=P.entryD, cv2=(dd[0]*chx+dd[1]*chy)/(Lc||1e-9);
+    $('oCt').textContent=num(Math.acos(clamp(cv2,-1,1))*180/PI,1)+'°';
+  }else{
+    $('oCh').textContent='—'; $('oCt').textContent='—';
   }
 }
 function hint(s){$('hint').textContent=s;}
@@ -890,7 +917,7 @@ function famInfoText(){
     return '放缩圆：v = '+s+' ×10⁶ m/s（深色为 v₀ 参考）';
   }
   if(fam==='roll'){
-    return '滚动圆：入射方向 '+num(DIR-60,0)+'° … '+num(DIR+60,0)+'°（深色为 '+num(DIR,0)+'° 参考）';
+    return '滚动圆：入射方向自 '+num(DIR,0)+'° 起每 15° 一支，共 24 支扫一周（深色为 θ₀ 参考）';
   }
   return '单粒子：改参数可用下方「保留旧轨迹」做对比';
 }
@@ -901,7 +928,7 @@ function setFam(f){
   $('famInfo').textContent=famInfoText();
   clearRun(); upd();
   if(f==='zoom') hint('放缩圆：同一点、同一方向、速率不同 → 半径与 v 成正比，圆心都在过入射点且垂直于 v 的直线上；各粒子角速度相同（T 与 v 无关），任一时刻转过的角度相同。');
-  else if(f==='roll') hint('滚动圆：同一点、速率相同、方向不同 → 半径相同，圆心都在以入射点为心、半径 r 的圆上；用来扫出临界方向。');
+  else if(f==='roll') hint('滚动圆：同一点、速率相同、入射方向每 15° 一支扫一周 → 半径相同，圆心都在以入射点为心、半径 r 的圆上；用来扫出临界方向。');
   else hint('已回到单粒子。');
 }
 $('bZoom').addEventListener('click',function(){ setFam(fam==='zoom'?'none':'zoom'); });
@@ -932,6 +959,12 @@ $('kGhost').addEventListener('change',function(){
   else hint('已开启对比：改参数、换场区或点「重来」时，旧轨迹以浅色保留（最多 6 组）。');
 });
 $('bGClear').addEventListener('click',function(){ ghosts.length=0; hint('已清除全部旧轨迹。'); });
+$('bChord').addEventListener('click',function(){
+  showChord=!showChord;
+  $('bChord').className=showChord?'on':'';
+  if(showChord) hint('弦矢量：入射点 → 出射点的位移。弦长 L = 2r·sin(θ/2)，弦切角 δ（弦与入射速度的夹角）= θ/2；粒子出射后显示。');
+  else hint('已隐藏弦矢量。');
+});
 
 /* ===== 主循环 ===== */
 function resize(){
