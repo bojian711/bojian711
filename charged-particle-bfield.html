@@ -322,6 +322,7 @@ function theme(){
     bsym:dk?'rgba(141,155,171,0.55)':'rgba(70,88,107,0.48)',
     fam:dk?['#cf9179','#7fa8d4','#8fae7f','#c9a26b','#a898c8','#6faeaa']
         :['#a3563c','#3a6ea5','#4f7a45','#8a6a2c','#6b5b8a','#37787a'],
+    chord:dk?'#d97d6b':'#b13a2e',
     halo:bg
   };
 }
@@ -534,9 +535,18 @@ function strokeTraj(tr,color,lw){
 }
 function drawGhosts(T){
   if(!showGhost||!ghosts.length) return;
-  var g,i;
+  var g,i,e,c;
   for(g=0;g<ghosts.length;g++){
-    for(i=0;i<ghosts[g].length;i++) strokeTraj(ghosts[g][i],T.curveDim,2.0);
+    e=ghosts[g];
+    if(e.tr) for(i=0;i<e.tr.length;i++) strokeTraj(e.tr[i],T.curveDim,2.0);
+    if(showChord&&e.ch&&e.ch.length){
+      ctx.save(); ctx.globalAlpha=0.45;
+      for(i=0;i<e.ch.length;i++){
+        c=e.ch[i];
+        arrow2(X(c[0]),Y(c[1]),X(c[2]),Y(c[3]),T.chord,1.4);
+      }
+      ctx.restore();
+    }
   }
 }
 function drawOrbits(T){
@@ -585,7 +595,7 @@ function drawChord(T){
     P=parts[i];
     if(!P.entryP||!P.exitP) continue;
     arrow2(X(P.entryP[0]),Y(P.entryP[1]),X(P.exitP[0]),Y(P.exitP[1]),
-      colOf(T,P),i===refIdx?2.4:1.4);
+      T.chord,i===refIdx?2.4:1.4);
   }
 }
 function drawCLabel(T){
@@ -774,10 +784,14 @@ function upd(){
 function hint(s){$('hint').textContent=s;}
 function snapGhost(){
   if(!showGhost) return;
-  var g=[],i;
-  for(i=0;i<parts.length;i++) if(parts[i].traj.length>8) g.push(parts[i].traj.slice());
+  var g=[],ch=[],i,P;
+  for(i=0;i<parts.length;i++){
+    P=parts[i];
+    if(P.traj.length>8) g.push(P.traj.slice());
+    if(P.entryP&&P.exitP) ch.push([P.entryP[0],P.entryP[1],P.exitP[0],P.exitP[1]]);
+  }
   if(g.length){
-    ghosts.push(g);
+    ghosts.push({tr:g,ch:ch});
     while(ghosts.length>6) ghosts.shift();
   }
 }
