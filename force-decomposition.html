@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>力的分解 · 矢量圆分步演示</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: #f3f5f9; color: #1f2937;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px;
+  }
+  .wrap { width: 100%; max-width: 1280px; }
+  header { text-align: center; margin-bottom: 14px; }
+  header h1 { font-size: 24px; color: #111827; letter-spacing: 1px; }
+  header p { font-size: 13.5px; color: #6b7280; margin-top: 4px; }
+  .main { display: flex; gap: 14px; align-items: stretch; }
+  .left { flex: 1 1 640px; min-width: 520px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ---------- 画布区（不含任何控制） ---------- */
+  .canvas-box {
+    background: #fff;
+    border: 1px solid #e5e7eb; border-radius: 14px; padding: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.05); position: relative;
+  }
+  #cv { width: 100%; height: 640px; display: block; border-radius: 8px;
+    background: #fcfdff; cursor: crosshair; touch-action: none; }
+  #cv.grabbing { cursor: grabbing; }
+  #labelLayer {
+    position: absolute; left: 10px; top: 10px; right: 10px; bottom: 10px;
+    pointer-events: none; overflow: hidden;
+  }
+  .mlabel {
+    position: absolute; left: 0; top: 0; white-space: nowrap;
+    pointer-events: none; font-size: 12px; will-change: transform;
+    transform: translate(-9999px,-9999px);
+    background: rgba(252,253,255,.9); padding: 1px 5px; border-radius: 5px;
+  }
+  .mlabel .katex { font-size: 1.02em; }
+  .mbadge {
+    position: absolute; left: 0; top: 0; width: 18px; height: 18px;
+    border-radius: 50%; background: #fff; border: 2px solid currentColor;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 700; pointer-events: none;
+    transform: translate(-9999px,-9999px);
+    box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  }
+  .hint {
+    position: absolute; bottom: 14px; left: 14px; font-size: 12.5px; color: #6b7280;
+    background: rgba(255,255,255,.88); padding: 4px 10px; border-radius: 20px;
+    border: 1px solid #e5e7eb; pointer-events: none;
+  }
+
+  /* ---------- 右侧控制面板 ---------- */
+  aside.panel { flex: 0 0 380px; display: flex; flex-direction: column; gap: 10px; }
+  /* 末张卡片拉伸填满面板高度，使整个版面呈矩形、无多余空白 */
+  aside.panel > .card:last-child { flex: 1; display: flex; flex-direction: column; }
+  aside.panel > .card:last-child .stepbox { flex: 1; display: flex; flex-direction: column; }
+  aside.panel > .card:last-child .step-desc { flex: 1; }
+  .card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+    padding: 12px 14px; box-shadow: 0 2px 10px rgba(0,0,0,.05);
+  }
+  .card h2 { font-size: 14.5px; color: #111827; margin-bottom: 9px; }
+  .step {
+    display: inline-flex; width: 20px; height: 20px; border-radius: 50%;
+    background: #e5e7eb; color: #6b7280; font-size: 12px; font-weight: 700;
+    align-items: center; justify-content: center; margin-right: 7px;
+    vertical-align: -3px; transition: all .25s;
+  }
+  .step.now { background: #4f46e5; color: #fff; }
+  .step.done { background: #10b981; color: #fff; }
+
+  .modes { display: flex; gap: 8px; }
+  .modes button {
+    flex: 1; padding: 9px 6px; font-size: 14px; border-radius: 10px;
+    border: 1.5px solid #d1d5db; background: #fff; color: #374151; cursor: pointer;
+    transition: all .15s; line-height: 1.6;
+  }
+  .modes button small { display: block; font-size: 12px; color: #9ca3af; }
+  .modes button.active { border-color: #4f46e5; background: #eef2ff; color: #4338ca; }
+  .modes button.active small { color: #818cf8; }
+  .modes button:disabled { opacity: .45; cursor: not-allowed; }
+
+  .readout { display: flex; gap: 8px; }
+  .readout .val {
+    flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 6px;
+    background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 7px 6px; white-space: nowrap; min-width: 0; overflow: hidden;
+  }
+  .readout .val b { font-size: 17px; color: #1d4ed8; font-variant-numeric: tabular-nums; }
+  .readout .val span { font-size: 11.5px; color: #6b7280; }
+  .stage-hint {
+    margin-top: 10px; font-size: 12.5px; color: #6b7280; line-height: 1.7;
+    background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 7px 10px;
+  }
+
+  .ctrl-caption { font-size: 12px; color: #9ca3af; margin: 10px 0 2px; }
+  .ctrl .row { display: flex; justify-content: space-between; font-size: 13.5px;
+    color: #374151; margin-bottom: 3px; align-items: baseline; }
+  .ctrl .row b { color: #4f46e5; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: #6366f1; height: 22px; }
+
+  .stepbox { margin-top: 12px; }
+  .step-title { font-size: 13px; font-weight: 700; color: #4f46e5; margin-bottom: 6px; }
+  .step-desc {
+    font-size: 13px; color: #374151; line-height: 1.85;
+    background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 9px 11px;
+  }
+  .dots { display: flex; gap: 7px; margin: 11px 0 9px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: #e5e7eb;
+    transition: all .2s; }
+  .dots i.now { background: #4f46e5; transform: scale(1.25); }
+  .dots i.done { background: #10b981; }
+  .step-btns { display: flex; gap: 6px; }
+  .step-btns button {
+    flex: 1; padding: 7px 4px; font-size: 12.5px; border-radius: 8px;
+    border: 1.5px solid #d1d5db; background: #fff; color: #374151; cursor: pointer;
+    transition: all .15s;
+  }
+  .step-btns button:hover:not(:disabled) { border-color: #4f46e5; color: #4f46e5; }
+  .step-btns button:disabled { opacity: .4; cursor: not-allowed; }
+  .step-btns button.on { background: #eef2ff; border-color: #4f46e5; color: #4338ca; }
+
+  .placeholder {
+    color: #9ca3af; font-size: 13px; text-align: center; padding: 22px 8px;
+    border: 1px dashed #e5e7eb; border-radius: 8px; line-height: 1.8;
+  }
+
+  .badge { display: flex; align-items: center; gap: 14px; }
+  .badge .num {
+    width: 62px; height: 62px; border-radius: 14px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #fff; flex-shrink: 0;
+    font-weight: 700; animation: pop .3s ease;
+  }
+  .badge .num b { font-size: 28px; line-height: 1; }
+  .badge .num span { font-size: 11px; margin-top: 2px; font-weight: 400; opacity: .9; }
+  .n0 { background: linear-gradient(135deg,#ef4444,#dc2626); }
+  .n1 { background: linear-gradient(135deg,#3b82f6,#2563eb); }
+  .n2 { background: linear-gradient(135deg,#10b981,#059669); }
+  @keyframes pop { 0% { transform: scale(.7); } 70% { transform: scale(1.08);} 100% { transform: scale(1);} }
+  .badge .desc { font-size: 13px; line-height: 1.75; color: #374151; }
+  .cond {
+    margin-top: 10px; font-size: 13px; color: #4b5563; background: #f8fafc;
+    border: 1px dashed #d1d5db; border-radius: 8px; padding: 9px 10px; line-height: 2;
+    overflow-x: auto;
+  }
+  .sol-item {
+    margin-top: 8px; font-size: 13px; line-height: 1.9; padding: 7px 10px;
+    border-radius: 8px; background: #f8fafc; border: 1px solid #e5e7eb;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .sol-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  .legend {
+    position: absolute; top: 14px; left: 14px; z-index: 5;
+    display: flex; flex-direction: column; gap: 3px;
+    background: rgba(255,255,255,.93); border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 8px 12px; font-size: 11.5px; color: #4b5563;
+    pointer-events: none; box-shadow: 0 1px 5px rgba(0,0,0,.07);
+  }
+  .legend .katex { font-size: 1em; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .swatch { width: 16px; height: 4px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+
+  /* 求解结果：画布右侧浮动卡，避免与矢量图交叉（原点已在左下，图形向右上生长） */
+  .float-card {
+    position: absolute; top: 14px; right: 14px; z-index: 6;
+    width: 292px; max-height: calc(100% - 28px); overflow-y: auto;
+    background: rgba(255,255,255,.96); border: 1px solid #e5e7eb; border-radius: 12px;
+    padding: 11px 13px; box-shadow: 0 3px 14px rgba(0,0,0,.09);
+  }
+  .float-card h2 { font-size: 13.5px; color: #111827; margin-bottom: 8px; }
+  .float-card .cond { margin-top: 8px; padding: 7px 9px; font-size: 12px; }
+  .float-card .sol-item { margin-top: 6px; font-size: 12px; padding: 6px 9px; }
+  .katex { font-size: 1.05em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>力的分解 · 矢量圆分步演示</h1>
+    <p id="subtitle">拖动画布设定合力，选择分解条件后，用矢量圆作图法分步推出分解结果</p>
+  </header>
+  <div class="main">
+    <div class="left">
+      <div class="canvas-box">
+        <canvas id="cv"></canvas>
+        <div id="labelLayer"></div>
+        <div class="hint">🖱 在画布上任意拖动 → 设定合力的大小与方向</div>
+        <div class="legend" id="legendBox"></div>
+        <div class="float-card" id="resultCard" style="display:none">
+          <h2>求解结果</h2>
+          <div class="badge">
+            <div class="num" id="badgeNum"></div>
+            <div class="desc" id="badgeDesc"></div>
+          </div>
+          <div class="cond" id="condBox"></div>
+          <div id="solList"></div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="card">
+        <h2><span class="step" id="step1">1</span> 设定合力</h2>
+        <div class="readout">
+          <div class="val"><b id="fMag">10.0</b><span id="fMagLabel"></span></div>
+          <div class="val"><b id="fAng">60.0°</b><span id="fAngLabel"></span></div>
+        </div>
+        <div class="stage-hint" id="stageHint"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="step" id="step2">2</span> 选择分解条件</h2>
+        <div class="modes">
+          <button id="btnM1" class="active" disabled></button>
+          <button id="btnM2" disabled></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="step" id="step3">3</span> 分步演示 · 矢量圆作图</h2>
+        <div class="placeholder" id="resultPlaceholder">完成步骤 ① ② 后，这里将用矢量圆作图法逐步演示分解过程</div>
+        <div id="ctrlWrap" style="display:none">
+          <div class="ctrl-caption">参数调节（可随时调整，作图实时更新）</div>
+          <div id="ctrlArea"></div>
+          <div class="stepbox" id="stepbox">
+            <div class="step-title" id="stepTitle"></div>
+            <div class="step-desc" id="stepDesc"></div>
+            <div class="dots" id="stepDots"></div>
+            <div class="step-btns">
+              <button id="btnPrev">◀ 上一步</button>
+              <button id="btnPlay">▶ 自动播放</button>
+              <button id="btnNext">下一步 ▶</button>
+              <button id="btnReplay">↻ 重播</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- LaTeX 渲染（KaTeX，加载失败时降级为纯文本） ----------
+  function tex(s) {
+    if (window.katex) {
+      try { return katex.renderToString(s, { throwOnError: false }); } catch (e) {}
+    }
+    return s.replace(/\\le\b/g, "≤").replace(/\\perp/g, "⊥").replace(/\\circ/g, "°")
+            .replace(/\\,/g, " ").replace(/\\quad/g, "  ")
+            .replace(/\\mathrm\{([^}]*)\}/g, "$1")
+            .replace(/\^\{?([^}]+)\}?/g, "<sup>$1</sup>")
+            .replace(/_\{?([^}]+)\}?/g, "<sub>$1</sub>");
+  }
+
+  // ---------- 常量与状态 ----------
+  const SCALE = 12;          // 像素/牛
+  const MAXF = 24, MINF = 0.5;
+  const C_F   = "#1d4ed8";   // 合力：蓝
+  const C_S   = ["#ea580c", "#0d9488"];  // 解①橙、解②青（同一组分解同色）
+  const C_DIR = "#8b5cf6";   // F2 方向线：紫
+  const C_CIR = "#64748b";   // 矢量圆：石板灰
+
+  const F = { mag: 10, ang: 60 * Math.PI / 180 };
+  let mode = 1;
+  let stage = 0;   // 0=待拖动设定合力 1=已设定待选模式 2=已选模式，分步演示
+  let step = 0;    // 当前演示步骤 0..2
+  let stepT0 = 0;  // 当前步骤开始时间（动画用）
+  const m1 = { a: 8, b: 7 };
+  const m2 = { a: 7, th2: 20 * Math.PI / 180 };
+
+  // ---------- 演示步骤说明（矢量圆/方向线为常显已知条件，演示从交点开始） ----------
+  const STEPS_M1 = [
+    `合力 ${tex('F')} 已给定。图中两个灰色<b>矢量圆</b>也是已知条件的几何化：以 O 为圆心、${tex('|F_1|')} 为半径的圆（${tex('F_1')} 末端必在其上），以 ${tex('F')} 末端为圆心、${tex('|F_2|')} 为半径的圆（${tex('F_1')} 末端到 ${tex('F')} 末端的距离必等于 ${tex('|F_2|')}）。调节 ${tex('|F_1|')}、${tex('|F_2|')} 滑块，两圆实时变化。目标：${tex('F_1+F_2=F')}。`,
+    `两圆的<b>交点</b>就是 ${tex('F_1')} 的末端。<b>数一数交点个数——正是解的个数！</b>`,
+    `连线完成分解：O → 交点为 ${tex('F_1')}，交点 → ${tex('F')} 末端为 ${tex('F_2')}。验证：${tex('F_1+F_2=F')} ✓`
+  ];
+  const STEPS_M2 = [
+    `合力 ${tex('F')} 已给定。紫色虚线为 ${tex('F_2')} 的<b>方向线</b>（调节 ${tex('\\theta_2')} 滑块实时转动），灰色<b>矢量圆</b>以 ${tex('F')} 末端为圆心、${tex('|F_1|')} 为半径（调节 ${tex('|F_1|')} 滑块实时改变）。${tex('F_2')} 的末端必同时在方向线和矢量圆上。目标：${tex('F_1+F_2=F')}。`,
+    `方向线与矢量圆的<b>交点</b>就是 ${tex('F_2')} 的末端。<b>交点个数 = 解的个数！</b>`,
+    `连线完成分解：O → 交点为 ${tex('F_2')}（沿方向线），交点 → ${tex('F')} 末端为 ${tex('F_1')}。验证：${tex('F_1+F_2=F')} ✓`
+  ];
+  const STEPS = () => mode === 1 ? STEPS_M1 : STEPS_M2;
+
+  // ---------- 画布 ----------
+  const cv = document.getElementById("cv");
+  const ctx = cv.getContext("2d");
+  let W = 0, H = 0, dpr = 1, origin = { x: 0, y: 0 };
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 原点放在左下四分之一区域：分力/矢量圆向右上方生长，充分利用画布空间
+    origin = { x: W * 0.24, y: H * 0.76 };
+  }
+  new ResizeObserver(resize).observe(cv);
+  resize();
+
+  const toPx = v => ({ x: origin.x + v.x * SCALE, y: origin.y - v.y * SCALE });
+  const toMath = (px, py) => ({ x: (px - origin.x) / SCALE, y: (origin.y - py) / SCALE });
+
+  // ---------- 画布上的 LaTeX 标签层 ----------
+  const labelLayer = document.getElementById("labelLayer");
+  const allLabels = [];
+  class MathLabel {
+    constructor(color, badge, prio) {
+      this.el = document.createElement("div");
+      this.el.className = badge ? "mbadge" : "mlabel";
+      if (color) this.el.style.color = color;
+      labelLayer.appendChild(this.el);
+      this.cur = null;
+      this.prio = !!prio;          // 高优先级标签尽量不挪动（如合力 F）
+      this.on = false;
+      allLabels.push(this);
+    }
+    set(html, x, y) {
+      if (html !== this.cur) { this.el.innerHTML = html; this.cur = html; }
+      this.tx = x; this.ty = y; this.on = true;
+    }
+    hide() { this.el.style.transform = "translate(-9999px,-9999px)"; this.on = false; }
+  }
+  // 每帧末调用：测量各标签实际尺寸，迭代推开互相重叠者，并约束在画布内
+  function layoutLabels() {
+    const act = allLabels.filter(l => l.on);
+    for (const l of act) {
+      l.w = l.el.offsetWidth || 40; l.h = l.el.offsetHeight || 16;
+      l.px = l.tx; l.py = l.ty;
+    }
+    for (let it = 0; it < 80; it++) {
+      let moved = false;
+      for (let i = 0; i < act.length; i++) for (let j = i + 1; j < act.length; j++) {
+        const a = act[i], b = act[j];
+        const ox = (a.w + b.w) / 2 + 6 - Math.abs(a.px - b.px);
+        const oy = (a.h + b.h) / 2 + 3 - Math.abs(a.py - b.py);
+        if (ox > 0 && oy > 0) {
+          let wa = 1, wb = 1;
+          if (a.prio) wa = 0.15; else if (b.prio) wb = 0.15;
+          if (oy <= ox) {
+            const s = oy / (wa + wb);
+            a.py += (a.py <= b.py ? -1 : 1) * s * wa;
+            b.py += (b.py <= a.py ? -1 : 1) * s * wb;
+          } else {
+            const s = ox / (wa + wb);
+            a.px += (a.px <= b.px ? -1 : 1) * s * wa;
+            b.px += (b.px <= a.px ? -1 : 1) * s * wb;
+          }
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+    for (const l of act) {
+      l.px = Math.min(W - l.w / 2 - 2, Math.max(l.w / 2 + 2, l.px));
+      l.py = Math.min(H - l.h / 2 - 2, Math.max(l.h / 2 + 2, l.py));
+      l.el.style.transform = `translate(${l.px}px,${l.py}px) translate(-50%,-50%)`;
+    }
+  }
+  const L = {
+    f:     new MathLabel(C_F, false, true),
+    fAng:  new MathLabel("#3b82f6"),
+    dir:   new MathLabel(C_DIR),
+    theta: new MathLabel(C_DIR),
+    r1:    new MathLabel("#475569"),
+    r2:    new MathLabel("#475569"),
+    sols: [0, 1].map(i => ({
+      f1: new MathLabel(C_S[i]), f2: new MathLabel(C_S[i]),
+      tag: new MathLabel(C_S[i], true)
+    }))
+  };
+  function hideAllLabels() { for (const l of allLabels) l.hide(); }
+
+  // ---------- 拖动设定合力 ----------
+  let dragging = false;
+  let snappedAt = 0;   // 磁性吸附发生的时间（用于绿色闪烁反馈）
+  function setF(e) {
+    const r = cv.getBoundingClientRect();
+    const p = toMath(e.clientX - r.left, e.clientY - r.top);
+    F.mag = Math.min(MAXF, Math.max(MINF, Math.hypot(p.x, p.y)));
+    F.ang = Math.atan2(p.y, p.x);
+    // 模式一：靠近临界值 |F1|+|F2| 或 ||F1|-|F2|| 时磁性吸附，便于演示共线临界情形
+    if (stage >= 2 && mode === 1) {
+      for (const t of [m1.a + m1.b, Math.abs(m1.a - m1.b)]) {
+        if (t >= MINF && t <= MAXF && Math.abs(F.mag - t) <= 0.15) {
+          F.mag = t; snappedAt = performance.now(); break;
+        }
+      }
+    }
+    updatePanel();
+  }
+  cv.addEventListener("pointerdown", e => {
+    dragging = true; cv.classList.add("grabbing");
+    cv.setPointerCapture(e.pointerId); setF(e);
+    if (stage === 0) { stage = 1; refreshStage(); }
+  });
+  cv.addEventListener("pointermove", e => { if (dragging) setF(e); });
+  cv.addEventListener("pointerup", () => { dragging = false; cv.classList.remove("grabbing"); });
+
+  // ---------- 求解 ----------
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const angDeg = a => { let d = a * 180 / Math.PI; d %= 360; if (d < 0) d += 360; return d; };
+  const fmt = v => v.toFixed(1);
+  const N = v => `${fmt(v)}\\,\\mathrm{N}`;
+
+  function solve() {
+    const Fm = F.mag, th = F.ang;
+    const Fv = { x: Fm * Math.cos(th), y: Fm * Math.sin(th) };
+    const sols = [];
+    let condHTML = "", desc = "";
+
+    if (mode === 1) {
+      const a = m1.a, b = m1.b;
+      const lo = Math.abs(a - b), hi = a + b;
+      // 临界判定容差：与数值显示精度(0.1 N)一致，避免手拖的微小偏差把临界情形误判为无解/两解
+      const TOL = 0.05;
+      if (Fm >= lo - TOL && Fm <= hi + TOL) {
+        if (Fm > lo + TOL && Fm < hi - TOL) {
+          const phi = Math.acos(clamp((Fm * Fm + a * a - b * b) / (2 * Fm * a), -1, 1));
+          for (const s of [1, -1]) {
+            const a1 = th + s * phi;
+            const F1 = { x: a * Math.cos(a1), y: a * Math.sin(a1) };
+            sols.push({ F1, F2: { x: Fv.x - F1.x, y: Fv.y - F1.y } });
+          }
+          desc = `满足 ${tex(`|F_1-F_2|<F<F_1+F_2`)}，两矢量圆相交于两点，<b>两个解</b>（关于 ${tex('F')} 的作用线对称）。`;
+        } else {
+          let F1;
+          if (Math.abs(Fm - hi) <= Math.abs(Fm - lo)) F1 = { x: a * Math.cos(th), y: a * Math.sin(th) };
+          else {
+            const dir = (a >= b) ? th : th + Math.PI;
+            F1 = { x: a * Math.cos(dir), y: a * Math.sin(dir) };
+          }
+          sols.push({ F1, F2: { x: Fv.x - F1.x, y: Fv.y - F1.y } });
+          desc = `临界情形：两矢量圆恰好<b>相切</b>（${tex('F')} 等于 ${tex('F_1+F_2')} 或 ${tex('|F_1-F_2|')}），只有一个交点，<b>一个解</b>。`;
+        }
+      } else {
+        desc = `两矢量圆<b>相离</b>（不满足 ${tex('|F_1-F_2|\\le F\\le F_1+F_2')}），没有交点，<b>无解</b>。`;
+      }
+      condHTML =
+        `判据（三角形不等式）：<br>` +
+        tex(`|F_1-F_2|=|${fmt(a)}-${fmt(b)}|=${fmt(lo)}\\;\\le\\;F=${fmt(Fm)}\\;\\le\\;F_1+F_2=${fmt(hi)}`);
+    } else {
+      const a = m2.a, u = { x: Math.cos(m2.th2), y: Math.sin(m2.th2) };
+      const Fd = Fv.x * u.x + Fv.y * u.y;
+      const cosT = clamp(Fd / Fm, -1, 1);
+      const sinT = Math.sqrt(1 - cosT * cosT);
+      const theta = Math.acos(cosT);
+      const FsinT = Fm * sinT;
+      const eps = 1e-6 * Math.max(1, Fm, a);
+      const tdeg = fmt(theta * 180 / Math.PI);
+      // 临界(相切)判定容差：与显示精度一致，|F1| 与 F·sinθ 显示值相等即按相切处理
+      const TOL = 0.05;
+
+      if (a < FsinT - TOL) {
+        desc = `${tex(`|F_1|=${N(a)}<F\\sin\\theta=${N(FsinT)}`)}：矢量圆与方向线<b>相离</b>，<b>无解</b>。`;
+      } else if (a <= FsinT + TOL) {
+        const t = Fd;
+        if (t > eps) {
+          sols.push({ F1: { x: Fv.x - t * u.x, y: Fv.y - t * u.y }, F2: { x: t * u.x, y: t * u.y } });
+          desc = `${tex(`|F_1|=F\\sin\\theta=${N(FsinT)}`)}：矢量圆与方向线恰好<b>相切</b>（此时 ${tex('F_1\\perp F_2')}），<b>一个解</b>。`;
+        } else {
+          desc = `${tex('|F_1|=F\\sin\\theta')}，但切点在 ${tex('F_2')} 的反方向上，<b>无解</b>。`;
+        }
+      } else {
+        const D = a * a - FsinT * FsinT;
+        const r = Math.sqrt(D);
+        for (const t of [Fd + r, Fd - r].filter(t => t > eps))
+          sols.push({ F1: { x: Fv.x - t * u.x, y: Fv.y - t * u.y }, F2: { x: t * u.x, y: t * u.y } });
+        if (sols.length === 2) {
+          desc = `${tex(`F\\sin\\theta=${N(FsinT)}<|F_1|=${N(a)}<F=${N(Fm)}`)}：矢量圆与方向线交于两点，<b>两个解</b>。`;
+        } else if (sols.length === 1) {
+          desc = `${tex(`|F_1|=${N(a)}\\ge F=${N(Fm)}`)}：矢量圆与方向线只有一个符合条件的交点，<b>一个解</b>。`;
+        } else {
+          desc = `${tex(`\\theta=${tdeg}^\\circ`)} 为钝角且 ${tex(`|F_1|=${N(a)}\\le F`)}：交点均在 ${tex('F_2')} 反方向射线上，<b>无解</b>。`;
+        }
+      }
+      condHTML =
+        `夹角 ${tex(`\\theta=${tdeg}^\\circ`)}　（${tex('F')} 与 ${tex('F_2')} 方向之间）<br>` +
+        tex(`F\\sin\\theta=${fmt(Fm)}\\times\\sin ${tdeg}^\\circ=${N(FsinT)}`) +
+        `　，　${tex(`|F_1|=${N(a)},\\;F=${N(Fm)}`)}`;
+    }
+    return { sols, condHTML, desc };
+  }
+
+  // ---------- 绘制 ----------
+  let dashOffset = 0;
+
+  function arrow(p1, p2, color, width, dashed) {
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 2) return;
+    const ux = dx / len, uy = dy / len;
+    const hl = Math.min(Math.max(9, width * 3.2), len * 0.45);
+    const bx = p2.x - ux * hl, by = p2.y - uy * hl;
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.lineCap = "round";
+    if (dashed) ctx.setLineDash([9, 6]);
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.setLineDash([]);
+    const s = hl * 0.48;
+    ctx.beginPath();
+    ctx.moveTo(p2.x, p2.y);
+    ctx.lineTo(bx - uy * s, by + ux * s);
+    ctx.lineTo(bx + uy * s, by - ux * s);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  // 矢量圆（带扫过动画；p: 0~1 为绘制进度）
+  function drawAuxCircle(c, r, p) {
+    if (p <= 0 || r < 2) return;
+    ctx.save();
+    ctx.strokeStyle = C_CIR; ctx.lineWidth = 1.8;
+    ctx.globalAlpha = step >= 2 ? .45 : .8;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    hideAllLabels();
+    const O = toPx({ x: 0, y: 0 });
+    const now = performance.now();
+    const ease = t => 1 - Math.pow(1 - t, 3);
+
+    // 网格与坐标轴
+    ctx.save();
+    ctx.strokeStyle = "#eef1f6"; ctx.lineWidth = 1;
+    for (let x = origin.x % SCALE; x < W; x += SCALE) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = origin.y % SCALE; y < H; y += SCALE) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(0, O.y); ctx.lineTo(W, O.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(O.x, 0); ctx.lineTo(O.x, H); ctx.stroke();
+    ctx.restore();
+
+    const Fv = { x: F.mag * Math.cos(F.ang), y: F.mag * Math.sin(F.ang) };
+    const pF = toPx(Fv);
+
+    if (stage >= 2) {
+      const { sols } = solve();
+
+      if (mode === 1) {
+        // 矢量圆①（圆心 O，半径 |F1|）与矢量圆②（圆心 F 末端，半径 |F2|）：
+        // 模式一下始终显示，调节 |F1| / |F2| 滑块时圆实时变化
+        drawAuxCircle(O, m1.a * SCALE, 1);
+        L.r1.set(tex('|F_1|'), O.x, O.y - m1.a * SCALE - 16);
+        drawAuxCircle(pF, m1.b * SCALE, 1);
+        L.r2.set(tex('|F_2|'), pF.x, pF.y - m1.b * SCALE - 16);
+      } else {
+        // F2 方向线 + θ 夹角弧：模式二下始终显示，调节方向角滑块时立即跟随
+        {
+          const Lp = Math.hypot(W, H);
+          const dir = { x: Math.cos(m2.th2), y: Math.sin(m2.th2) };
+          ctx.save();
+          ctx.strokeStyle = C_DIR; ctx.lineWidth = 1.6;
+          ctx.setLineDash([10, 7]); ctx.lineDashOffset = -dashOffset;
+          ctx.globalAlpha = .8;
+          ctx.beginPath(); ctx.moveTo(O.x, O.y);
+          ctx.lineTo(O.x + dir.x * Lp, O.y - dir.y * Lp); ctx.stroke();
+          ctx.restore();
+          L.dir.set(tex('F_2') + " 方向线", O.x + dir.x * 150, O.y - dir.y * 150 - 16);
+          let d = (-m2.th2) - (-F.ang);
+          while (d > Math.PI) d -= 2 * Math.PI;
+          while (d < -Math.PI) d += 2 * Math.PI;
+          ctx.save();
+          ctx.strokeStyle = C_DIR; ctx.lineWidth = 2; ctx.globalAlpha = .85;
+          ctx.beginPath(); ctx.arc(O.x, O.y, 48, -F.ang, -F.ang + d, d < 0); ctx.stroke();
+          ctx.restore();
+          const mid = -F.ang + d / 2;
+          L.theta.set(tex(`\\theta`), O.x + Math.cos(mid) * 68, O.y + Math.sin(mid) * 68);
+        }
+        // 矢量圆（圆心 F 末端，半径 |F1|）：模式二下始终显示，调节 |F1| 滑块时圆实时变大变小
+        drawAuxCircle(pF, m2.a * SCALE, 1);
+        L.r1.set(tex('|F_1|'), pF.x, pF.y - m2.a * SCALE - 16);
+      }
+
+      // 步骤2：交点（= 分力末端），个数即解数
+      if (step >= 1) {
+        const pop = ease(Math.min(1, (now - stepT0) / 400));
+        sols.forEach((s, i) => {
+          const pt = mode === 1 ? s.F1 : s.F2;
+          const pp = toPx(pt);
+          const pulse = step === 1 ? 1 + .18 * Math.sin(now / 220) : 1;
+          ctx.save();
+          ctx.fillStyle = C_S[i];
+          ctx.globalAlpha = .22;
+          ctx.beginPath(); ctx.arc(pp.x, pp.y, 12 * pulse * pop, 0, 7); ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(pp.x, pp.y, 5.5 * pop, 0, 7); ctx.fill();
+          ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.restore();
+          L.sols[i].tag.set(i === 0 ? "①" : "②", pp.x + 17, pp.y - 17);
+        });
+      }
+
+      // 步骤3：连线得分解（三角形法则，首尾相接；箭头生长动画）
+      if (step >= 2) {
+        const g = ease(Math.min(1, (now - stepT0) / 700));
+        sols.forEach((s, i) => {
+          const c = C_S[i], dashed = i > 0;
+          const m1v = Math.hypot(s.F1.x, s.F1.y);
+          const m2v = Math.hypot(s.F2.x, s.F2.y);
+          // P = 首个分力的末端（模式一为 F1 末端，模式二为 F2 末端）
+          const P = toPx(mode === 1 ? s.F1 : s.F2);
+          const e1 = { x: O.x + (P.x - O.x) * g, y: O.y + (P.y - O.y) * g };
+          arrow(O, e1, c, 3.2, dashed);
+          const q1 = { x: P.x + (pF.x - P.x) * g, y: P.y + (pF.y - P.y) * g };
+          arrow(P, q1, c, 3.2, dashed);
+          if (g > 0.25) {
+            const a1 = Math.atan2(P.y - O.y, P.x - O.x);
+            const a2 = Math.atan2(pF.y - P.y, pF.x - P.x);
+            const l1 = mode === 1 ? L.sols[i].f1 : L.sols[i].f2;
+            const l2 = mode === 1 ? L.sols[i].f2 : L.sols[i].f1;
+            const v1 = mode === 1 ? m1v : m2v, n1 = mode === 1 ? 'F_1' : 'F_2';
+            const v2 = mode === 1 ? m2v : m1v, n2 = mode === 1 ? 'F_2' : 'F_1';
+            if (v1 > 0.3) l1.set(tex(`${n1}=${N(v1)}`),
+              (O.x + P.x) / 2 + Math.sin(a1) * 18, (O.y + P.y) / 2 - Math.cos(a1) * 18);
+            if (v2 > 0.3) l2.set(tex(`${n2}=${N(v2)}`),
+              (P.x + pF.x) / 2 + Math.sin(a2) * 18, (P.y + pF.y) / 2 - Math.cos(a2) * 18);
+          }
+        });
+      }
+    }
+
+    // 合力 F 的角度弧
+    ctx.save();
+    ctx.strokeStyle = "#93c5fd"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(O.x, O.y, 34, 0, -F.ang, F.ang >= 0); ctx.stroke();
+    ctx.restore();
+    const la = -F.ang / 2;
+    L.fAng.set(tex(`${fmt(angDeg(F.ang))}^\\circ`), O.x + Math.cos(la) * 54, O.y + Math.sin(la) * 54);
+
+    // 合力 F（最上层）
+    arrow(O, pF, C_F, 4.5, false);
+    const fa = Math.atan2(pF.y - O.y, pF.x - O.x);
+    L.f.set(tex(`F=${N(F.mag)}`),
+      (O.x + pF.x) / 2 + Math.sin(fa) * 20, (O.y + pF.y) / 2 - Math.cos(fa) * 20);
+
+    // 拖动提示圈（吸附到临界值后的 0.7s 内闪绿色）
+    ctx.save();
+    const snapFlash = now - snappedAt < 700;
+    ctx.strokeStyle = snapFlash ? "rgba(16,185,129,.85)" : "rgba(29,78,216,.45)";
+    ctx.lineWidth = snapFlash ? 3 : 2;
+    const pulse = 5 + Math.sin(now / 300) * 2.5;
+    ctx.beginPath(); ctx.arc(pF.x, pF.y, 14 + pulse, 0, 7); ctx.stroke();
+    ctx.restore();
+
+    dashOffset += 0.6;
+    layoutLabels();   // 末尾统一消解标签重叠
+    requestAnimationFrame(draw);
+  }
+
+  // ---------- 控制面板 ----------
+  const ctrlArea = document.getElementById("ctrlArea");
+  const badgeNum = document.getElementById("badgeNum");
+  const badgeDesc = document.getElementById("badgeDesc");
+  const condBox = document.getElementById("condBox");
+  const solList = document.getElementById("solList");
+
+  function sliderRow(labelHTML, value, min, max, step, oninput) {
+    const wrap = document.createElement("div");
+    wrap.className = "ctrl";
+    wrap.innerHTML = `<div class="row"><span>${labelHTML}</span><b>${value.toFixed(1)}</b></div>`;
+    const input = document.createElement("input");
+    input.type = "range"; input.min = min; input.max = max; input.step = step; input.value = value;
+    input.addEventListener("input", () => {
+      const v = parseFloat(input.value);
+      wrap.querySelector("b").textContent = v.toFixed(1);
+      oninput(v);
+      updatePanel();
+    });
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  function buildControls() {
+    ctrlArea.innerHTML = "";
+    if (mode === 1) {
+      ctrlArea.appendChild(sliderRow(`${tex('|F_1|')} 分力大小 / N`, m1.a, 0, 30, 0.1, v => m1.a = v));
+      ctrlArea.appendChild(sliderRow(`${tex('|F_2|')} 分力大小 / N`, m1.b, 0, 30, 0.1, v => m1.b = v));
+    } else {
+      ctrlArea.appendChild(sliderRow(`${tex('\\theta_2')}：${tex('F_2')} 方向角 / °`,
+        m2.th2 * 180 / Math.PI, 0, 360, 1, v => m2.th2 = v * Math.PI / 180));
+      ctrlArea.appendChild(sliderRow(`${tex('|F_1|')} 分力大小 / N`, m2.a, 0, 30, 0.1, v => m2.a = v));
+    }
+  }
+
+  function updatePanel() {
+    document.getElementById("fMag").textContent = fmt(F.mag);
+    document.getElementById("fAng").textContent = fmt(angDeg(F.ang)) + "°";
+    if (stage < 2 || step < STEPS().length - 1) return;   // 未完成演示前不显示求解结果
+
+    const { sols, condHTML, desc } = solve();
+    const n = sols.length;
+    badgeNum.className = "num n" + n;
+    badgeNum.innerHTML = `<b>${n}</b><span>个解</span>`;
+    badgeDesc.innerHTML = desc;
+    condBox.innerHTML = condHTML;
+
+    solList.innerHTML = "";
+    sols.forEach((s, i) => {
+      const m1v = Math.hypot(s.F1.x, s.F1.y);
+      const m2v = Math.hypot(s.F2.x, s.F2.y);
+      const a1 = Math.atan2(s.F1.y, s.F1.x);
+      const a2 = Math.atan2(s.F2.y, s.F2.x);
+      const div = document.createElement("div");
+      div.className = "sol-item";
+      div.innerHTML =
+        `<i class="sol-dot" style="background:${C_S[i]}"></i>` +
+        `${tex(`F_1=${N(m1v)}`)}　方向 ${m1v < 0.05 ? "—" : tex(`${fmt(angDeg(a1))}^\\circ`)}` +
+        `<br>` +
+        `${tex(`F_2=${N(m2v)}`)}　方向 ${m2v < 0.05 ? "—" : tex(`${fmt(angDeg(a2))}^\\circ`)}`;
+      solList.appendChild(div);
+    });
+  }
+
+  // ---------- 步骤流程控制 ----------
+  const btnM1 = document.getElementById("btnM1"), btnM2 = document.getElementById("btnM2");
+  const btnPrev = document.getElementById("btnPrev"), btnNext = document.getElementById("btnNext");
+  const btnPlay = document.getElementById("btnPlay"), btnReplay = document.getElementById("btnReplay");
+
+  function setStep(k) {
+    step = Math.max(0, Math.min(STEPS().length - 1, k));
+    stepT0 = performance.now();
+    updateStepUI();
+  }
+
+  function updateStepUI() {
+    const S = STEPS();
+    document.getElementById("stepTitle").innerHTML = `第 ${step + 1} 步 / 共 ${S.length} 步`;
+    document.getElementById("stepDesc").innerHTML = S[step];
+    document.getElementById("stepDots").innerHTML = S.map((_, i) =>
+      `<i class="${i < step ? 'done' : i === step ? 'now' : ''}"></i>`).join("");
+    btnPrev.disabled = step === 0;
+    btnNext.disabled = step === S.length - 1;
+    document.getElementById("resultCard").style.display =
+      (stage >= 2 && step === S.length - 1) ? "" : "none";
+    if (stage >= 2 && step === S.length - 1) updatePanel();
+  }
+
+  let autoTimer = null;
+  function stopAuto() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    btnPlay.textContent = "▶ 自动播放";
+    btnPlay.classList.remove("on");
+  }
+  function startAuto() {
+    stopAuto();
+    if (step >= STEPS().length - 1) setStep(0);
+    autoTimer = setInterval(() => {
+      if (step < STEPS().length - 1) setStep(step + 1);
+      else stopAuto();
+    }, 1700);
+    btnPlay.textContent = "⏸ 暂停";
+    btnPlay.classList.add("on");
+  }
+
+  btnPrev.addEventListener("click", () => { stopAuto(); setStep(step - 1); });
+  btnNext.addEventListener("click", () => { stopAuto(); setStep(step + 1); });
+  btnReplay.addEventListener("click", () => { stopAuto(); setStep(0); });
+  btnPlay.addEventListener("click", () => { autoTimer ? stopAuto() : startAuto(); });
+
+  function refreshStage() {
+    document.getElementById("step1").className = "step " + (stage >= 1 ? "done" : "now");
+    document.getElementById("step2").className = "step " + (stage === 2 ? "done" : stage === 1 ? "now" : "");
+    document.getElementById("step3").className = "step " + (stage === 2 ? "now" : "");
+    btnM1.disabled = btnM2.disabled = stage < 1;
+
+    document.getElementById("stageHint").innerHTML =
+      stage === 0 ? `预设合力已给出——在画布上<b>拖动</b>它，设定你想要的大小与方向`
+      : stage === 1 ? `✓ 合力已设定，请在上方 ② 选择分解条件（仍可继续拖动微调）`
+      : `拖动画布可随时调整合力 ${tex('F')}；用下方按钮逐步观察矢量圆作图过程`;
+
+    const show = stage >= 2;
+    document.getElementById("resultPlaceholder").style.display = show ? "none" : "";
+    document.getElementById("ctrlWrap").style.display = show ? "" : "none";
+    if (show) {
+      buildControls();
+      updateStepUI();
+    } else {
+      ctrlArea.innerHTML = "";
+      document.getElementById("resultCard").style.display = "none";
+    }
+  }
+
+  function setMode(m) {
+    mode = m;
+    btnM1.classList.toggle("active", m === 1);
+    btnM2.classList.toggle("active", m === 2);
+    if (stage < 2) { stage = 2; }
+    stopAuto();
+    setStep(0);
+    refreshStage();
+  }
+  btnM1.addEventListener("click", () => setMode(1));
+  btnM2.addEventListener("click", () => setMode(2));
+
+  // ---------- 静态文本 ----------
+  document.getElementById("fMagLabel").innerHTML = `合力大小 ${tex('F')} / N`;
+  document.getElementById("fAngLabel").innerHTML = `方向角（与 ${tex('x')} 轴）`;
+  document.getElementById("btnM1").innerHTML = `模式一<small>已知 ${tex('|F_1|')} 与 ${tex('|F_2|')}</small>`;
+  document.getElementById("btnM2").innerHTML = `模式二<small>已知 ${tex('|F_1|')} 与 ${tex('F_2')} 方向</small>`;
+  document.getElementById("legendBox").innerHTML =
+    `<span><i class="swatch" style="background:${C_F}"></i>${tex('F')}：合力（拖动画布设定）</span>` +
+    `<span><i class="swatch" style="background:${C_CIR}"></i>矢量圆（作图辅助，交点即分力末端）</span>` +
+    `<span><i class="swatch" style="background:${C_S[0]}"></i>解 ①：${tex('F_1')}、${tex('F_2')} 同组同色</span>` +
+    `<span><i class="swatch" style="background:${C_S[1]}"></i>解 ②：同组同色，虚线箭头</span>` +
+    `<span><i class="swatch" style="background:${C_DIR}"></i>${tex('F_2')} 方向线（模式二）</span>`;
+
+  // ---------- 启动 ----------
+  refreshStage();
+  updatePanel();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
