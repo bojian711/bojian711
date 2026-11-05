@@ -181,6 +181,34 @@
   .float-card .cond { margin-top: 8px; padding: 7px 9px; font-size: 12px; }
   .float-card .sol-item { margin-top: 6px; font-size: 12px; padding: 6px 9px; }
   .katex { font-size: 1.05em; }
+
+  /* ---------- 自适应窄屏（手机 / 平板竖屏）---------- */
+  @media (max-width: 900px) {
+    body { padding: 10px; }
+    header h1 { font-size: 19px; }
+    header p { font-size: 12px; }
+    header { margin-bottom: 10px; }
+    /* 左右两列改为纵向堆叠：画布在上、控制面板在下 */
+    .main { flex-direction: column; }
+    .left { min-width: 0; flex: 1 1 auto; }
+    /* 画布高度随屏幕宽度自适应，保证竖屏手机上有足够的拖动空间 */
+    #cv { height: clamp(320px, 100vw, 460px); }
+    .canvas-box { padding: 7px; }
+    #labelLayer { left: 7px; top: 7px; right: 7px; bottom: 7px; }
+    aside.panel { flex: 1 1 auto; width: auto; }
+    /* 窄屏下末卡不再纵向拉伸（各卡按内容高度排布） */
+    aside.panel > .card:last-child { flex: 0 0 auto; }
+    aside.panel > .card:last-child .stepbox { flex: 0 0 auto; }
+    aside.panel > .card:last-child .step-desc { flex: 0 0 auto; }
+    /* 求解结果卡：不再浮动遮挡小画布，转为画布正下方的常规卡片 */
+    .float-card {
+      position: static; width: auto; max-height: none; overflow: visible;
+      margin-top: 8px;
+    }
+    .legend { top: 10px; left: 10px; padding: 6px 9px; font-size: 11px; }
+    .hint { bottom: 10px; left: 10px; font-size: 11.5px; }
+    .modes button { font-size: 13px; padding: 8px 4px; }
+  }
 </style>
 </head>
 <body>
@@ -194,7 +222,7 @@
       <div class="canvas-box">
         <canvas id="cv"></canvas>
         <div id="labelLayer"></div>
-        <div class="hint">🖱 在画布上任意拖动 → 设定合力的大小与方向</div>
+        <div class="hint">🖱 / 👆 在画布上拖动 → 设定合力的大小与方向</div>
         <div class="legend" id="legendBox"></div>
         <div class="float-card" id="resultCard" style="display:none">
           <h2>求解结果</h2>
@@ -266,7 +294,7 @@
   }
 
   // ---------- 常量与状态 ----------
-  const SCALE = 12;          // 像素/牛
+  let SCALE = 12;          // 像素/牛（随画布尺寸自适应，见 resize）
   const MAXF = 24, MINF = 0.5;
   const C_F   = "#1d4ed8";   // 合力：蓝
   const C_S   = ["#ea580c", "#0d9488"];  // 解①橙、解②青（同一组分解同色）
@@ -306,6 +334,8 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // 原点放在左下四分之一区域：分力/矢量圆向右上方生长，充分利用画布空间
     origin = { x: W * 0.24, y: H * 0.76 };
+    // 比例尺自适应：保证最大合力(MAXF)的矢量圆在原点右上区域放得下；桌面约 12px/N，小屏自动缩小
+    SCALE = Math.min(12, Math.max(4.5, Math.min(W, H) / 52));
   }
   new ResizeObserver(resize).observe(cv);
   resize();
