@@ -100,6 +100,19 @@
     background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px;
     padding: 7px 10px;
   }
+  /* 步骤完成后隐藏该卡，当前卡内用摘要行回顾已设定的条件 */
+  .mini-sum {
+    margin-top: 9px; font-size: 12px; color: #4b5563; line-height: 1.7;
+    background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 6px 10px;
+  }
+  .sum-row { display: flex; align-items: flex-start; gap: 10px; }
+  .sum-row .mini-sum { flex: 1; margin-top: 0; }
+  .linklike {
+    border: none; background: none; color: #6366f1; font-size: 12px;
+    cursor: pointer; padding: 4px 2px; white-space: nowrap;
+  }
+  .linklike:hover { text-decoration: underline; }
 
   .ctrl-caption { font-size: 12px; color: #9ca3af; margin: 10px 0 2px; }
   .ctrl .row { display: flex; justify-content: space-between; font-size: 13.5px;
@@ -237,7 +250,7 @@
     </div>
 
     <aside class="panel">
-      <div class="card">
+      <div class="card" id="card1">
         <h2><span class="step" id="step1">1</span> 设定合力</h2>
         <div class="readout">
           <div class="val"><b id="fMag">10.0</b><span id="fMagLabel"></span></div>
@@ -246,16 +259,22 @@
         <div class="stage-hint" id="stageHint"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="card2" style="display:none">
         <h2><span class="step" id="step2">2</span> 选择分解条件</h2>
         <div class="modes">
           <button id="btnM1" class="active" disabled></button>
           <button id="btnM2" disabled></button>
         </div>
+        <div class="mini-sum" id="sum2"></div>
+        <button class="linklike" id="btnBackF">↩ 重设合力</button>
       </div>
 
-      <div class="card">
+      <div class="card" id="card3" style="display:none">
         <h2><span class="step" id="step3">3</span> 分步演示 · 矢量圆作图</h2>
+        <div class="sum-row">
+          <span class="mini-sum" id="sum3"></span>
+          <button class="linklike" id="btnBackCond">↩ 重选条件</button>
+        </div>
         <div class="placeholder" id="resultPlaceholder">完成步骤 ① ② 后，这里将用矢量圆作图法逐步演示分解过程</div>
         <div id="ctrlWrap" style="display:none">
           <div class="ctrl-caption">参数调节（可随时调整，作图实时更新）</div>
@@ -733,6 +752,12 @@
   function updatePanel() {
     document.getElementById("fMag").textContent = fmt(F.mag);
     document.getElementById("fAng").textContent = fmt(angDeg(F.ang)) + "°";
+    // 卡②③的摘要行：已完成步骤的条件回顾（F 实时更新，画布拖动随时可见）
+    document.getElementById("sum2").innerHTML =
+      `当前 ${tex('F')} = <b>${fmt(F.mag)}</b> N @ <b>${fmt(angDeg(F.ang))}°</b>（仍可拖动画布微调）`;
+    document.getElementById("sum3").innerHTML = mode === 1
+      ? `${tex('F')} = <b>${fmt(F.mag)}</b> N @ <b>${fmt(angDeg(F.ang))}°</b> · 已知 ${tex('|F_1|')}、${tex('|F_2|')}`
+      : `${tex('F')} = <b>${fmt(F.mag)}</b> N @ <b>${fmt(angDeg(F.ang))}°</b> · 已知 ${tex('|F_1|')} 与 ${tex('F_2')} 方向`;
     if (stage < 2 || step < STEPS().length - 1) return;   // 未完成演示前不显示求解结果
 
     const { sols, condHTML, desc } = solve();
@@ -811,10 +836,13 @@
     document.getElementById("step3").className = "step " + (stage === 2 ? "now" : "");
     btnM1.disabled = btnM2.disabled = stage < 1;
 
+    // 每步完成后隐藏该步的卡片，面板中只显示当前需要用户输入的步骤
+    document.getElementById("card1").style.display = stage === 0 ? "" : "none";
+    document.getElementById("card2").style.display = stage === 1 ? "" : "none";
+    document.getElementById("card3").style.display = stage >= 2 ? "" : "none";
+
     document.getElementById("stageHint").innerHTML =
-      stage === 0 ? `预设合力已给出——在画布上<b>拖动</b>它，设定你想要的大小与方向`
-      : stage === 1 ? `✓ 合力已设定，请在上方 ② 选择分解条件（仍可继续拖动微调）`
-      : `拖动画布可随时调整合力 ${tex('F')}；用下方按钮逐步观察矢量圆作图过程`;
+      `预设合力已给出——在画布上<b>拖动</b>它，设定你想要的大小与方向`;
 
     const show = stage >= 2;
     document.getElementById("resultPlaceholder").style.display = show ? "none" : "";
@@ -826,7 +854,14 @@
       ctrlArea.innerHTML = "";
       document.getElementById("resultCard").style.display = "none";
     }
+    updatePanel();
   }
+
+  // 卡②③的返回链接：回到上一步重新输入
+  document.getElementById("btnBackF").addEventListener("click", () => { stage = 0; refreshStage(); });
+  document.getElementById("btnBackCond").addEventListener("click", () => {
+    stage = 1; stopAuto(); refreshStage();
+  });
 
   function setMode(m) {
     mode = m;
