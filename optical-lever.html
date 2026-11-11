@@ -68,7 +68,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
         <output id='oDelta'>0.100</output>
       </div>
       <div class='ctl'>
-        <label>支架脚距 <span class='v c2'>b</span> / cm</label>
+        <label title='铁架台底座两只支承脚在桌面上的间距'>支架两脚间距 <span class='v c2'>b</span> / cm</label>
         <input id='sSpan' type='range' min='2' max='20' step='0.5' value='5'>
         <output id='oSpan'>5.0</output>
       </div>
@@ -89,7 +89,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span>光斑位移 <span class='v'>Δs</span> <span class='n'>=</span> <span class='n' id='oDs'>12.0</span> <span class='n'>mm</span></span>
       <span>放大倍数 <span class='v'>M</span> <span class='n'>=</span> <span class='n' id='oM'>120</span></span>
     </div>
-    <div class='rule'>下沉 <span class='v'>δ</span> 与脚距 <span class='v'>b</span> 决定倾角 <span class='v'>α</span> <span class='n'>≈</span> <span class='v'>δ</span><span class='n'>/</span><span class='v'>b</span>；<span class='v'>L</span> 把这个角度拉长成墙上的位移 <span class='v'>Δs</span> <span class='n'>≈</span> <span class='v'>Lδ</span><span class='n'>/</span><span class='v'>b</span>，放大倍数 <span class='v'>M</span> <span class='n'>=</span> <span class='v'>L</span><span class='n'>/</span><span class='v'>b</span>。</div>
+    <div class='rule'><span class='v'>b</span> 是铁架台两只脚在桌面上的间距。桌面下弯让两脚相差 <span class='v'>δ</span>，支架因此倾斜 <span class='v'>α</span> <span class='n'>≈</span> <span class='v'>δ</span><span class='n'>/</span><span class='v'>b</span>；两脚分得越开，倾角越小。<span class='v'>L</span> 把角度拉长成墙上位移 <span class='v'>Δs</span> <span class='n'>≈</span> <span class='v'>Lδ</span><span class='n'>/</span><span class='v'>b</span>，放大倍数 <span class='v'>M</span> <span class='n'>=</span> <span class='v'>L</span><span class='n'>/</span><span class='v'>b</span>。</div>
     <div class='hint' id='hint'>设定参数后按「开始」，看光斑在墙面上移动。</div>
   </div>
 </div>
@@ -106,7 +106,8 @@ var PI=Math.PI, TAU=2*PI;
 var BX=95, BY=280;             /* 支架底座（旋转中心） */
 var MLEN=150;                   /* 出射点到底座距离 px */
 var WALL0=230, WALLK=35;        /* 墙 x = WALL0 + L*WALLK */
-var KDEL=7, KANG=25;            /* 固定夸大倍数：桌面下沉 1/10，倾角不变 */
+var KDEL=7, KANG=25;            /* 固定夸大：下沉 1/10，倾角不变 */
+var KFOOT=4;                    /* 两脚间距 px/cm，固定比例，不按当前值归一化 */
 var DSMAX=120, SY0=86, SPP=2;   /* 墙面放大窗固定标尺 0..120 mm */
 var WX=668;                     /* 放大窗左边界 */
 var TMAX=12;                    /* 一个按压周期 12 s */
@@ -266,8 +267,8 @@ function drawSide(T){
   ctx.closePath();
   ctx.fillStyle=T.wood; ctx.fill();
   ctx.strokeStyle=T.line; ctx.lineWidth=1; ctx.stroke();
-  ctx.fillStyle=T.wood; ctx.fillRect(58,BY+9,11,58); ctx.fillRect(206,BY+9,11,58);
-  ctx.strokeStyle=T.line; ctx.strokeRect(58,BY+9,11,58); ctx.strokeRect(206,BY+9,11,58);
+  ctx.fillStyle=T.wood; ctx.fillRect(32,BY+9,10,58); ctx.fillRect(224,BY+9,10,58);
+  ctx.strokeStyle=T.line; ctx.strokeRect(32,BY+9,10,58); ctx.strokeRect(224,BY+9,10,58);
 
   /* 按压力：δ=0 即未施力，不画箭头 */
   var ay=BY+dv-6;
@@ -282,10 +283,15 @@ function drawSide(T){
   rtextBox([{t:'\u03B4',v:true},' = ',num(d,3),' mm'],175,BY-20,12.5,T.p2,'left','middle');
 
   /* 支架：整体随桌面刚性倾斜（激光器与平面镜同装，出射光偏 α） */
+  var footW=SPAN*KFOOT;           /* 两脚间距随 b 真实变化 */
   ctx.save();
   ctx.translate(BX,BY); ctx.rotate(th);
-  ctx.fillStyle=T.steel; ctx.fillRect(-30,-8,60,8);
-  ctx.strokeStyle=T.muted; ctx.lineWidth=1; ctx.strokeRect(-30,-8,60,8);
+  ctx.fillStyle=T.steel; ctx.fillRect(-footW/2,-8,footW,8);
+  ctx.strokeStyle=T.muted; ctx.lineWidth=1; ctx.strokeRect(-footW/2,-8,footW,8);
+  /* 两只支承脚 */
+  ctx.fillStyle=T.muted;
+  ctx.fillRect(-footW/2-2,-2,6,6); ctx.fillRect(footW/2-4,-2,6,6);
+  ctx.fillStyle=T.steel;
   ctx.fillRect(-5,-150,10,142); ctx.strokeRect(-5,-150,10,142);
   ctx.fillStyle=T.muted; ctx.fillRect(-13,-112,26,7);
   ctx.fillStyle=T.gold; ctx.fillRect(-9,-110,18,54);
@@ -302,6 +308,14 @@ function drawSide(T){
     line(px,py+10,px+8,py+2,T.muted,0.8);
   }
   ctx.restore();
+
+  /* 两脚间距 b：尺寸线对齐两只脚，随滑块真实变长/变短 */
+  var fx1=BX-footW/2, fx2=BX+footW/2;
+  line(fx1,BY+16,fx1,BY+26,T.p2,1);
+  line(fx2,BY+16,fx2,BY+26,T.p2,1);
+  if(footW>=30) hArrow(fx1,BY+22,fx2,T.p2,1);
+  else line(fx1,BY+22,fx2,BY+22,T.p2,1);
+  rtextBox([{t:'b',v:true},' = ',num(SPAN,1),' cm'],BX,BY+38,12.5,T.p2,'center','middle');
 
   /* 光束 */
   if(showRef){dash([6,5]); line(mx,my,wallX,my,T.dim,1.2); dash();}
@@ -330,7 +344,7 @@ function drawSide(T){
   if(Math.abs(by-my)>20) rtextBox([{t:'A',v:true}],wallX+20,my,12,T.muted,'left','middle');
 
   /* 注记 */
-  rtext(['桌面形变 ',num(KDEL,0),' px/mm（近乎不可见），倾角夸大 ×',num(KANG,0)],30,356,11.5,T.muted,'left','alphabetic');
+  rtext(['桌面形变 ',num(KDEL,0),' px/mm（近乎不可见），倾角 ×',num(KANG,0),'，两脚间距 ',num(KFOOT,0),' px/cm'],30,356,11.5,T.muted,'left','alphabetic');
 }
 
 /* ===== 右侧：墙面光斑放大（固定标尺） ===== */
@@ -391,7 +405,7 @@ function upd(){
 function refresh(){upd(); draw();}
 function hintFor(which,prev){
   if(which==='delta') hint.textContent='下沉 '+num(prev,3)+' → '+num(DELTA,3)+' mm：倾角与光斑位移同比变，放大倍数不变';
-  else if(which==='span') hint.textContent='脚距 '+num(prev,1)+' → '+num(SPAN,1)+' cm：倾角反向变，光斑位移与放大倍数跟着变';
+  else if(which==='span') hint.textContent='两脚间距 '+num(prev,1)+' → '+num(SPAN,1)+' cm：图上两脚随之分开或靠拢；间距越大倾角越小，光斑位移与放大倍数跟着变';
   else if(which==='dist') hint.textContent='光路 '+num(prev,1)+' → '+num(DIST,1)+' m：倾角不变，光斑位移与放大倍数同比变';
   else hint.textContent='设定参数后按「开始」，看光斑在墙面上移动。';
 }
