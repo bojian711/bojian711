@@ -53,7 +53,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
     <div class='grid'>
       <div class='ctl'>
         <span class='v c1'>α</span>
-        <input id='sa' type='range' min='25' max='65' step='0.5' value='30'>
+        <input id='sa' type='range' min='25' max='55' step='0.5' value='30'>
         <output id='oa'>30°</output>
       </div>
       <div class='ctl'>
@@ -130,6 +130,23 @@ function avoid(x,y,w,h,pref){
   }
   return [x,y];
 }
+/* 标签只沿一个方向连续外移：拖动滑块时位置不会跳 */
+function pushAlong(x,y,w,h,dx,dy){
+  if(freeAt(x,y,w,h)) return [x,y];
+  var t=0, i;
+  for(i=0;i<110;i++){
+    t+=2;
+    if(freeAt(x+dx*t,y+dy*t,w,h)) return [x+dx*t,y+dy*t];
+  }
+  return avoid(x,y,w,h,[dx,dy]);
+}
+/* 一条边的中点，以及背离第三点的法向 */
+function midN(x1,y1,x2,y2,ax,ay){
+  var dx=x2-x1, dy=y2-y1, L=Math.sqrt(dx*dx+dy*dy)||1;
+  var nx=-dy/L, ny=dx/L, mx=(x1+x2)/2, my=(y1+y2)/2;
+  if((mx-ax)*nx+(my-ay)*ny<0){ nx=-nx; ny=-ny; }
+  return {mx:mx,my:my,nx:nx,ny:ny};
+}
 
 
 var LW=900, LH=420;
@@ -170,7 +187,7 @@ function fmt(s){
   return s;
 }
 function fmtHint(){ hint.innerHTML=fmt(hint.textContent); }
-function rtext(ps,x,y,size,color,align,base,halo){
+function rtext(ps,x,y,size,color,align,base,halo,dir){
   var p=partsOf(ps),i,w=0;
   for(i=0;i<p.length;i++){ctx.font=fontOf(p[i][1],size); w+=ctx.measureText(p[i][0]).width;}
   var sx=align==='center'?x-w/2:(align==='right'?x-w:x);
@@ -178,7 +195,8 @@ function rtext(ps,x,y,size,color,align,base,halo){
   var hh=size*1.12;
   var top=base==='middle'?y-hh*0.55:(base==='bottom'?y-hh:(base==='top'?y:y-hh*0.8));
   var pref=align==='right'?[-1,0]:(align==='left'?[1,0]:[0,-1]);
-  var q=avoid(sx,top,w,hh,pref), dx=q[0]-sx, dy=q[1]-top;
+  /* dir 给定 = 数学标签：锚点由几何算出，固定不动，不再做搜索式避让（搜索会让标签在拖动时跳动） */
+  var q=(dir?[sx,top]:avoid(sx,top,w,hh,pref)), dx=q[0]-sx, dy=q[1]-top;
   TXTS.push([q[0],q[1],q[0]+w,q[1]+hh]);
   ctx.textAlign='left'; ctx.textBaseline=base||'alphabetic'; ctx.fillStyle=color;
   var cx=sx+dx, yy=y+dy;
@@ -270,20 +288,24 @@ function drawScene(T){
   ring(BX,by,BR,T.ball,T.ballEdge,2);
   /* 三力都从球心画出，1 mg = SC px */
   var N=SC/Math.tan(ar), F=SC/Math.sin(ar);
-  arrow(BX,by+BR,BX,by+BR+SC,T.p1,1.1,9);                          /* mg 竖直向下，从球的下缘起 */
+  arrow(BX,by,BX,by+BR+SC,T.p1,1.1,9);                             /* mg：箭尾在球心，箭头拖到木板下方 */
   arrow(BX,by,BX+N,by,T.p2,1.1,9);                                 /* N 水平向右 */
   arrow(BX,by,BX-F*Math.cos(ar),by-F*Math.sin(ar),T.p3,1.1,9);     /* F 垂直木板指向左上 */
-  rtext([{t:'mg',v:true}],BX+12,by+BR+SC*0.5,15,T.p1,'left','middle');
-  rtext([{t:'N',v:true}],BX+Math.max(N,BR)+10,by-9,15,T.p2,'left','middle');
-  rtext([{t:'F',v:true}],BX-F*Math.cos(ar),by-F*Math.sin(ar)-9,15,T.p3,'center','bottom');
-  /* α 弧：半径随球心到支点的距离收缩，避免压在球上 */
-  var rr=Math.min(70,0.5*BR/Math.sin(ar/2));
+  /* 标签锚在箭头本体上：mg 贴箭杆、落在木板下方那段；N 在箭杆上方，F 推到箭头外，避免落到墙上 */
+  rtext([{t:'mg',v:true}],BX+14,by+BR+SC-2,13,T.p1,'left','middle',true,true);
+  rtext([{t:'N',v:true}],BX+N*0.62,by-BR-13,14,T.p2,'center','middle',true,true);
+  rtext([{t:'F',v:true}],BX-(F+26)*Math.cos(ar),by-(F+26)*Math.sin(ar),14,T.p3,'center','middle',true,true);
+  /* α 弧：半径随球心到支点的距离收缩，留在球外的墙角里 */
+  var dist=BR/Math.sin(ar/2), free=dist-BR;
+  var rr=Math.min(70,0.38*free);
   ctx.strokeStyle=T.muted; ctx.lineWidth=1.2; ctx.beginPath();
   ctx.arc(PX0,PY0,rr,-PI/2,-PI/2+ar,false); ctx.stroke();
-  rtext([{t:'α',v:true}],WX-15,PY0-rr*Math.cos(ar/2),15,T.fg,'right','middle');
+  /* 字母落在弧线中点方向、球面之内：拖动时沿角平分线连续移动，不跳 */
+  var lr=Math.min(rr+14,free-8);
+  rtext([{t:'α',v:true}],WX+lr*Math.sin(ar/2),PY0-lr*Math.cos(ar/2),15,T.fg,'center','middle',true,[Math.sin(ar/2),-Math.cos(ar/2)]);
   /* 说明 */
-  rtext(['木板'],tx+10,ty-12,13,T.muted,'left','bottom');
-  rtext(['不计摩擦'],WX+8,400,13,T.muted,'left','middle');
+  rtext(['木板'],tx+10,ty-12,13,T.muted,'left','bottom',true,[1,-1]);
+  rtext(['不计摩擦'],WX+8,400,13,T.muted,'left','middle',true,[1,0]);
 }
 
 function drawTri(T){
@@ -297,16 +319,17 @@ function drawTri(T){
   arrow(Ax,Ay,Ax,By,T.p1,1.1,hm(TSC));
   arrow(Ax,By,Cx,Ay,T.p3,1.1,hm(F));
   arrow(Cx,Ay,Ax,Ay,T.p2,1.1,hm(N));
-  rtext([{t:'N',v:true}],(Ax+Cx)/2,Ay-12,15,T.p2,'center','bottom');
-  rtext([{t:'mg',v:true}],Ax+12,(Ay+By)/2,15,T.p1,'left','middle');
-  /* F 标签放在斜边外侧 */
-  var mx=(Cx+Ax)/2, my=(Ay+By)/2, ux=Ax-Cx, uy=By-Ay, L=Math.sqrt(ux*ux+uy*uy);
-  rtext([{t:'F',v:true}],mx-uy/L*18,my+ux/L*18,15,T.p3,'center','middle');
+  /* 三条边的标签一律放在该边的中点附近，只沿背离三角形内部的方向外移 */
+  var eN=midN(Cx,Ay,Ax,Ay,Ax,By), eM=midN(Ax,Ay,Ax,By,Cx,Ay), eF=midN(Ax,By,Cx,Ay,Ax,Ay);
+  rtext([{t:'N',v:true}],eN.mx+eN.nx*16,eN.my+eN.ny*16,15,T.p2,'center','middle',true,[eN.nx,eN.ny]);
+  rtext([{t:'mg',v:true}],eM.mx+eM.nx*17,eM.my+eM.ny*17,15,T.p1,'center','middle',true,[eM.nx,eM.ny]);
+  rtext([{t:'F',v:true}],eF.mx+eF.nx*18,eF.my+eF.ny*18,15,T.p3,'center','middle',true,[eF.nx,eF.ny]);
   /* α 在 C：N 与 F 的夹角 */
   var r2=Math.min(46,0.42*Math.min(N,TSC));
   ctx.strokeStyle=T.muted; ctx.lineWidth=1.2; ctx.beginPath();
-  ctx.arc(Cx,Ay,r2,0,Math.atan2(By-Ay,Ax-Cx),false); ctx.stroke();
-  rtext([{t:'α',v:true}],Cx+(r2+13)*Math.cos(ar/2),Ay+(r2+13)*Math.sin(ar/2),15,T.fg,'center','middle');
+  var aEnd=Math.atan2(By-Ay,Ax-Cx), mA=aEnd/2;
+  ctx.arc(Cx,Ay,r2,0,aEnd,false); ctx.stroke();
+  rtext([{t:'α',v:true}],Cx+(r2+17)*Math.cos(mA),Ay+(r2+17)*Math.sin(mA),15,T.fg,'center','middle',true,[Math.cos(mA),Math.sin(mA)]);
   /* 三个力的定性说明 */
   rtext([{t:'mg',v:true},' 恒定'],680,302,13,T.muted,'center','middle');
   rtext([{t:'N',v:true},' 方向不变'],680,324,13,T.muted,'center','middle');
@@ -370,7 +393,7 @@ function step(ts){
     tCur+=dt/12;                     /* 12 s 一个来回 */
     if(tCur>1){ tCur=1-(tCur-1); dirS=-1; }
     if(tCur<0){ tCur=-tCur; dirS=1; }
-    var a=25+(65-25)*tCur;
+    var a=25+(55-25)*tCur;
     alpha=Math.round(a*2)/2; sa.value=String(alpha); upd(); draw();
   }
   requestAnimationFrame(step);

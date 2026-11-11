@@ -130,6 +130,23 @@ function avoid(x,y,w,h,pref){
   }
   return [x,y];
 }
+/* 标签只沿一个方向连续外移：拖动滑块时位置不会跳 */
+function pushAlong(x,y,w,h,dx,dy){
+  if(freeAt(x,y,w,h)) return [x,y];
+  var t=0, i;
+  for(i=0;i<110;i++){
+    t+=2;
+    if(freeAt(x+dx*t,y+dy*t,w,h)) return [x+dx*t,y+dy*t];
+  }
+  return avoid(x,y,w,h,[dx,dy]);
+}
+/* 一条边的中点，以及背离第三点的法向 */
+function midN(x1,y1,x2,y2,ax,ay){
+  var dx=x2-x1, dy=y2-y1, L=Math.sqrt(dx*dx+dy*dy)||1;
+  var nx=-dy/L, ny=dx/L, mx=(x1+x2)/2, my=(y1+y2)/2;
+  if((mx-ax)*nx+(my-ay)*ny<0){ nx=-nx; ny=-ny; }
+  return {mx:mx,my:my,nx:nx,ny:ny};
+}
 
 
 var LW=900, LH=420;
@@ -171,7 +188,7 @@ function fmt(s){
   return s;
 }
 function fmtHint(){ hint.innerHTML=fmt(hint.textContent); }
-function rtext(ps,x,y,size,color,align,base,halo){
+function rtext(ps,x,y,size,color,align,base,halo,dir){
   var p=partsOf(ps),i,w=0;
   for(i=0;i<p.length;i++){ctx.font=fontOf(p[i][1],size); w+=ctx.measureText(p[i][0]).width;}
   var sx=align==='center'?x-w/2:(align==='right'?x-w:x);
@@ -179,7 +196,8 @@ function rtext(ps,x,y,size,color,align,base,halo){
   var hh=size*1.12;
   var top=base==='middle'?y-hh*0.55:(base==='bottom'?y-hh:(base==='top'?y:y-hh*0.8));
   var pref=align==='right'?[-1,0]:(align==='left'?[1,0]:[0,-1]);
-  var q=avoid(sx,top,w,hh,pref), dx=q[0]-sx, dy=q[1]-top;
+  /* dir 给定 = 数学标签：锚点由几何算出，固定不动，不再做搜索式避让（搜索会让标签在拖动时跳动） */
+  var q=(dir?[sx,top]:avoid(sx,top,w,hh,pref)), dx=q[0]-sx, dy=q[1]-top;
   TXTS.push([q[0],q[1],q[0]+w,q[1]+hh]);
   ctx.textAlign='left'; ctx.textBaseline=base||'alphabetic'; ctx.fillStyle=color;
   var cx=sx+dx, yy=y+dy;
@@ -254,32 +272,37 @@ function drawScene(T){
   ctx.fillStyle=T.wedge; ctx.fill();
   ctx.strokeStyle=T.wedgeEdge; ctx.lineWidth=1.4; ctx.stroke();
   /* 顶部横梁与悬点 */
-  ctx.fillStyle=T.beam; ctx.fillRect(250,AY-18,150,18);
-  line(250,AY,400,AY,T.wedgeEdge,1);
+  ctx.fillStyle=T.beam; ctx.fillRect(286,AY-18,114,18);
+  line(286,AY,400,AY,T.wedgeEdge,1);
   dot(AX,AY,3.6,T.rope);
   rtext(['悬点'],AX+12,AY-30,12.5,T.muted,'left','middle');
-  /* 绳 */
+  /* 先在绳的 T 处断开一段，再把球、力矢量画上去 */
   var ux=(AX-cx)/RL, uy=(AY-cy)/RL;
-  line(cx+RB*ux,cy+RB*uy,AX,AY,T.rope,1.6);
+  var N=Math.sin(ar)/Math.sin(ar+BRAD), TT=Math.sin(BRAD)/Math.sin(ar+BRAD);
+  var gap=cy-AY;
+  var lr=Math.max(40,Math.min(58,gap-13),11/Math.sin(ar/2));
+  var rr=Math.max(14,Math.min(lr-14,40));
+  var dT=Math.max(TT*SC+20,rr+14,RB+18), gw=17;
+  line(cx+RB*ux,cy+RB*uy,cx+(dT-gw)*ux,cy+(dT-gw)*uy,T.rope,1.6);
+  line(cx+(dT+gw)*ux,cy+(dT+gw)*uy,AX,AY,T.rope,1.6);
   /* 球 */
   ring(cx,cy,RB,T.ball,T.ballEdge,2);
   /* 竖直虚线 */
   dash([5,5]); line(cx,cy,cx,cy-62,T.muted,1); dash([]);
   /* 三力 */
-  var N=Math.sin(ar)/Math.sin(ar+BRAD), TT=Math.sin(BRAD)/Math.sin(ar+BRAD);
-  arrow(cx,cy+RB,cx,cy+RB+SC,T.p1,1.1,9);                       /* mg */
+  arrow(cx,cy,cx,cy+RB+SC,T.p1,1.1,9);                          /* mg：箭尾在球心 */
   arrow(cx,cy,cx-N*SC*sb,cy-N*SC*cb,T.p2,1.1,9);                /* N，垂直斜面 */
   arrow(cx,cy,cx+TT*SC*ux,cy+TT*SC*uy,T.p3,1.1,9);              /* T，沿绳 */
-  rtext([{t:'mg',v:true}],cx-9,cy+RB+SC*0.5,15,T.p1,'right','middle');
-  rtext([{t:'N',v:true}],cx-N*SC*sb-8,cy-N*SC*cb-8,15,T.p2,'right','bottom');
-  rtext([{t:'T',v:true}],cx+TT*SC*ux+8,cy+TT*SC*uy-8,15,T.p3,'left','bottom');
-  /* α：竖直方向与绳的夹角 */
-  var rr=38;
+  /* 标签锚在箭杆中段，只沿箭头指向一侧连续外移 */
+  rtext([{t:'mg',v:true}],cx+13,cy+RB+SC-6,14,T.p1,'left','middle',true,true);
+  rtext([{t:'N',v:true}],cx-N*SC*sb-15,cy-N*SC*cb-13,14,T.p2,'right','bottom',true,[-sb,-cb]);
+  rtext([{t:'T',v:true}],cx+dT*ux,cy+dT*uy,14,T.p3,'center','middle',true,true);
+  /* α：竖直方向与绳的夹角，落在弧线中点方向、球外；夹角小时贴着竖直虚线右侧 */
   ctx.strokeStyle=T.muted; ctx.lineWidth=1.2; ctx.beginPath();
   ctx.arc(cx,cy,rr,-PI/2,-PI/2+ar,false);
   ctx.stroke();
   var mid=-PI/2+ar/2;
-  rtext([{t:'α',v:true}],cx+(rr+14)*Math.cos(mid),cy+(rr+14)*Math.sin(mid),15,T.fg,'center','middle');
+  rtext([{t:'α',v:true}],Math.max(cx+lr*Math.cos(mid),cx+11.5),cy+lr*Math.sin(mid),15,T.fg,'center','middle',true,true);
   /* 斜面标注与速度箭头 */
   rtext(['光滑斜面'],bx+12,YB+20,13,T.muted,'left','middle');
   arrow(bx+WW-16,YB+18,bx+WW-58,YB+18,T.muted,1.4,8);
@@ -297,18 +320,20 @@ function drawTri(T){
   arrow(Ax,Ay,Ax,By,T.p1,1.1,hm(TSC));
   arrow(Ax,By,Cx,Cy,T.p2,1.1,hm(N*TSC));
   arrow(Cx,Cy,Ax,Ay,T.p3,1.1,hm(TT*TSC));
-  rtext([{t:'mg',v:true}],Ax+12,(Ay+By)/2,15,T.p1,'left','middle');
-  rtext([{t:'N',v:true}],Cx-10,Cy-6,15,T.p2,'right','bottom');
-  /* T 标签放在 C→A' 这条边的外侧 */
-  var mx=(Cx+Ax)/2, my=(Cy+Ay)/2, ux=Ax-Cx, uy=Ay-Cy, L=Math.sqrt(ux*ux+uy*uy);
-  rtext([{t:'T',v:true}],mx+uy/L*16,my-ux/L*16,15,T.p3,'center','middle');
+  /* 三条边的标签都锚在该边中点，沿背离三角形内部的方向外移 */
+  var eM=midN(Ax,Ay,Ax,By,Cx,Cy), eN=midN(Ax,By,Cx,Cy,Ax,Ay), eT=midN(Cx,Cy,Ax,Ay,Ax,By);
+  rtext([{t:'mg',v:true}],eM.mx+eM.nx*17,eM.my+eM.ny*17,15,T.p1,'center','middle',true,[eM.nx,eM.ny]);
+  rtext([{t:'N',v:true}],eN.mx+eN.nx*17,eN.my+eN.ny*17,15,T.p2,'center','middle',true,[eN.nx,eN.ny]);
+  rtext([{t:'T',v:true}],eT.mx+eT.nx*17,eT.my+eT.ny*17,15,T.p3,'center','middle',true,[eT.nx,eT.ny]);
   /* α 在 A'：mg 与 T 的夹角 */
   var r2=Math.min(38,0.42*Math.min(TT*TSC,TSC));
   var angAC=Math.atan2(Cy-Ay,Cx-Ax);
   ctx.strokeStyle=T.muted; ctx.lineWidth=1.2; ctx.beginPath();
   ctx.arc(Ax,Ay,r2,PI/2,angAC,false); ctx.stroke();
   var midA=(PI/2+angAC)/2;
-  rtext([{t:'α',v:true}],Ax+(r2+13)*Math.cos(midA),Ay+(r2+13)*Math.sin(midA),15,T.fg,'center','middle');
+  /* 夹角窄时把字母沿角平分线外移，避开两条边；随 α 连续变化，不跳 */
+  var rA=Math.max(r2+18,9.5/Math.sin(ar/2));
+  rtext([{t:'α',v:true}],Ax+rA*Math.cos(midA),Ay+rA*Math.sin(midA),15,T.fg,'center','middle',true,[Math.cos(midA),Math.sin(midA)]);
   /* 三个力的定性说明 */
   rtext([{t:'mg',v:true},' 恒定'],680,306,13,T.muted,'center','middle');
   rtext([{t:'N',v:true},' 方向不变'],680,328,13,T.muted,'center','middle');

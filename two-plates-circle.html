@@ -129,6 +129,23 @@ function avoid(x,y,w,h,pref){
   }
   return [x,y];
 }
+/* 标签只沿一个方向连续外移：拖动滑块时位置不会跳 */
+function pushAlong(x,y,w,h,dx,dy){
+  if(freeAt(x,y,w,h)) return [x,y];
+  var t=0, i;
+  for(i=0;i<110;i++){
+    t+=2;
+    if(freeAt(x+dx*t,y+dy*t,w,h)) return [x+dx*t,y+dy*t];
+  }
+  return avoid(x,y,w,h,[dx,dy]);
+}
+/* 一条边的中点，以及背离第三点的法向 */
+function midN(x1,y1,x2,y2,ax,ay){
+  var dx=x2-x1, dy=y2-y1, L=Math.sqrt(dx*dx+dy*dy)||1;
+  var nx=-dy/L, ny=dx/L, mx=(x1+x2)/2, my=(y1+y2)/2;
+  if((mx-ax)*nx+(my-ay)*ny<0){ nx=-nx; ny=-ny; }
+  return {mx:mx,my:my,nx:nx,ny:ny};
+}
 
 
 var LW=900, LH=420;
@@ -168,7 +185,7 @@ function fmt(s){
   return s;
 }
 function fmtHint(){ hint.innerHTML=fmt(hint.textContent); }
-function rtext(ps,x,y,size,color,align,base,halo){
+function rtext(ps,x,y,size,color,align,base,halo,dir){
   var p=partsOf(ps),i,w=0;
   for(i=0;i<p.length;i++){ctx.font=fontOf(p[i][1],size); w+=ctx.measureText(p[i][0]).width;}
   var sx=align==='center'?x-w/2:(align==='right'?x-w:x);
@@ -176,7 +193,8 @@ function rtext(ps,x,y,size,color,align,base,halo){
   var hh=size*1.12;
   var top=base==='middle'?y-hh*0.55:(base==='bottom'?y-hh:(base==='top'?y:y-hh*0.8));
   var pref=align==='right'?[-1,0]:(align==='left'?[1,0]:[0,-1]);
-  var q=avoid(sx,top,w,hh,pref), dx=q[0]-sx, dy=q[1]-top;
+  /* dir 给定 = 数学标签：锚点由几何算出，固定不动，不再做搜索式避让（搜索会让标签在拖动时跳动） */
+  var q=(dir?[sx,top]:avoid(sx,top,w,hh,pref)), dx=q[0]-sx, dy=q[1]-top;
   TXTS.push([q[0],q[1],q[0]+w,q[1]+hh]);
   ctx.textAlign='left'; ctx.textBaseline=base||'alphabetic'; ctx.fillStyle=color;
   var cx=sx+dx, yy=y+dy;
@@ -266,15 +284,22 @@ function drawScene(T){
   arrow(s.cx,s.cy,s.cx,s.cy+SC,T.p1,1.1,9);
   arrow(s.cx,s.cy,s.cx+s.T*SC*uT.x,s.cy+s.T*SC*uT.y,T.p3,1.1,9);
   arrow(s.cx,s.cy,s.cx+s.F*SC*uF.x,s.cy+s.F*SC*uF.y,T.p2,1.1,9);
-  rtext([{t:'mg',v:true}],s.cx-10,s.cy+SC*0.55,15,T.p1,'right','middle',true);
-  rtext([{t:'T',v:true}],s.cx+s.T*SC*uT.x,s.cy+s.T*SC*uT.y-10,15,T.p3,'center','bottom',true);
-  rtext([{t:'F',v:true}],s.cx+s.F*SC*uF.x+8,s.cy+s.F*SC*uF.y+10,15,T.p2,'left','top',true);
+  rtext([{t:'mg',v:true}],s.cx,s.cy+SC+42,14,T.p1,'center','middle',true,true);
+  /* T、F 的标签沿箭头方向推到球外、挡板外侧：位置随力的大小连续变化，拖动时不跳 */
+  var dT=s.T*SC, dF=s.F*SC;
+  /* 先沿箭头推到球外，再沿"远离 O"的方向退出角区，始终落在两条挡板之外 */
+  var pT=[s.cx+dT*uT.x,s.cy+dT*uT.y], pF=[s.cx+dF*uF.x,s.cy+dF*uF.y];
+  /* 两条挡板之间的开口方向：字母顺开口离开箭杆，落在两板之外的空白里 */
+  var mbx=(s.cx-OX)/DBALL, mby=(s.cy-OY)/DBALL;
+  pT=[pT[0]+27*mbx,pT[1]+27*mby]; pF=[pF[0]+42*mbx,pF[1]+42*mby];
+  rtext([{t:'T',v:true}],pT[0],pT[1],14,T.p3,'center','middle',true,true);
+  rtext([{t:'F',v:true}],pF[0],pF[1],14,T.p2,'center','middle',true,true);
   /* OA 与水平的夹角 */
-  var rr=76;
+  var rr=104;
   ctx.strokeStyle=T.muted; ctx.lineWidth=1.2; ctx.beginPath();
   ctx.arc(OX,OY,rr,-PI,-s.aA,false); ctx.stroke();
   var m=(-PI-s.aA)/2;
-  rtext([num(ANG0+delta,0)+'°'],OX+(rr+17)*Math.cos(m),OY+(rr+17)*Math.sin(m),13,T.muted,'center','middle');
+  rtext([num(ANG0+delta,0)+'°'],OX+(rr+26)*Math.cos(m),OY+(rr+26)*Math.sin(m),13,T.muted,'center','middle',true,[Math.cos(m),Math.sin(m)]);
 }
 function drawTri(T){
   HALO=T.bg;
@@ -295,11 +320,18 @@ function drawTri(T){
   /* F：B'→V；T：V→A' */
   arrow(Bx,By,Vx,Vy,T.p2,1.1,hm(s.F*TSC));
   arrow(Vx,Vy,Ax,Ay,T.p3,1.1,hm(s.T*TSC));
-  rtext([{t:'mg',v:true}],Ax-12,(Ay+By)/2,15,T.p1,'right','middle');
+  var eM=midN(Ax,Ay,Bx,By,Vx,Vy);
+  rtext([{t:'mg',v:true}],eM.mx+eM.nx*17,eM.my+eM.ny*17,15,T.p1,'center','middle',true,[eM.nx,eM.ny]);
   var fx=(Bx+Vx)/2, fy=(By+Vy)/2, fvx=Vx-Bx, fvy=Vy-By, fl=Math.sqrt(fvx*fvx+fvy*fvy);
-  if(fl>1) rtext([{t:'F',v:true}],fx-fvy/fl*16,fy+fvx/fl*16,15,T.p2,'center','middle');
+  /* 字母贴在边的外侧（背离三角形重心），落在三角形与圆周之间的窄带里 */
+  var Gx=(Ax+Bx+Vx)/3, Gy=(Ay+By+Vy)/3;
+  var nfx=-fvy/fl, nfy=fvx/fl;
+  if((Gx-fx)*nfx+(Gy-fy)*nfy>0){ nfx=-nfx; nfy=-nfy; }
+  if(fl>1) rtext([{t:'F',v:true}],fx+nfx*19,fy+nfy*19,15,T.p2,'center','middle',true,[nfx,nfy]);
   var tx=(Vx+Ax)/2, ty=(Vy+Ay)/2, tvx=Ax-Vx, tvy=Ay-Vy, tl=Math.sqrt(tvx*tvx+tvy*tvy);
-  if(tl>1) rtext([{t:'T',v:true}],tx-tvy/tl*16,ty+tvx/tl*16,15,T.p3,'center','middle');
+  var ntx=-tvy/tl, nty=tvx/tl;
+  if((Gx-tx)*ntx+(Gy-ty)*nty>0){ ntx=-ntx; nty=-nty; }
+  if(tl>1) rtext([{t:'T',v:true}],tx+ntx*19,ty+nty*19,15,T.p3,'center','middle',true,[ntx,nty]);
   /* V 处的 60° */
   var ang1=Math.atan2(Ay-Vy,Ax-Vx), ang2=Math.atan2(By-Vy,Bx-Vx);
   var r2=Math.min(30,0.35*Math.min(s.F,s.T)*TSC);
