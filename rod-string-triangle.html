@@ -281,7 +281,7 @@ function drawScene(T){
   var uxO=(XCT-bx)/BO, uyO=(OYCT-by)/BO;         /* B→O */
   var LBA=Math.sqrt((bx-XCT)*(bx-XCT)+(by-AYCT)*(by-AYCT));
   var uxA=(XCT-bx)/LBA, uyA=(AYCT-by)/LBA;       /* B→A */
-  arrow(bx,by+HANG+2*BALL,bx,by+HANG+2*BALL+SC,T.p1,1.1,9);        /* mg */
+  arrow(bx,by+HANG+BALL,bx,by+HANG+2*BALL+SC,T.p1,1.1,9);          /* mg：箭尾在球心，整条压在球上，不被遮挡 */
   arrow(bx,by,bx+s.F*SC*uxA,by+s.F*SC*uyA,T.p3,1.1,9);             /* F */
   arrow(bx,by,bx-s.N*SC*uxO,by-s.N*SC*uyO,T.p2,1.1,9);             /* N 沿杆背离 O：杆受压，把 B 推离铰点 */
   rtext([{t:'mg',v:true}],bx-16,by+HANG+2*BALL+SC*0.5,14,T.p1,'right','middle',true,[-1,0]);

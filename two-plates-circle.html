@@ -306,39 +306,54 @@ function drawTri(T){
   var s=state(delta);
   var Ax=TX, Ay=TY, Bx=TX, By=TY+TSC;
   var R=TSC/(2*Math.sin(PHI*D2R));
-  var Cx=TX+R*Math.cos(PHI*D2R), Cy=(Ay+By)/2;
-  var phi=(-90+2*delta)*D2R;
+  /* 顶点 V 在弦的左侧：各边方向必须与场景中的力同向（F 朝左上、T 朝右上），
+     画在右侧会变成镜像，F、T 的方向与长度都会互换 */
+  var Cx=TX-R*Math.cos(PHI*D2R), Cy=(Ay+By)/2;
+  var phi=(90+2*delta)*D2R;
   var Vx=Cx+R*Math.cos(phi), Vy=Cy+R*Math.sin(phi);
+  var Gx=(Ax+Bx+Vx)/3, Gy=(Ay+By+Vy)/3;
+  var fl=Math.sqrt((Vx-Bx)*(Vx-Bx)+(Vy-By)*(Vy-By));
+  var tl=Math.sqrt((Ax-Vx)*(Ax-Vx)+(Ay-Vy)*(Ay-Vy));
+  var eM=midN(Ax,Ay,Bx,By,Vx,Vy), eF=midN(Bx,By,Vx,Vy,Gx,Gy), eT=midN(Vx,Vy,Ax,Ay,Gx,Gy);
+  /* 三个字母先定位置：锚在边中点、沿背离重心的法向外移，位置只随 δ 连续变化 */
+  var pM=[eM.mx+eM.nx*17,eM.my+eM.ny*17];
+  var pF=[eF.mx+eF.nx*19,eF.my+eF.ny*19];
+  var pT=[eT.mx+eT.nx*19,eT.my+eT.ny*19];
+  /* 三角形内接于圆周，边与圆之间只剩十几像素，字母必定落在圆上；
+     引导圆按字母的位置断开，字与线之间就留出了空档 */
+  var cuts=[[pM[0],pM[1],20,19],[pF[0],pF[1],14,19],[pT[0],pT[1],13,19]];
   var hm=function(len){return Math.max(7,Math.min(11,len*0.12+6));};
   rtext(['力三角形'],680,64,13,T.muted,'center','middle');
-  /* 圆周与顶点轨迹 */
-  ctx.strokeStyle=T.circ; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(Cx,Cy,R,0,TAU); ctx.stroke();
-  ctx.strokeStyle=T.muted; ctx.lineWidth=1.4; dash([5,4]);
-  ctx.beginPath(); ctx.arc(Cx,Cy,R,-PI/2,PI/3,false); ctx.stroke(); dash([]);
+  /* 顶点的轨迹圆 */
+  ctx.strokeStyle=T.circ; ctx.lineWidth=1; ctx.beginPath();
+  var NS=240, on=false, i, k, a0, a1, am, mx, my, cut;
+  for(i=0;i<NS;i++){
+    a0=TAU*i/NS; a1=TAU*(i+1)/NS; am=(a0+a1)/2;
+    mx=Cx+R*Math.cos(am); my=Cy+R*Math.sin(am); cut=false;
+    for(k=0;k<cuts.length;k++){
+      if(Math.abs(mx-cuts[k][0])<cuts[k][2]&&Math.abs(my-cuts[k][1])<cuts[k][3]) cut=true;
+    }
+    if(cut){ on=false; continue; }
+    if(!on){ ctx.moveTo(Cx+R*Math.cos(a0),Cy+R*Math.sin(a0)); on=true; }
+    ctx.lineTo(Cx+R*Math.cos(a1),Cy+R*Math.sin(a1));
+  }
+  ctx.stroke();
   /* mg：定长定方向 */
   arrow(Ax,Ay,Bx,By,T.p1,1.1,10);
   /* F：B'→V；T：V→A' */
   arrow(Bx,By,Vx,Vy,T.p2,1.1,hm(s.F*TSC));
   arrow(Vx,Vy,Ax,Ay,T.p3,1.1,hm(s.T*TSC));
-  var eM=midN(Ax,Ay,Bx,By,Vx,Vy);
-  rtext([{t:'mg',v:true}],eM.mx+eM.nx*17,eM.my+eM.ny*17,15,T.p1,'center','middle',true,[eM.nx,eM.ny]);
-  var fx=(Bx+Vx)/2, fy=(By+Vy)/2, fvx=Vx-Bx, fvy=Vy-By, fl=Math.sqrt(fvx*fvx+fvy*fvy);
-  /* 字母贴在边的外侧（背离三角形重心），落在三角形与圆周之间的窄带里 */
-  var Gx=(Ax+Bx+Vx)/3, Gy=(Ay+By+Vy)/3;
-  var nfx=-fvy/fl, nfy=fvx/fl;
-  if((Gx-fx)*nfx+(Gy-fy)*nfy>0){ nfx=-nfx; nfy=-nfy; }
-  if(fl>1) rtext([{t:'F',v:true}],fx+nfx*19,fy+nfy*19,15,T.p2,'center','middle',true,[nfx,nfy]);
-  var tx=(Vx+Ax)/2, ty=(Vy+Ay)/2, tvx=Ax-Vx, tvy=Ay-Vy, tl=Math.sqrt(tvx*tvx+tvy*tvy);
-  var ntx=-tvy/tl, nty=tvx/tl;
-  if((Gx-tx)*ntx+(Gy-ty)*nty>0){ ntx=-ntx; nty=-nty; }
-  if(tl>1) rtext([{t:'T',v:true}],tx+ntx*19,ty+nty*19,15,T.p3,'center','middle',true,[ntx,nty]);
-  /* V 处的 60° */
+  rtext([{t:'mg',v:true}],pM[0],pM[1],15,T.p1,'center','middle',true,[eM.nx,eM.ny]);
+  if(fl>1) rtext([{t:'F',v:true}],pF[0],pF[1],15,T.p2,'center','middle',true,[eF.nx,eF.ny]);
+  if(tl>1) rtext([{t:'T',v:true}],pT[0],pT[1],15,T.p3,'center','middle',true,[eT.nx,eT.ny]);
+  /* V 处的 60°：弧半径按顶点到弦的高收缩，字母贴着弧的内侧，落在张角当中 */
   var ang1=Math.atan2(Ay-Vy,Ax-Vx), ang2=Math.atan2(By-Vy,Bx-Vx);
-  var r2=Math.min(30,0.35*Math.min(s.F,s.T)*TSC);
+  var alt=Math.abs((Bx-Ax)*(Vy-Ay)-(By-Ay)*(Vx-Ax))/TSC;
+  var r2=Math.max(8,Math.min(20,0.30*alt));
   ctx.strokeStyle=T.muted; ctx.lineWidth=1.2; ctx.beginPath();
   ctx.arc(Vx,Vy,r2,Math.min(ang1,ang2),Math.max(ang1,ang2),false); ctx.stroke();
-  var mv=(ang1+ang2)/2;
-  rtext(['60°'],Vx+(r2+16)*Math.cos(mv),Vy+(r2+16)*Math.sin(mv),12.5,T.muted,'center','middle');
+  var mv=(ang1+ang2)/2+PI, rl=r2+17;
+  rtext(['60°'],Vx+rl*Math.cos(mv),Vy+rl*Math.sin(mv),12.5,T.muted,'center','middle',true,[Math.cos(mv),Math.sin(mv)]);
   /* 说明 */
   rtext([{t:'mg',v:true},' 是定长弦，顶点 ',{t:'V',v:true},' 沿圆弧滑动'],680,300,13,T.muted,'center','middle');
   rtext([{t:'V',v:true},' 落在圆的中垂线上时 ',{t:'F',v:true},' 成为直径，',{t:'F',v:true},' 最大'],680,322,13,T.muted,'center','middle');
