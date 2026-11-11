@@ -64,7 +64,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
     <div class='grid'>
       <div class='ctl'>
         <label>下沉 <span class='v c1'>δ</span> / mm</label>
-        <input id='sDelta' type='range' min='0.02' max='0.20' step='0.005' value='0.100'>
+        <input id='sDelta' type='range' min='0' max='0.20' step='0.005' value='0.100'>
         <output id='oDelta'>0.100</output>
       </div>
       <div class='ctl'>
@@ -106,7 +106,7 @@ var PI=Math.PI, TAU=2*PI;
 var BX=95, BY=280;             /* 支架底座（旋转中心） */
 var MLEN=150;                   /* 出射点到底座距离 px */
 var WALL0=230, WALLK=35;        /* 墙 x = WALL0 + L*WALLK */
-var KDEL=70, KANG=25;           /* 固定夸大倍数 */
+var KDEL=7, KANG=25;            /* 固定夸大倍数：桌面下沉 1/10，倾角不变 */
 var DSMAX=120, SY0=86, SPP=2;   /* 墙面放大窗固定标尺 0..120 mm */
 var WX=668;                     /* 放大窗左边界 */
 var TMAX=12;                    /* 一个按压周期 12 s */
@@ -132,7 +132,8 @@ function num(v,d){
 function physics(dmm,scm,dm){
   var alpha=Math.atan((dmm/1000)/(scm/100));
   var ds=dm*Math.tan(alpha)*1000;
-  return {alpha:alpha,ds:ds,M:(dmm>0?ds/dmm:0)};
+  /* M = Δs/δ = 100 L/b，与 δ 无关；δ=0 时按极限取值，不能显示 0 */
+  return {alpha:alpha,ds:ds,M:100*dm/scm};
 }
 function deltaNow(){return started?DELTA*(0.5+0.5*Math.cos(TAU*tCur/TMAX)):DELTA;}
 function arm(){running=false; started=false; ended=false; tCur=0; last=0;}
@@ -268,11 +269,13 @@ function drawSide(T){
   ctx.fillStyle=T.wood; ctx.fillRect(58,BY+9,11,58); ctx.fillRect(206,BY+9,11,58);
   ctx.strokeStyle=T.line; ctx.strokeRect(58,BY+9,11,58); ctx.strokeRect(206,BY+9,11,58);
 
-  /* 按压力 */
+  /* 按压力：δ=0 即未施力，不画箭头 */
   var ay=BY+dv-6;
-  line(150,ay-34,150,ay,T.p1,2);
-  tri(150,ay,0,1,9,T.p1);
-  rtextBox(['按压'],150,ay-40,12,T.p1,'center','bottom');
+  if(d>0.0005){
+    line(150,ay-34,150,ay,T.p1,2);
+    tri(150,ay,0,1,9,T.p1);
+    rtextBox(['按压'],150,ay-40,12,T.p1,'center','bottom');
+  }
 
   /* 下沉量 */
   dblV(166,BY,BY+dv,T.p2,1);
@@ -327,7 +330,7 @@ function drawSide(T){
   if(Math.abs(by-my)>20) rtextBox([{t:'A',v:true}],wallX+20,my,12,T.muted,'left','middle');
 
   /* 注记 */
-  rtext(['夸大显示：下沉 ',num(KDEL,0),' px/mm，倾角 ×',num(KANG,0)],30,356,11.5,T.muted,'left','alphabetic');
+  rtext(['桌面形变 ',num(KDEL,0),' px/mm（近乎不可见），倾角夸大 ×',num(KANG,0)],30,356,11.5,T.muted,'left','alphabetic');
 }
 
 /* ===== 右侧：墙面光斑放大（固定标尺） ===== */
