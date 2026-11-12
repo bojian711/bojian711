@@ -27,7 +27,7 @@ body{background:var(--bg);color:var(--fg);border:none;
 .v{font-family:KaTeX_Math,Georgia,serif;font-style:italic}
 .n{font-family:KaTeX_Main,Georgia,serif}
 .wrap{width:100%;max-width:920px;margin:0 auto;padding:6px 6px 10px}
-canvas{display:block;width:100%;height:400px}
+canvas{display:block;width:100%;height:400px;touch-action:none}
 .head{padding:2px 4px 6px;font-size:15px}
 .head .fr{margin-left:14px;font-size:13px;color:var(--muted)}
 .panel{background:var(--panel);border-radius:10px;padding:9px 12px 11px;margin-top:6px}
@@ -100,7 +100,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span class='rm' id='oRf'></span>
     </div>
     <div class='rule' id='rc'>光从水射入空气时折射角大于入射角；人眼沿直线回看，看到的虚像比实际位置浅，并且偏向人这一侧。</div>
-    <div class='hint' id='hint'>拖动滑块改变观察条件；按「开始」看光点从物体跑向眼睛。</div>
+    <div class='hint' id='hint'>拖动画面中的眼睛改变观察位置，拖动滑块改变观察条件；按「开始」看光点行进。</div>
   </div>
 </div>
 <script>
@@ -111,11 +111,11 @@ function $(id){return D.getElementById(id);}
 var cv=$('cv'), ctx=cv.getContext('2d');
 
 /* ===== 固定标尺：等比 S，角度才不失真 ===== */
-var LW=820, LH=460;
+var LW=820, LH=430;
 var S=80;            /* px / m，两轴相同 */
-var OX=120, SY=230;  /* 世界 (0,0)（物体正上方水面点）的画布位置 */
+var OX=120, SY=240;  /* 世界 (0,0)（物体正上方水面点）的画布位置 */
 var PI=Math.PI, TAU=2*PI;
-var PU=0.02;         /* 瞳孔半宽，m */
+var FOVH=30*PI/180;  /* 视野半张角 */
 var TPER=10, TT=4.5; /* 光点循环周期与单程时间 */
 
 /* ===== 状态 ===== */
@@ -307,19 +307,37 @@ function geom(){
   var no=(MODE==='man')?N:1, ne=(MODE==='man')?1:N;
   var O={x:0,y:-sgn*D_}, E={x:L,y:sgn*H};
   var p0=solveP(D_,L,H,no,ne);
-  var p1=solveP(D_,L,H-PU,no,ne), p2=solveP(D_,L,H+PU,no,ne);
-  var P0={x:p0,y:0}, P1={x:p1,y:0}, P2={x:p2,y:0};
-  var E1={x:L,y:sgn*(H-PU)}, E2={x:L,y:sgn*(H+PU)};
-  function dirf(P,E_){var dx=E_.x-P.x,dy=E_.y-P.y,m=Math.hypot(dx,dy);return {x:dx/m,y:dy/m};}
-  var v1=dirf(P1,E1), v2=dirf(P2,E2);
-  var cr=v1.x*v2.y-v1.y*v2.x, Op=null;
-  if(Math.abs(cr)>1e-7){
-    var wx=P2.x-P1.x, wy=P2.y-P1.y;
-    var t=(wx*v2.y-wy*v2.x)/cr;
-    Op={x:P1.x+t*v1.x, y:P1.y+t*v1.y};
-  }
+  var P0={x:p0,y:0};
+  /* 虚像：进入眼睛的光线之反向延长线，与过物体垂直界面的光线之交，
+     恒在过 O 的竖直线上，视深 d′ = p0·h/(L−p0) */
+  var dp=p0*H/(L-p0);
+  var I={x:0,y:-sgn*dp};
   var idg=Math.atan2(p0,D_)*180/PI, rdg=Math.atan2(L-p0,H)*180/PI;
-  return {sgn:sgn,no:no,ne:ne,O:O,E:E,E1:E1,E2:E2,P0:P0,P1:P1,P2:P2,v1:v1,v2:v2,Op:Op,idg:idg,rdg:rdg};
+  var yA=Math.min(H*0.55+0.45,2.5); /* 垂直光线伸出界面的长度 */
+  return {sgn:sgn,no:no,ne:ne,O:O,E:E,P0:P0,I:I,dp:dp,idg:idg,rdg:rdg,yA:yA};
+}
+
+/* 视野：从眼睛向入射点方向张开的两条虚线，止于水面或画布边（同平面镜成像演示的约定） */
+function drawFov(g,T){
+  var ex=XW(g.E.x), ey=YW(g.E.y);
+  var gaze=Math.atan2(SY-ey,XW(g.P0.x)-ex);
+  var r0=18, k;
+  dash([7,6]);
+  for(k=-1;k<=1;k+=2){
+    var a=gaze+k*FOVH;
+    var dx=Math.cos(a), dy=Math.sin(a);
+    var ts=Math.abs(dy)>1e-9?(SY-ey)/dy:1e9;
+    var tEnd=1e9, t;
+    if(dx>1e-6){t=(LW-4-ex)/dx; if(t>r0&&t<tEnd)tEnd=t;}
+    if(dx<-1e-6){t=(4-ex)/dx; if(t>r0&&t<tEnd)tEnd=t;}
+    if(dy>1e-6){t=(LH-4-ey)/dy; if(t>r0&&t<tEnd)tEnd=t;}
+    if(dy<-1e-6){t=(4-ey)/dy; if(t>r0&&t<tEnd)tEnd=t;}
+    if(ts>r0&&ts<tEnd) tEnd=ts;             /* 伸向界面：止于水面 */
+    else if(!(ts>r0)) tEnd=Math.min(tEnd,r0+1.7*S); /* 该侧视线离开水面，只画一段示意 */
+    if(tEnd<=r0||tEnd>1e8) continue;
+    line(ex+dx*r0,ey+dy*r0,ex+dx*tEnd,ey+dy*tEnd,T.muted,1.3);
+  }
+  dash();
 }
 
 /* ===== 场景绘制 ===== */
@@ -358,11 +376,14 @@ function draw(){
     ctx.restore();
   }
 
-  /* 瞳孔两条边缘光线 + 中央光线 */
-  rarr(XW(g.O.x),YW(g.O.y),XW(g.P1.x),SY,T.p1,1.5);
-  rarr(XW(g.P1.x),SY,XW(g.E1.x),YW(g.E1.y),T.p1,1.5);
-  rarr(XW(g.O.x),YW(g.O.y),XW(g.P2.x),SY,T.p1,1.5);
-  rarr(XW(g.P2.x),SY,XW(g.E2.x),YW(g.E2.y),T.p1,1.5);
+  /* 视野虚线（先画，让光线与标签压在它上面） */
+  drawFov(g,T);
+
+  /* 特殊光线一：垂直于界面，不发生偏折 */
+  rarr(XW(0),YW(g.O.y),XW(0),SY,T.p1,1.6);
+  rarr(XW(0),SY,XW(0),YW(g.sgn*g.yA),T.p1,1.6);
+
+  /* 特殊光线二：经界面折射后进入眼睛 */
   rarr(XW(g.O.x),YW(g.O.y),XW(g.P0.x),SY,T.p1,2.4);
   rarr(XW(g.P0.x),SY,XW(g.E.x),YW(g.E.y),T.p1,2.4);
 
@@ -374,18 +395,17 @@ function draw(){
   }
 
   /* 反向延长线与虚像 */
-  var opVis=false;
-  if(kImg.checked&&g.Op&&g.Op.y>-2.7&&g.Op.y<2.6&&g.Op.x>-0.7&&g.Op.x<8.3) opVis=true;
+  var iyc=YW(g.I.y);
+  var ivis=kImg.checked&&(iyc>16&&iyc<LH-16);
   if(kImg.checked){
     dash([6,4]);
-    if(opVis){
-      var t1=(g.Op.x-g.P1.x)*g.v1.x+(g.Op.y-g.P1.y)*g.v1.y;
-      var t2=(g.Op.x-g.P2.x)*g.v2.x+(g.Op.y-g.P2.y)*g.v2.y;
-      line(XW(g.P1.x),SY,XW(g.P1.x+g.v1.x*(t1-0.3)),YW(g.P1.y+g.v1.y*(t1-0.3)),T.p2,1.4);
-      line(XW(g.P2.x),SY,XW(g.P2.x+g.v2.x*(t2-0.3)),YW(g.P2.y+g.v2.y*(t2-0.3)),T.p2,1.4);
+    var pxc=XW(g.P0.x);
+    var ux=XW(g.I.x)-pxc, uy=iyc-SY, um=Math.hypot(ux,uy);
+    if(ivis){
+      line(pxc,SY,XW(g.I.x)+ux/um*0.22*S,iyc+uy/um*0.22*S,T.p2,1.4);
     }else{
-      line(XW(g.P1.x),SY,XW(g.P1.x-g.v1.x*0.45),YW(g.P1.y-g.v1.y*0.45),T.p2,1.4);
-      line(XW(g.P2.x),SY,XW(g.P2.x-g.v2.x*0.45),YW(g.P2.y-g.v2.y*0.45),T.p2,1.4);
+      var bx=XW(g.E.x)-pxc, by=YW(g.E.y)-SY, bm=Math.hypot(bx,by);
+      line(pxc,SY,pxc-bx/bm*0.5*S,SY-by/bm*0.5*S,T.p2,1.4);
     }
     dash();
   }
@@ -404,9 +424,9 @@ function draw(){
   dot(XW(g.O.x),YW(g.O.y),5.5,T.p3);
   ring(XW(g.E.x),YW(g.E.y),6,HALO,T.p2,2);
   dot(XW(g.E.x),YW(g.E.y),2.2,T.p2);
-  if(opVis){
-    ring(XW(g.Op.x),YW(g.Op.y),5.5,HALO,T.p2,2);
-    dot(XW(g.Op.x),YW(g.Op.y),1.8,T.p2);
+  if(ivis){
+    ring(XW(g.I.x),iyc,5.5,HALO,T.p2,2);
+    dot(XW(g.I.x),iyc,1.8,T.p2);
   }
 
   /* 文字标注（先受几何限制的落位） */
@@ -415,27 +435,37 @@ function draw(){
     [[-13,4,'right','middle'],[-13,-13,'right','alphabetic'],[14,15,'left','top'],[0,19,'center','top']]:
     [[-13,-4,'right','middle'],[-13,13,'right','top'],[14,-15,'left','bottom'],[0,-19,'center','bottom']];
   tryPut(['实际位置'],13,T.p3,XW(g.O.x),YW(g.O.y),objC,true);
-  if(opVis){
-    var imgC=(MODE==='man')?
-      [[-14,-8,'right','bottom'],[-14,13,'right','top'],[13,12,'left','top'],[0,17,'center','top']]:
-      [[14,-10,'left','bottom'],[14,4,'left','top'],[-12,-10,'right','bottom'],[0,-18,'center','bottom']];
-    tryPut(['虚像位置'],13,T.p2,XW(g.Op.x),YW(g.Op.y),imgC,true);
+  if(ivis){
+    var imgC=[[13,0,'left','middle'],[-13,0,'right','middle'],[13,-12,'left','bottom'],[13,12,'left','top'],[-13,-12,'right','bottom'],[-13,12,'right','top']];
+    tryPut(['虚像位置'],13,T.p2,XW(g.I.x),iyc,imgC,true);
   }
   var eyeC=(MODE==='man')?
     [[0,-15,'center','bottom'],[16,0,'left','middle'],[0,17,'center','top']]:
     [[0,16,'center','top'],[16,0,'left','middle'],[0,-15,'center','bottom']];
-  tryPut([MODE==='man'?'人眼':'鱼眼'],13,T.p2,XW(g.E.x),YW(g.E.y),eyeC,true);
-  if(kImg.checked&&g.Op&&!opVis){
+  tryPut([MODE==='man'?'人眼（可拖动）':'鱼眼（可拖动）'],13,T.p2,XW(g.E.x),YW(g.E.y),eyeC,true);
+  /* 「视野」标注落在光锥内侧、紧贴视线旁；「垂直入射」标注贴垂直光线的伸出段 */
+  var ga=Math.atan2(SY-YW(g.E.y),XW(g.P0.x)-XW(g.E.x));
+  var gx=Math.cos(ga), gy=Math.sin(ga), px=-gy, py=gx;
+  var ex0=XW(g.E.x), ey0=YW(g.E.y);
+  var okFov=tryPut(['视野'],12.5,T.muted,ex0+gx*48+px*17,ey0+gy*48+py*17,
+    [[0,0,'center','middle'],[0,-15,'center','bottom'],[0,15,'center','top'],[-20,0,'right','middle']],true);
+  if(!okFov){
+    tryPut(['视野'],12.5,T.muted,ex0+gx*48-px*17,ey0+gy*48-py*17,
+      [[0,0,'center','middle'],[0,-15,'center','bottom'],[0,15,'center','top'],[-20,0,'right','middle']],true);
+  }
+  tryPut(['垂直入射，不偏折'],12,T.muted,XW(0),YW(g.sgn*g.yA*0.72),
+    [[-10,0,'right','middle'],[10,0,'left','middle'],[-10,-13,'right','bottom'],[-10,13,'right','top']],true);
+  if(kImg.checked&&!ivis){
     put(['虚像在画面之外，读数见下方'],24,LH-74,12.5,T.muted,'left','middle',true);
   }
 
   /* 图例（右上角，远离物体一侧） */
-  var names=['实际光线','反向延长线','看到的虚像'], li;
+  var names=['实际光线','反向延长线','视野'], li;
   for(li=0;li<3;li++){
     var yy=28+li*20, lw=rtWidth([names[li]],12.5), lx=LW-16-lw;
     if(li===0) line(lx-32,yy-4,lx-9,yy-4,T.p1,2.2);
-    else if(li===1){ dash([5,4]); line(lx-32,yy-4,lx-9,yy-4,T.p2,1.4); dash(); }
-    else ring(lx-20,yy-4,4.5,HALO,T.p2,1.8);
+    else if(li===1){ dash([6,4]); line(lx-32,yy-4,lx-9,yy-4,T.p2,1.4); dash(); }
+    else { dash([7,6]); line(lx-32,yy-4,lx-9,yy-4,T.muted,1.3); dash(); }
     rtext([names[li]],lx,yy,12.5,T.muted,'left','alphabetic',true);
     OCC.push([lx-34,yy-14,lw+36,17]);
   }
@@ -447,10 +477,10 @@ function draw(){
   line(xb0+S,yb,xb0+S-6,yb-4,T.muted,1.6); line(xb0+S,yb,xb0+S-6,yb+4,T.muted,1.6);
   rtextBox(['1 m'],xb0+S/2,yb-8,12.5,T.muted,'center','bottom');
 
-  /* 行进光点 */
+  /* 行进光点：沿两条特殊光线跑 */
   if(running||tCur>0){
-    var paths=[[g.O,g.P0,g.E],[g.O,g.P1,g.E1],[g.O,g.P2,g.E2]], pi;
-    for(pi=0;pi<3;pi++){
+    var paths=[[g.O,g.P0,g.E],[g.O,{x:0,y:0},{x:0,y:g.sgn*g.yA}]], pi;
+    for(pi=0;pi<paths.length;pi++){
       var A=paths[pi][0],B=paths[pi][1],C=paths[pi][2];
       var l1=Math.hypot(B.x-A.x,B.y-A.y), l2=Math.hypot(C.x-B.x,C.y-B.y), lt=l1+l2;
       for(var j=0;j<4;j++){
@@ -470,7 +500,7 @@ function draw(){
 /* ===== 读数 ===== */
 function fmtI(g){return num(g.idg,1)+'°';}
 function fmtR(g){return num(g.rdg,1)+'°';}
-function fmtDp(g){return g.Op?num(Math.abs(g.Op.y),2):'—';}
+function fmtDp(g){return num(g.dp,2);}
 function upd(){
   oD.textContent=num(D_,1);
   oL.textContent=num(L,1);
@@ -480,9 +510,7 @@ function upd(){
   oI.textContent=fmtI(g);
   oR.textContent=fmtR(g);
   oDp.textContent=fmtDp(g)+' m';
-  if(g.Op&&D_>0){
-    oRt.textContent=num(Math.abs(g.Op.y)/D_,2);
-  }else oRt.textContent='—';
+  oRt.textContent=num(g.dp/D_,2);
   if(MODE==='man'){
     oRf.innerHTML='（近垂直向下看时 <span class=n>1/</span><span class=v>n</span><span class=n> ≈ '+num(1/N,2)+'</span>）';
   }else{
@@ -543,8 +571,42 @@ bReset.addEventListener('click',function(){
   D_=1.0; L=1.6; H=1.6; N=1.33;
   sD.value='1'; sL.value='1.6'; sH.value='1.6'; sN.value='1.33';
   arm(); refresh();
-  hint.textContent='拖动滑块改变观察条件；按「开始」看光点从物体跑向眼睛。';
+  hint.textContent='拖动画面中的眼睛改变观察位置，拖动滑块改变观察条件；按「开始」看光点行进。';
 });
+
+/* 眼睛拖动：与 L、h 两个滑块双向同步 */
+var dragEye=false;
+function cavXY(ev){
+  var r=cv.getBoundingClientRect();
+  return {x:(ev.clientX-r.left)/r.width*LW, y:(ev.clientY-r.top)/r.height*LH};
+}
+function nearEye(pt){
+  var ex=XW(L), ey=YW((MODE==='man')?H:-H);
+  return Math.hypot(pt.x-ex,pt.y-ey)<22;
+}
+cv.addEventListener('pointerdown',function(ev){
+  if(nearEye(cavXY(ev))){
+    dragEye=true; cv.style.cursor='grabbing';
+    if(cv.setPointerCapture) cv.setPointerCapture(ev.pointerId);
+    hint.textContent='移动眼睛：视野方向与进入眼睛的光线随之改变，像始终由折射定律决定。';
+    ev.preventDefault();
+  }
+});
+cv.addEventListener('pointermove',function(ev){
+  var pt=cavXY(ev);
+  if(dragEye){
+    var wx=(pt.x-OX)/S, wy=(SY-pt.y)/S;
+    L=clamp(wx,parseFloat(sL.min),parseFloat(sL.max));
+    H=clamp((MODE==='man')?wy:-wy,parseFloat(sH.min),parseFloat(sH.max));
+    sL.value=num(L,1); sH.value=num(H,2);
+    arm(); refresh();
+  }else{
+    cv.style.cursor=nearEye(pt)?'grab':'';
+  }
+});
+function endDrag(){ if(dragEye){dragEye=false; cv.style.cursor='';} }
+cv.addEventListener('pointerup',endDrag);
+cv.addEventListener('pointercancel',endDrag);
 kNorm.addEventListener('change',function(){refresh();});
 kImg.addEventListener('change',function(){refresh();});
 kFan.addEventListener('change',function(){refresh();});
