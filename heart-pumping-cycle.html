@@ -314,29 +314,44 @@ function drawHeart(T,p){
   valveSL(240,260,11,oSL,colV);
   valveSL(352,256,11,oSL,colA);
 
-  /* --- 血流箭头 --- */
+  /* --- 血流箭头：用比腔室底色更深的蓝/红，加描边衬底 --- */
   var ph=(p*6)%1;
-  function flow(x0,y0,x1,y1,col,al){
+  var arrV=mix(rgbV,[12,44,104],0.72), arrA=mix(rgbA,[116,30,20],0.7);   // 比管壁深得多，靠明度差把箭头衬出来
+  function tri(x,y,c,s,L,W){
+    ctx.beginPath();
+    ctx.moveTo(x+c*L*0.55, y+s*L*0.55);
+    ctx.lineTo(x-c*L*0.45-s*W, y-s*L*0.45+c*W);
+    ctx.lineTo(x-c*L*0.45+s*W, y-s*L*0.45-c*W);
+    ctx.closePath();
+  }
+  function arr(x,y,ang,rgb,al,sc){
+    var c=Math.cos(ang), s=Math.sin(ang);
+    tri(x,y,c,s,15*sc,6.4*sc);
+    ctx.fillStyle=rgba(rgb,al); ctx.fill();
+  }
+  function flow(x0,y0,x1,y1,rgb,al){
     var ang=Math.atan2(y1-y0,x1-x0), i, k;
-    for(i=0;i<3;i++){
-      k=(ph+i/3)%1;
-      chevron(x0+(x1-x0)*k,y0+(y1-y0)*k,ang,rgba(hex2rgb(col),al),6);
+    var len=Math.sqrt((x1-x0)*(x1-x0)+(y1-y0)*(y1-y0));
+    var n=len<64?2:3, sc=Math.max(0.82,Math.min(1,len/120));
+    for(i=0;i<n;i++){
+      k=(ph+i/n)%1;
+      arr(x0+(x1-x0)*k,y0+(y1-y0)*k,ang,rgb,al,sc);
     }
   }
-  var veinAl = st===2?0.85:(st===0?0.55:0.4);   // 静脉回流全程存在，舒张期最强
-  flow(146,98,162,146,colV,veinAl);
-  flow(126,420,135,252,colV,veinAl);
-  flow(500,175,458,186,colA,veinAl);
-  flow(500,213,458,206,colA,veinAl);
+  var veinAl = st===2?1:(st===0?0.8:0.65);   // 静脉回流全程存在，舒张期最强
+  flow(146,98,162,146,arrV,veinAl);
+  flow(126,420,135,252,arrV,veinAl);
+  flow(500,175,458,186,arrA,veinAl);
+  flow(500,213,458,206,arrA,veinAl);
   if(oAV>0.5){
-    var alF=st===0?0.95:0.5;
-    flow(198,234,209,270,colV,alF);           // 右心房 → 右心室
-    flow(380,232,375,264,colA,alF);           // 左心房 → 左心室
+    var alF=st===0?1:0.8;
+    flow(198,234,209,270,arrV,alF);           // 右心房 → 右心室
+    flow(380,232,375,264,arrA,alF);           // 左心房 → 左心室
   }
   if(oSL>0.5){
-    flow(272,195,290,102,colV,0.95);          // 右心室 → 肺动脉
-    flow(330,200,323,156,colA,0.95);          // 左心室 → 主动脉（竖直段）
-    flow(342,110,458,103,colA,0.95);          // 左心室 → 主动脉（弓段）
+    flow(272,195,290,102,arrV,1);             // 右心室 → 肺动脉
+    flow(330,200,323,156,arrA,1);             // 左心室 → 主动脉（竖直段）
+    flow(342,110,458,103,arrA,1);             // 左心室 → 主动脉（弓段）
   }
 
   /* --- 标签 --- */
