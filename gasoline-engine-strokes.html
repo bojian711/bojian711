@@ -232,10 +232,10 @@ function pinDist(deg){
 }
 function degNow(){ return ((tCur%1)+1)%1*720; }
 function strokeOf(deg){ return Math.floor(deg/180)%4; }
-function valveLift(deg,s0){ // 该冲程内平滑开闭
-  var k=(deg-s0)/180;
-  if(k<=0||k>=1) return 0;
-  return 9*Math.sin(PI*k);
+function valveLift(deg,s0){ // 该冲程内开，两端各留 8 度提前量与 2 度滞后量
+  var d=deg-s0;
+  var k=Math.min(clamp((d+8)/14,0,1),clamp((178-d)/14,0,1));
+  return 9*Math.max(0,k);
 }
 
 /* ===== 发动机场景 ===== */
@@ -265,7 +265,7 @@ function drawEngine(T,deg){
   else { gc=[140,140,140]; ga=0.42-0.34*((deg-540)/180); }
   rect(EX-BW+1,HEAD_B,2*BW-2,chH,rgba(gc,ga),null);
   var ignWin=CFG.diesel?(deg>344&&deg<398):(deg>348&&deg<372);   // 点火/喷油瞬间不写缸内标签
-  if(chH>30&&!ignWin){
+  if(chH>36&&!ignWin){
     rtext([CFG.gasNames[st]],EX,HEAD_B+chH/2+4,12.5,T.fg,'center','middle',false);
   }
 
