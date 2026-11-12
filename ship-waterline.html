@@ -342,7 +342,7 @@ function drawZoom(T){
   if(gap<1.2){
     line(700,y1,872,y1,T.fg,2.1);
     dot(700,y1,2.8,T.fg);
-    rtextBox(['当前 ',num(hNow(),2),' m'],872,y1-7,12.5,T.fg,'right','bottom');
+    rtextBox(['当前 ',num(hNow(),2),' m'],872,y1-9,12.5,T.fg,'right','bottom');
     rtextBox(['已到达',dir>0?'淡水':'海水','，两条水线重合'],(ZX0+ZX1)/2,338,12.5,T.fg,'center','middle');
   } else {
     ctx.fillStyle=T.band; ctx.fillRect(700,Math.min(y1,y2),172,gap);
@@ -351,8 +351,8 @@ function drawZoom(T){
     dot(700,y1,2.8,T.fg); dot(700,y2,2.4,T.muted);
     /* 标签一律排在各自那条线的外侧，免得两条线只差十来像素时数值与线对错 */
     var below=y1>=y2;
-    rtextBox(['当前 ',num(hNow(),2),' m'],872,below?y1+16:y1-7,12.5,T.fg,'right',below?'top':'bottom');
-    rtextBox([dir>0?'淡水 ':'海水 ',num(hRef(),2),' m'],872,below?y2-7:y2+16,12.5,T.muted,'right',below?'bottom':'top');
+    rtextBox(['当前 ',num(hNow(),2),' m'],872,below?y1+18:y1-9,12.5,T.fg,'right',below?'top':'bottom');
+    rtextBox([dir>0?'淡水 ':'海水 ',num(hRef(),2),' m'],872,below?y2-9:y2+18,12.5,T.muted,'right',below?'bottom':'top');
     rtextBox(['同一载荷，相差 ',num(Math.abs(hRef()-hNow()),2),' m'],(ZX0+ZX1)/2,338,12.5,T.fg,'center','middle');
   }
 }
