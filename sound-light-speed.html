@@ -72,7 +72,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <span>时差 <span class='n'>Δ</span><span class='v'>t</span> <span class='n'>≈</span> <span class='n' id='oDT'>—</span></span>
     </div>
     <div class='rule'>结论：这几千米内光的传播时间至多约 <span class='n'>1×10</span><sup class='n'>−5</sup> <span class='n'>s</span>，可以当作即刻到达；声音到达时间 <span class='v'>t</span> <span class='n'>=</span> <span class='v'>d</span><span class='n'>/</span><span class='v'>v</span>，距离越远、介质中声速越小，到得越晚——所以赛跑计时员看发令枪的烟、不听枪声，先见闪电后闻雷声。</div>
-    <div class='hint' id='hint'>设定距离与介质后按「开始」；勾选慢放可把过程放慢 10 倍。</div>
+    <div class='hint' id='hint'>设定距离与介质后按「开始」；勾选慢放可把过程放慢 10 倍，声音到达时响起一声枪响。</div>
   </div>
 </div>
 <script>
@@ -189,6 +189,34 @@ function resize(){
   cv.style.height=h+'px';
   cv.width=Math.round(w*ss); cv.height=Math.round(h*ss);
   ctx.setTransform(cv.width/LW,0,0,cv.height/LH,0,0);
+}
+
+/* ===== 枪声：到达时播放（噪声爆发 + 低通扫频 + 指数衰减） ===== */
+var AC=null;
+function ac(){
+  var A=window.AudioContext||window.webkitAudioContext;
+  if(!A) return null;
+  if(!AC){try{AC=new A();}catch(e){AC=null;}}
+  if(AC&&AC.state==='suspended'){try{AC.resume();}catch(e){}}
+  return AC;
+}
+function gunshot(){
+  var c=ac(); if(!c) return;
+  var dur2=0.45, sr=c.sampleRate, n=Math.floor(sr*dur2), i;
+  var buf=c.createBuffer(1,n,sr), ch=buf.getChannelData(0);
+  for(i=0;i<n;i++){
+    var t=i/sr;
+    ch[i]=(Math.random()*2-1)*Math.exp(-t*14);
+  }
+  var src=c.createBufferSource(); src.buffer=buf;
+  var lp=c.createBiquadFilter(); lp.type='lowpass';
+  lp.frequency.setValueAtTime(2800,c.currentTime);
+  lp.frequency.exponentialRampToValueAtTime(220,c.currentTime+0.3);
+  var g=c.createGain();
+  g.gain.setValueAtTime(0.85,c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+dur2);
+  src.connect(lp); lp.connect(g); g.connect(c.destination);
+  src.start();
 }
 
 /* ===== 图元 ===== */
@@ -360,11 +388,12 @@ function arm(){running=false; started=false; arrived=false; tCur=0;}
 sD.addEventListener('input',function(){DI=parseFloat(sD.value); arm(); hintFor(); refresh();});
 kSlow.addEventListener('change',function(){SLOW=!!kSlow.checked;});
 bPlay.addEventListener('click',function(){
+  ac();
   if(running){running=false;}
   else{
     if(arrived){arrived=false; tCur=0;}
     started=true;
-    if(dur()<=0){arrived=true;}
+    if(dur()<=0){arrived=true; gunshot();}
     else{running=true;}
   }
   refresh();
@@ -385,7 +414,7 @@ function step(ts){
   var dt=Math.min(0.05,(ts-last)/1000); last=ts;
   if(running){
     tCur+=dt*(SLOW?0.1:1);
-    if(tCur>=dur()){tCur=dur(); running=false; arrived=true;}
+    if(tCur>=dur()){tCur=dur(); running=false; arrived=true; gunshot();}
   }
   upd(); draw();
   requestAnimationFrame(step);
