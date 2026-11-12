@@ -615,7 +615,7 @@ function drawView(T,ph){
   line(238+scaleLen,50,238+scaleLen,58,T.ink,1.4);
   rtextBox([MODE===0?'10′':'5000 km'],238+scaleLen/2,70,11.5,T.ink,'center','alphabetic');
   rtext([MODE===0?'从地面看太阳 · 真实视角':'月面与地球影 · 真实标尺'],10,21,13.5,T.ink,'left','alphabetic');
-  rtext([MODE===0?'角标尺 10′；圆面直径 = 视直径':'长度标尺 5000 km；圆面半径 = 真实 km'],10,38,11.5,T.dim,'left','alphabetic');
+  rtext([MODE===0?'角标尺 10′；圆面直径 = 视直径':'长度标尺 5000 km；圆面半径 = 真实 km'],10,38,11.5,T.ink2,'left','alphabetic');
 
   /* 视直径对比条（同一标尺，标尺不随参数变化） */
   var unit=MODE===0?3:1;
