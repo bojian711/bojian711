@@ -90,7 +90,6 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <button id='bReset'>复位</button>
       <label class='chk'><input id='kNorm' type='checkbox' checked>法线与角度</label>
       <label class='chk'><input id='kImg' type='checkbox' checked>虚像与反向延长线</label>
-      <label class='chk'><input id='kFan' type='checkbox' checked>发散光束</label>
     </div>
     <div class='readout'>
       <span>入射角 <span class='v'>i</span> <span class='n'>=</span> <span class='n' id='oI'>—</span></span>
@@ -115,7 +114,7 @@ var LW=820, LH=430;
 var S=80;            /* px / m，两轴相同 */
 var OX=120, SY=240;  /* 世界 (0,0)（物体正上方水面点）的画布位置 */
 var PI=Math.PI, TAU=2*PI;
-var FOVH=30*PI/180;  /* 视野半张角 */
+var FOVH=65*PI/180;  /* 视野半张角，与平面镜成像演示一致 */
 var TPER=10, TT=4.5; /* 光点循环周期与单程时间 */
 
 /* ===== 状态 ===== */
@@ -132,7 +131,7 @@ var oI=$('oI'), oR=$('oR'), oDp=$('oDp'), oRt=$('oRt'), oRf=$('oRf');
 var lbD=$('lbD'), lbH=$('lbH'), lbDp=$('lbDp'), lbDv=$('lbDv'), lbRt=$('lbRt');
 var hdT=$('hdT'), rc=$('rc'), hint=$('hint');
 var bMan=$('bMan'), bFish=$('bFish'), bPlay=$('bPlay'), bReset=$('bReset');
-var kNorm=$('kNorm'), kImg=$('kImg'), kFan=$('kFan');
+var kNorm=$('kNorm'), kImg=$('kImg');
 
 /* ===== 小工具 ===== */
 function XW(x){return OX+x*S;}
@@ -243,7 +242,9 @@ function theme(){
     p2:g('--p2')||'#3a6ea5',
     p3:g('--p3')||'#4f7a45',
     water:dark?'rgba(127,168,212,0.16)':'rgba(58,110,165,0.10)',
-    surf:g('--p2')||'#3a6ea5'
+    surf:g('--p2')||'#3a6ea5',
+    iris:dark?'#b98d5f':'#7b5b34',
+    pupil:dark?'#0d0d0f':'#1c1c1c'
   };
 }
 
@@ -317,27 +318,48 @@ function geom(){
   return {sgn:sgn,no:no,ne:ne,O:O,E:E,P0:P0,I:I,dp:dp,idg:idg,rdg:rdg,yA:yA};
 }
 
+/* 眼睛图形：与平面镜成像演示同一套画法（杏仁形眼白、上眼睑加粗、睫毛、虹膜瞳孔高光） */
+function drawEye(cx,cy,T,gaze){
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(gaze);
+  ctx.fillStyle=T.bg; ctx.strokeStyle=T.fg; ctx.lineWidth=1.7; ctx.lineJoin='round';
+  ctx.beginPath();
+  ctx.moveTo(-17,0);
+  ctx.quadraticCurveTo(0,-13,17,0);
+  ctx.quadraticCurveTo(0,10.5,-17,0);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.lineWidth=2.3; ctx.strokeStyle=T.fg;
+  ctx.beginPath();
+  ctx.moveTo(-16,0.4); ctx.quadraticCurveTo(0,-13.6,16,0.4);
+  ctx.stroke();
+  ctx.lineWidth=1.4; ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(-9.5,-4.2); ctx.lineTo(-12.6,-8.0);
+  ctx.moveTo(-13.2,-2.4); ctx.lineTo(-16.8,-5.2);
+  ctx.stroke();
+  ctx.lineCap='butt';
+  dot(1.0,0.4,5.2,T.iris);
+  dot(1.0,0.4,2.3,T.pupil);
+  dot(2.6,-1.5,1.2,'#ffffff');
+  ctx.restore();
+}
+
 /* 视野：从眼睛向入射点方向张开的两条虚线，止于水面或画布边（同平面镜成像演示的约定） */
 function drawFov(g,T){
   var ex=XW(g.E.x), ey=YW(g.E.y);
   var gaze=Math.atan2(SY-ey,XW(g.P0.x)-ex);
-  var r0=18, k;
+  var R=1.15*S, r0=17, k, ends=[];
   dash([7,6]);
   for(k=-1;k<=1;k+=2){
     var a=gaze+k*FOVH;
     var dx=Math.cos(a), dy=Math.sin(a);
-    var ts=Math.abs(dy)>1e-9?(SY-ey)/dy:1e9;
-    var tEnd=1e9, t;
-    if(dx>1e-6){t=(LW-4-ex)/dx; if(t>r0&&t<tEnd)tEnd=t;}
-    if(dx<-1e-6){t=(4-ex)/dx; if(t>r0&&t<tEnd)tEnd=t;}
-    if(dy>1e-6){t=(LH-4-ey)/dy; if(t>r0&&t<tEnd)tEnd=t;}
-    if(dy<-1e-6){t=(4-ey)/dy; if(t>r0&&t<tEnd)tEnd=t;}
-    if(ts>r0&&ts<tEnd) tEnd=ts;             /* 伸向界面：止于水面 */
-    else if(!(ts>r0)) tEnd=Math.min(tEnd,r0+1.7*S); /* 该侧视线离开水面，只画一段示意 */
-    if(tEnd<=r0||tEnd>1e8) continue;
+    var tEnd=R, t;
+    var ts=Math.abs(dy)>1e-9?(SY-ey)/dy:1e9;  /* 沿这条边到水面的距离 */
+    if(ts>r0&&ts<tEnd) tEnd=ts;               /* 朝水面且先碰到水面：止于水面 */
     line(ex+dx*r0,ey+dy*r0,ex+dx*tEnd,ey+dy*tEnd,T.muted,1.3);
+    ends.push({x:ex+dx*tEnd,y:ey+dy*tEnd,a:a});
   }
   dash();
+  return ends;
 }
 
 /* ===== 场景绘制 ===== */
@@ -355,27 +377,6 @@ function draw(){
   ctx.fillStyle=T.water; ctx.fillRect(0,SY,LW,LH-SY);
   line(0,SY,LW,SY,T.surf,2);
 
-  /* 发散光束（物体向各方向发光） */
-  if(kFan.checked){
-    var fr=[0.2,0.45,0.7,0.95], k;
-    ctx.save(); ctx.globalAlpha=0.3;
-    for(k=0;k<fr.length;k++){
-      var pF=L*fr[k];
-      var um=Math.hypot(pF,D_);
-      var sinI=pF/um;
-      var sinR=g.no/g.ne*sinI;
-      var Fx=XW(pF);
-      line(XW(g.O.x),YW(g.O.y),Fx,SY,T.p1,1.2);
-      /* 全反射时没有出射光线：入射线止于水面；近掠射的出射光也不画，免成锯齿 */
-      if(sinR<1&&sinR<=0.9){
-        var vx=sinR, vy=sgn*Math.sqrt(1-sinR*sinR);
-        var ex=Fx+vx*0.7*S, ey=SY-vy*0.7*S;
-        line(Fx,SY,clamp(ex,3,LW-3),clamp(ey,3,LH-3),T.p1,1.2);
-      }
-    }
-    ctx.restore();
-  }
-
   /* 视野虚线（先画，让光线与标签压在它上面） */
   drawFov(g,T);
 
@@ -383,9 +384,11 @@ function draw(){
   rarr(XW(0),YW(g.O.y),XW(0),SY,T.p1,1.6);
   rarr(XW(0),SY,XW(0),YW(g.sgn*g.yA),T.p1,1.6);
 
-  /* 特殊光线二：经界面折射后进入眼睛 */
+  /* 特殊光线二：经界面折射后进入眼睛（终点退到眼形之外，箭头留在眼睛前面） */
   rarr(XW(g.O.x),YW(g.O.y),XW(g.P0.x),SY,T.p1,2.4);
-  rarr(XW(g.P0.x),SY,XW(g.E.x),YW(g.E.y),T.p1,2.4);
+  var ax=XW(g.P0.x), ay=SY, bx2=XW(g.E.x), by2=YW(g.E.y);
+  var bl=Math.hypot(bx2-ax,by2-ay)||1;
+  rarr(ax,ay,bx2-(bx2-ax)/bl*14,by2-(by2-ay)/bl*14,T.p1,2.4);
 
   /* 法线 */
   if(kNorm.checked){
@@ -422,8 +425,8 @@ function draw(){
 
   /* 物体、眼睛、虚像标记 */
   dot(XW(g.O.x),YW(g.O.y),5.5,T.p3);
-  ring(XW(g.E.x),YW(g.E.y),6,HALO,T.p2,2);
-  dot(XW(g.E.x),YW(g.E.y),2.2,T.p2);
+  /* 眼睛按俯视视角水平摆放：眼形不随视线倾侧，与平面镜成像演示同一副外形 */
+  drawEye(XW(g.E.x),YW(g.E.y),T,0);
   if(ivis){
     ring(XW(g.I.x),iyc,5.5,HALO,T.p2,2);
     dot(XW(g.I.x),iyc,1.8,T.p2);
@@ -439,19 +442,22 @@ function draw(){
     var imgC=[[13,0,'left','middle'],[-13,0,'right','middle'],[13,-12,'left','bottom'],[13,12,'left','top'],[-13,-12,'right','bottom'],[-13,12,'right','top']];
     tryPut(['虚像位置'],13,T.p2,XW(g.I.x),iyc,imgC,true);
   }
-  var eyeC=(MODE==='man')?
-    [[0,-15,'center','bottom'],[16,0,'left','middle'],[0,17,'center','top']]:
-    [[0,16,'center','top'],[16,0,'left','middle'],[0,-15,'center','bottom']];
+  /* 眼睛标签优先落在背离视线的方向，免得压住张开的视野虚线 */
+  var eyeC0=[[0,-23,'center','bottom'],[17,-17,'left','bottom'],[23,0,'left','middle'],
+    [17,17,'left','top'],[0,23,'center','top'],[-17,17,'right','top'],
+    [-23,0,'right','middle'],[-17,-17,'right','bottom']];
+  var gz=Math.atan2(SY-YW(g.E.y),XW(g.P0.x)-XW(g.E.x));
+  function angOff(a){return Math.abs(Math.atan2(Math.sin(Math.atan2(a[1],a[0])-gz),Math.cos(Math.atan2(a[1],a[0])-gz)));}
+  var eyeC=eyeC0.slice().sort(function(a,b){return angOff(b)-angOff(a);});
   tryPut([MODE==='man'?'人眼（可拖动）':'鱼眼（可拖动）'],13,T.p2,XW(g.E.x),YW(g.E.y),eyeC,true);
-  /* 「视野」标注落在光锥内侧、紧贴视线旁；「垂直入射」标注贴垂直光线的伸出段 */
-  var ga=Math.atan2(SY-YW(g.E.y),XW(g.P0.x)-XW(g.E.x));
-  var gx=Math.cos(ga), gy=Math.sin(ga), px=-gy, py=gx;
+  /* 「视野」标注落在两条虚线之间、贴视线旁，读者一眼能对上是那个张角 */
   var ex0=XW(g.E.x), ey0=YW(g.E.y);
-  var okFov=tryPut(['视野'],12.5,T.muted,ex0+gx*48+px*17,ey0+gy*48+py*17,
-    [[0,0,'center','middle'],[0,-15,'center','bottom'],[0,15,'center','top'],[-20,0,'right','middle']],true);
-  if(!okFov){
-    tryPut(['视野'],12.5,T.muted,ex0+gx*48-px*17,ey0+gy*48-py*17,
-      [[0,0,'center','middle'],[0,-15,'center','bottom'],[0,15,'center','top'],[-20,0,'right','middle']],true);
+  var fga=Math.atan2(SY-ey0,XW(g.P0.x)-ex0);
+  var fgx=Math.cos(fga), fgy=Math.sin(fga), fpx=-fgy, fpy=fgx;
+  if(!tryPut(['视野'],12.5,T.muted,ex0+fgx*62+fpx*19,ey0+fgy*62+fpy*19,
+    [[0,0,'center','middle'],[0,-14,'center','bottom'],[0,14,'center','top'],[-16,0,'right','middle']],true)){
+    tryPut(['视野'],12.5,T.muted,ex0+fgx*62-fpx*19,ey0+fgy*62-fpy*19,
+      [[0,0,'center','middle'],[0,-14,'center','bottom'],[0,14,'center','top'],[-16,0,'right','middle']],true);
   }
   tryPut(['垂直入射，不偏折'],12,T.muted,XW(0),YW(g.sgn*g.yA*0.72),
     [[-10,0,'right','middle'],[10,0,'left','middle'],[-10,-13,'right','bottom'],[-10,13,'right','top']],true);
@@ -582,7 +588,7 @@ function cavXY(ev){
 }
 function nearEye(pt){
   var ex=XW(L), ey=YW((MODE==='man')?H:-H);
-  return Math.hypot(pt.x-ex,pt.y-ey)<22;
+  return Math.hypot(pt.x-ex,pt.y-ey)<25;
 }
 cv.addEventListener('pointerdown',function(ev){
   if(nearEye(cavXY(ev))){
@@ -609,7 +615,6 @@ cv.addEventListener('pointerup',endDrag);
 cv.addEventListener('pointercancel',endDrag);
 kNorm.addEventListener('change',function(){refresh();});
 kImg.addEventListener('change',function(){refresh();});
-kFan.addEventListener('change',function(){refresh();});
 
 /* ===== 主循环 ===== */
 function step(ts){
