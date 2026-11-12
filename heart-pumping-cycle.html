@@ -244,7 +244,7 @@ function openSL(p){         // 动脉瓣：心室收缩期开
 
 /* ===== 心脏场景（前面观：画面左侧为右心，与教材插图方向一致） ===== */
 var RA={x:182,y:196,rx:62,ry:46}, RV={x:222,y:318,rx:64,ry:60};
-var LA={x:388,y:196,rx:56,ry:42}, LV={x:368,y:320,rx:62,ry:64};
+var LA={x:392,y:196,rx:56,ry:42}, LV={x:368,y:320,rx:62,ry:64};
 function drawHeart(T,p){
   HALO=T.bg;
   var st=phaseOf(p);
@@ -266,9 +266,9 @@ function drawHeart(T,p){
   tube([120,436,126,300,138,230],22,rgbV);    // 下腔静脉
   tube([240,262,268,202,290,148,292,94],20,rgbV);  // 肺动脉
   /* 主动脉走中隔与左心房之间的缝，左心室到主动脉这一段必须看得见 */
-  tube([352,258,332,196,318,148,330,112,382,100,470,102],22,rgbA);
-  tube([508,172,442,190],16,rgbA);            // 肺静脉（上）
-  tube([508,216,442,204],16,rgbA);            // 肺静脉（下）
+  tube([352,258,334,200,320,150,332,112,382,100,470,102],20,rgbA);
+  tube([508,172,450,190],16,rgbA);            // 肺静脉（上）
+  tube([508,216,450,204],16,rgbA);            // 肺静脉（下）
   /* 血管端口的方向箭头 */
   chevron(292,96,-PI/2,rgba(rgbV,0.8),7);
   chevron(468,102,0,rgba(rgbA,0.8),7);
@@ -326,8 +326,8 @@ function drawHeart(T,p){
   var veinAl = st===2?0.85:(st===0?0.55:0.4);   // 静脉回流全程存在，舒张期最强
   flow(146,98,162,146,colV,veinAl);
   flow(126,420,135,252,colV,veinAl);
-  flow(500,175,454,186,colA,veinAl);
-  flow(500,213,454,206,colA,veinAl);
+  flow(500,175,458,186,colA,veinAl);
+  flow(500,213,458,206,colA,veinAl);
   if(oAV>0.5){
     var alF=st===0?0.95:0.5;
     flow(198,234,209,270,colV,alF);           // 右心房 → 右心室
@@ -335,7 +335,7 @@ function drawHeart(T,p){
   }
   if(oSL>0.5){
     flow(272,195,290,102,colV,0.95);          // 右心室 → 肺动脉
-    flow(330,196,320,152,colA,0.95);          // 左心室 → 主动脉（竖直段）
+    flow(330,200,323,156,colA,0.95);          // 左心室 → 主动脉（竖直段）
     flow(342,110,458,103,colA,0.95);          // 左心室 → 主动脉（弓段）
   }
 
@@ -352,7 +352,7 @@ function drawHeart(T,p){
   rtext(['房室瓣'],58,302,12.5,T.muted,'left','alphabetic',true);
   line(102,296,180,254,rgba(hex2rgb(T.muted),0.55),1);
   rtext(['动脉瓣'],492,334,12.5,T.muted,'right','alphabetic',true);
-  line(448,328,340,262,rgba(hex2rgb(T.muted),0.55),1);
+  line(448,328,344,258,rgba(hex2rgb(T.muted),0.55),1);
   rtext(['左心室壁最厚：把血液泵向全身'],368,424,12,T.muted,'center','alphabetic',false);
 }
 
