@@ -56,6 +56,9 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
   border-top:1px solid var(--line);padding-top:6px;min-height:34px}
 .say em{font-style:normal;color:var(--p1)}
 .hint{margin-top:5px;font-size:12px;color:var(--muted);min-height:1.5em}
+.vstat{margin-top:2px;font-size:11.5px;line-height:1.5;color:var(--muted)}
+.vstat:empty{display:none}
+.vstat.warn{color:var(--p2)}
 .tbl{margin-top:8px;font-size:12px}
 .tbl summary{cursor:pointer;color:var(--muted);font-size:12px;outline:none}
 .tbl table{border-collapse:collapse;width:100%;margin-top:6px}
@@ -85,12 +88,13 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
         <span>调到台位自动播报</span></label>
     </div>
     <div class='row' id='stas'>
-      <button id='b0'>中波广播 1 MHz</button>
-      <button id='b1'>调频广播 98 MHz</button>
-      <button id='b2'>遥控器 315 MHz</button>
-      <button id='b3'>对讲机 430 MHz</button>
-      <button id='b4'>无线网 2.4 GHz</button>
-      <button id='b5'>5G 手机 3.5 GHz</button>
+      <button id='b0'>长波广播 153 kHz</button>
+      <button id='b1'>中波广播 1 MHz</button>
+      <button id='b2'>调频广播 98 MHz</button>
+      <button id='b3'>遥控器 315 MHz</button>
+      <button id='b4'>对讲机 430 MHz</button>
+      <button id='b5'>无线网 2.4 GHz</button>
+      <button id='b6'>5G 手机 3.5 GHz</button>
     </div>
     <div class='info'>
       <div class='cell'><b>波长 <span class='v'>λ</span></b><span class='val' id='oL'>3.00 m</span></div>
@@ -100,6 +104,7 @@ button.on{background:var(--p2);color:#fff;border-color:var(--p2)}
       <div class='cell full'><b>用途</b><span class='val' id='oU'>—</span></div>
     </div>
     <div class='say' id='say'>调到台位后，这里显示它自报的身份。</div>
+    <div class='vstat' id='vstat'></div>
     <div class='hint' id='hint'></div>
     <details class='tbl'><summary>十二个无线电波段对照表</summary><div id='tblBox'></div></details>
   </div>
@@ -161,6 +166,7 @@ var BANDS=[
 ];
 /* 台位：被调节到附近时自报身份 */
 var STA=[
+  {f:1.53e5, k:'长波广播', say:'我是长波广播，频率一百五十三千赫，属于低频长波，波长接近两千米。'},
   {f:1e6,    k:'中波广播', say:'我是中波广播，频率一兆赫，属于中频中波，波长三百米。'},
   {f:9.8e7,  k:'调频广播', say:'我是调频广播，频率九十八兆赫，属于甚高频米波，波长三米。'},
   {f:3.15e8, k:'遥控器',   say:'我是遥控器信号，频率三百一十五兆赫，属于特高频分米波，波长接近一米。'},
@@ -178,7 +184,7 @@ var SIGS=[
 /* 波长的实物参照 */
 var REF=[
   [1e8,'比地球的直径还大好几倍'],[3e7,'地球直径的两三倍'],[1.2e7,'和地球的直径差不多'],[3e6,'一个省那么宽'],
-  [3e5,'一座大城市那么宽'],[3e4,'一座城市那么宽'],[3e3,'一栋摩天楼的高度'],
+  [3e5,'一座大城市那么宽'],[3e4,'一座城市那么宽'],[3e3,'一栋摩天楼的高度'],[1.5e3,'比最高的摩天楼还高一倍'],
   [3e2,'一个足球场的长度'],[2e1,'一间教室的宽度'],[1,'一张书桌的长度'],
   [0.4,'一张课桌的宽度'],[0.1,'一只手掌的宽度'],[0.02,'两根手指的宽度'],
   [2e-3,'一粒米的长度'],[2e-4,'一根头发丝的粗细'],[2e-5,'一个细胞的直径'],
@@ -572,7 +578,7 @@ function draw(){
 }
 
 /* ===== 声音 ===== */
-var AC=null, voice=null, voiceTried=false;
+var AC=null, voice=null, voiceTried=false, userActed=false;
 function pickVoice(){
   if(!('speechSynthesis' in window)) return null;
   var vs=window.speechSynthesis.getVoices()||[],i;
@@ -587,12 +593,7 @@ function initVoice(){
   voice=pickVoice();
   voiceTried=true;
 }
-if('speechSynthesis' in window){
-  initVoice();
-  if(window.speechSynthesis.addEventListener){
-    window.speechSynthesis.addEventListener('voiceschanged',function(){voice=pickVoice();});
-  }
-}
+if('speechSynthesis' in window){ initVoice(); }
 function ensureAC(){
   if(!AC){
     var K=window.AudioContext||window.webkitAudioContext;
@@ -632,33 +633,87 @@ function beepSeq(){
     }
   }catch(e){}
 }
+var vstatBox=null;
+function setVstat(t,isWarn){
+  if(!vstatBox) vstatBox=$('vstat');
+  if(!vstatBox) return;
+  vstatBox.textContent=t||'';
+  vstatBox.className=isWarn?'vstat warn':'vstat';
+}
+function hasZhVoice(){
+  var v=pickVoice();
+  return !!v;
+}
+function voiceFailText(code){
+  var vs=[];
+  try{ vs=(window.speechSynthesis&&window.speechSynthesis.getVoices())||[]; }catch(e){}
+  if(!vs.length) return '本机没有可用的语音引擎，只发提示音';
+  if(!pickVoice()) return '本机没有中文语音，只发提示音（Win 设置 \u2192 时间和语言 \u2192 语音，添加中文语音）';
+  if(code==='not-allowed') return '浏览器拦下了朗读，再点一次按钮';
+  if(code==='interrupted'||code==='canceled') return '朗读被打断，再点一次按钮';
+  if(code==='audio-busy'||code==='audio-hardware') return '音频设备不可用，只发提示音';
+  return '本机语音引擎没有响应，只发提示音；换手机或普通电脑打开就能听到朗读';
+}
+function speakNow(txt){
+  var ss=window.speechSynthesis;
+  if(!ss){ beepSeq(); setVstat('这个浏览器不支持语音播报，只发提示音',1); return; }
+  try{
+    ss.cancel();
+    var v=voice||pickVoice();
+    var u=new SpeechSynthesisUtterance(txt);
+    if(v){ u.voice=v; u.lang=v.lang||'zh-CN'; }else{ u.lang='zh-CN'; }
+    u.rate=1.0; u.pitch=1.0; u.volume=1.0;
+    var started=false, reported=false;
+    function fail(code){
+      if(reported||started) return;
+      reported=true;
+      beepSeq();
+      setVstat(voiceFailText(code),1);
+      if(vstatBox) vstatBox.title='错误码：'+code;
+      voice=null;
+    }
+    u.onstart=function(){ started=true; setVstat('正在朗读'); };
+    u.onend=function(){ if(started) setVstat(''); };
+    u.onerror=function(e){
+      var c=(e&&e.error)||'error';
+      if(c==='interrupted'||c==='canceled') return;
+      fail(c);
+    };
+    /* cancel 与 speak 在同一帧里连着调用时，Chrome/Edge 会把后者吞掉，隔一帧再送 */
+    setTimeout(function(){
+      try{ ss.speak(u); }catch(e){ fail('throw'); }
+      setTimeout(function(){ if(!started) fail('no-response'); },1200);
+    },60);
+  }catch(e){
+    beepSeq();
+    setVstat('朗读启动失败，只发提示音',1);
+  }
+}
 function announce(txt){
   if(!sayOn) return;
   ensureAC();
   staticBurst();
-  if('speechSynthesis' in window){
-    var vs=window.speechSynthesis.getVoices()||[];
-    /* 有中文语音，或语音表还没加载完（交给引擎按 lang 自行挑）时才朗读；
-       只剩外文语音时不硬读，改成提示音，免得把中文念得听不懂 */
-    if(vs.length===0||voice||pickVoice()){
-      try{
-        voice=voice||pickVoice();
-        window.speechSynthesis.cancel();
-        var u=new SpeechSynthesisUtterance(txt);
-        if(voice) u.voice=voice;
-        u.lang='zh-CN'; u.rate=1.02; u.pitch=1.0; u.volume=1.0;
-        var started=false;
-        u.onstart=function(){started=true;};
-        window.speechSynthesis.speak(u);
-        /* 引擎没有可用语音时会静默失败，0.6 s 后补一段提示音 */
-        setTimeout(function(){
-          if(!started&&!(window.speechSynthesis&&window.speechSynthesis.speaking)) beepSeq();
-        },600);
-        return;
-      }catch(e){}
-    }
+  speakNow(txt);
+}
+/* 进页面先探一次：本机到底有没有语音，免得点了没反应还不明原因 */
+function probeVoice(){
+  if(userActed) return;
+  var ss=window.speechSynthesis;
+  if(!ss){ setVstat('这个浏览器不支持语音播报，用提示音代替',1); return; }
+  var vs=[];
+  try{ vs=ss.getVoices()||[]; }catch(e){}
+  if(!vs.length) return;          /* 还没加载完，等 voiceschanged */
+  if(hasZhVoice()) setVstat('');
+  else setVstat('本机没有中文语音，朗读会退成提示音（Win 设置 → 时间和语言 → 语音 里可添加）',1);
+}
+if('speechSynthesis' in window){
+  setTimeout(probeVoice,700);
+  setTimeout(probeVoice,2200);
+  if(window.speechSynthesis.addEventListener){
+    window.speechSynthesis.addEventListener('voiceschanged',function(){
+      voice=pickVoice(); probeVoice();
+    });
   }
-  beepSeq();
 }
 
 /* ===== 面板 ===== */
@@ -721,6 +776,7 @@ function refresh(){ upd(); draw(); }
 /* ===== 交互 ===== */
 var lastF=F;
 sF.addEventListener('input',function(){
+  userActed=true;
   F=fFromV(parseFloat(sF.value));
   refresh();
 });
@@ -741,6 +797,7 @@ for(var bi=0;bi<STA.length;bi++){
     if(!b) return;
     staBtns[k]=b;
     b.addEventListener('click',function(){
+      userActed=true;
       F=STA[k].f; sF.value=String(vFromF(F)); refresh();
       sayBox.innerHTML='<em>'+STA[k].k+'</em>：'+STA[k].say;
       announce(STA[k].say);
@@ -748,8 +805,12 @@ for(var bi=0;bi<STA.length;bi++){
   })(bi);
 }
 kSay.addEventListener('change',function(){
+  userActed=true;
   sayOn=!!kSay.checked;
-  if(!sayOn&&'speechSynthesis' in window){try{window.speechSynthesis.cancel();}catch(e){}}
+  if(!sayOn){
+    if('speechSynthesis' in window){try{window.speechSynthesis.cancel();}catch(e){}}
+    setVstat('');
+  }
 });
 
 /* 波段对照表 */
