@@ -215,6 +215,11 @@ function rtextBoxOn(c,ps,x,y,size,color,align,base){
   return w;
 }
 function rtextBox(ps,x,y,size,color,align,base){return rtextBoxOn(ctx,ps,x,y,size,color,align,base);}
+function hexLum(c){
+  if(typeof c!=='string'||c.charAt(0)!=='#'||c.length<7) return 1;
+  var r=parseInt(c.substr(1,2),16)/255, g=parseInt(c.substr(3,2),16)/255, b=parseInt(c.substr(5,2),16)/255;
+  return 0.299*r+0.587*g+0.114*b;
+}
 function theme(){
   var bg='#ffffff',panel='#f5f6f8',fg='#23262b',muted='#6b7078',line='#dcdee3',p1='#a3563c',p2='#3a6ea5',p3='#4f7a45';
   if(typeof getComputedStyle==='function'){
@@ -225,6 +230,11 @@ function theme(){
       line=g('--line')||line; p1=g('--p1')||p1; p2=g('--p2')||p2; p3=g('--p3')||p3;
     }
   }
+  var dark=hexLum(bg)<0.45;
+  if(dark) return {bg:bg,panel:panel,fg:fg,muted:muted,line:line,p1:p1,p2:p2,p3:p3,
+    fuel:'#9c7a56',fuelRim:'#c8a880',rodC:'#7c828b',hous:'#9aa0a8',
+    hotP:'#cf6d57',coldP:'#6f9cc4',steamP:'#cd8049',
+    nF:'#79aede',nT:'#e0a25f',flF:'#e2c150',flC:'#a98fd0',flR:'#b0b6bf'};
   return {bg:bg,panel:panel,fg:fg,muted:muted,line:line,p1:p1,p2:p2,p3:p3,
     fuel:'#8a6a4a',fuelRim:'#5f4a33',rodC:'#666b73',hous:'#8b9099',
     hotP:'#b35240',coldP:'#4a7196',steamP:'#b06a3a',
@@ -605,9 +615,9 @@ function drawBurn(T){
   var labs=[{y:d5,dy:d5,t:num(cur.x5,2)+'%',col:T.p1},{y:d9,dy:d9,t:num(cur.x9,2)+'%',col:T.p2},{y:dF,dy:dF,t:num(cur.xFP,2)+'%',col:T.p3}];
   labs.sort(function(a,b){return a.y-b.y;});
   var k;
-  for(k=1;k<labs.length;k++) if(labs[k].y<labs[k-1].y+16) labs[k].y=labs[k-1].y+16;
+  for(k=1;k<labs.length;k++) if(labs[k].y<labs[k-1].y+18) labs[k].y=labs[k-1].y+18;
   for(k=labs.length-1;k>=0;k--) if(labs[k].y>BY0-22){labs[k].y=BY0-22;}
-  for(k=labs.length-2;k>=0;k--) if(labs[k].y>labs[k+1].y-16) labs[k].y=labs[k+1].y-16;
+  for(k=labs.length-2;k>=0;k--) if(labs[k].y>labs[k+1].y-18) labs[k].y=labs[k+1].y-18;
   var lx=tx+dir*12, lalign=dir>0?'left':'right';
   for(k=0;k<labs.length;k++){
     if(parseFloat(labs[k].t)<0.005) continue;
@@ -688,8 +698,9 @@ bPlay.addEventListener('click',function(){
   syncPlayBtn();
 });
 bScram.addEventListener('click',function(){
-  SCRAM=true; started=true;
+  SCRAM=true; started=true; running=true;
   hint.textContent='紧急停堆：全部控制棒快速插入到底，f 骤降，链式反应熄灭。';
+  syncPlayBtn();
 });
 bReset.addEventListener('click',function(){
   ROD=0.60; E0=3.0; TB=0; PW=P0; SCRAM=false;
