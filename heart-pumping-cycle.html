@@ -263,14 +263,15 @@ function drawHeart(T,p){
   }
   /* --- 血管（先画，腔室压在上面，管子就像从腔室里长出来） --- */
   tube([142,88,166,158],22,rgbV);             // 上腔静脉
-  tube([122,436,131,300,146,228],22,rgbV);    // 下腔静脉
+  tube([120,436,126,300,138,230],22,rgbV);    // 下腔静脉
   tube([240,262,268,202,290,148,292,94],20,rgbV);  // 肺动脉
-  tube([352,260,346,190,338,140,368,110,470,104],22,rgbA); // 主动脉
+  /* 主动脉走中隔与左心房之间的缝，左心室到主动脉这一段必须看得见 */
+  tube([352,258,332,196,318,148,330,112,382,100,470,102],22,rgbA);
   tube([508,172,442,190],16,rgbA);            // 肺静脉（上）
   tube([508,216,442,204],16,rgbA);            // 肺静脉（下）
   /* 血管端口的方向箭头 */
   chevron(292,96,-PI/2,rgba(rgbV,0.8),7);
-  chevron(468,104,0,rgba(rgbA,0.8),7);
+  chevron(468,102,0,rgba(rgbA,0.8),7);
   chevron(162,146,Math.atan2(70,24),rgba(rgbV,0.8),7);
   chevron(137,244,-PI/2+0.08,rgba(rgbV,0.8),7);
   chevron(448,188,Math.atan2(18,-66),rgba(rgbA,0.8),7);
@@ -294,14 +295,6 @@ function drawHeart(T,p){
   blob(LA,rgba(rgbA,0.28+0.22*cA),colA,2.5+3.5*cA,0.62+0.38*vA);
   blob(RV,rgba(rgbV,0.28+0.22*cV),colV,3+5*cV,0.62+0.38*vV);
   blob(LV,rgba(rgbA,0.28+0.22*cV),colA,5+7*cV,0.62+0.38*vV);   // 左心室壁最厚
-
-  /* --- 中隔 --- */
-  ctx.beginPath();
-  var yi; for(yi=150;yi<=386;yi+=8){
-    var xx=296+6*Math.sin((yi-150)/236*PI);
-    if(yi===150) ctx.moveTo(xx,yi); else ctx.lineTo(xx,yi);
-  }
-  ctx.strokeStyle=rgba(hex2rgb(T.blockEdge),0.85); ctx.lineWidth=8; ctx.lineCap='round'; ctx.stroke();
 
   /* --- 瓣膜 --- */
   function valveAV(cx,cy,hw,open,col){        // 房室瓣：开时瓣叶倒向心室
@@ -342,8 +335,8 @@ function drawHeart(T,p){
   }
   if(oSL>0.5){
     flow(272,195,290,102,colV,0.95);          // 右心室 → 肺动脉
-    flow(343,182,339,146,colA,0.95);          // 左心室 → 主动脉（竖直段）
-    flow(352,110,458,105,colA,0.95);          // 左心室 → 主动脉（弓段）
+    flow(330,196,320,152,colA,0.95);          // 左心室 → 主动脉（竖直段）
+    flow(342,110,458,103,colA,0.95);          // 左心室 → 主动脉（弓段）
   }
 
   /* --- 标签 --- */
@@ -353,7 +346,7 @@ function drawHeart(T,p){
   rtext(['左心室'],LV.x,LV.y,13.5,T.fg,'center','middle',false);
   rtext(['上腔静脉'],96,76,12.5,T.muted,'left','alphabetic',true);
   rtext(['下腔静脉'],104,424,12.5,T.muted,'right','alphabetic',true);
-  rtext(['肺动脉（到肺）'],272,78,12.5,T.muted,'right','alphabetic',true);
+  rtext(['肺动脉（到肺）'],284,86,12.5,T.muted,'right','alphabetic',true);
   rtext(['主动脉（到全身）'],482,82,12.5,T.muted,'right','alphabetic',true);
   rtext(['肺静脉（来自肺）'],530,152,12.5,T.muted,'right','alphabetic',true);
   rtext(['房室瓣'],58,302,12.5,T.muted,'left','alphabetic',true);
