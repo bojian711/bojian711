@@ -347,7 +347,7 @@ function updateParticles(dt,T){
       if(p.fade<=0||p.x<PV0+6||p.x>PV1-6||p.y>PVBOT-8){PA.splice(i,1);}
       continue;
     }
-    if(insideRod(p)){FL.push({x:p.x,y:p.y,col:T.flR,age:0}); PA.splice(i,1); continue;}
+    if(insideRod(p)){if(FL.length<26) FL.push({x:p.x,y:p.y,col:T.flR,age:0}); PA.splice(i,1); continue;}
     var d=nearCell(p);
     if(p.sp<100&&d<8){
       if(Math.random()<0.82){
@@ -367,7 +367,7 @@ function updateParticles(dt,T){
   }
   for(i=FL.length-1;i>=0;i--){
     FL[i].age+=dt;
-    if(FL[i].age>0.55) FL.splice(i,1);
+    if(FL[i].age>0.42) FL.splice(i,1);
   }
 }
 
@@ -486,9 +486,9 @@ function drawPlant(T){
       ctx.globalAlpha=1;
     }
     for(i=0;i<FL.length;i++){
-      var f=FL[i], ra=3+f.age*34;
-      ctx.globalAlpha=clamp(1-f.age/0.55,0,1);
-      ctx.strokeStyle=f.col; ctx.lineWidth=2;
+      var f=FL[i], ra=3+f.age*20;
+      ctx.globalAlpha=clamp(1-f.age/0.42,0,1);
+      ctx.strokeStyle=f.col; ctx.lineWidth=1.6;
       ctx.beginPath(); ctx.arc(f.x,f.y,ra,0,TAU); ctx.stroke();
       ctx.globalAlpha=1;
     }
@@ -520,8 +520,7 @@ function drawPlant(T){
   line(215,144,222,144,T.muted,1);
   rtext([{t:'控制棒',sys:true}],262,345,12,T.fg,'left','alphabetic',false);
   line(214,292,260,343,T.muted,1);
-  rtext([{t:'堆芯',sys:true}],165,447,12,T.fg,'center','alphabetic',false);
-  rtext([{t:'慢化剂（水）',sys:true}],82,272,12,T.muted,'left','alphabetic',false);
+  rtext([{t:'堆芯（水兼慢化剂）',sys:true}],165,447,12,T.fg,'center','alphabetic',false);
   rtext([{t:'蒸汽发生器',sys:true}],386,316,12,T.fg,'left','alphabetic',false);
   line(370,312,384,312,T.muted,1);
   rtext([{t:'主泵',sys:true}],288,440,12,T.fg,'center','alphabetic',false);
@@ -607,10 +606,11 @@ function drawBurn(T){
   labs.sort(function(a,b){return a.y-b.y;});
   var k;
   for(k=1;k<labs.length;k++) if(labs[k].y<labs[k-1].y+16) labs[k].y=labs[k-1].y+16;
-  for(k=labs.length-1;k>=0;k--) if(labs[k].y>BY0-6){labs[k].y=BY0-6;}
+  for(k=labs.length-1;k>=0;k--) if(labs[k].y>BY0-22){labs[k].y=BY0-22;}
   for(k=labs.length-2;k>=0;k--) if(labs[k].y>labs[k+1].y-16) labs[k].y=labs[k+1].y-16;
   var lx=tx+dir*12, lalign=dir>0?'left':'right';
   for(k=0;k<labs.length;k++){
+    if(parseFloat(labs[k].t)<0.005) continue;
     if(Math.abs(labs[k].y-labs[k].dy)>7){
       lineOn(c2,tx+dir*3,labs[k].dy,lx+(dir>0?-2:2),labs[k].y,labs[k].col,0.9);
     }
