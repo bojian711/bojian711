@@ -368,6 +368,7 @@ function drawObject(T,cx,py){
   ctx.lineTo(cx-w+5,y-h+8); ctx.lineTo(cx-8,y-h); ctx.lineTo(cx+10,y-h+3);
   ctx.lineTo(cx+w,y-h+11); ctx.lineTo(cx+w-3,y);
   ctx.closePath(); ctx.fill();
+  ctx.strokeStyle=T.muted; ctx.lineWidth=1.1; ctx.stroke();
   rtext(['物'],cx,y-7,13,T.bg,'center','alphabetic',false);
 }
 function drawCaption(T){
@@ -425,13 +426,14 @@ function draw(){
   drawBeam(T);
   var pL=drawPan(T,-1), pR=drawPan(T,1);
   var objSide=(MODE==='swap')?1:-1;
-  if(placed) drawObject(T,objSide<0?pL[0]:pR[0],(objSide<0?pL:pR)[1]);
   drawWeights(T,objSide<0?pR[0]:pL[0],(objSide<0?pR:pL)[1]);
   /* 盘标签 */
   rtext([MODE==='swap'?'左盘·砝码':'左盘·物体'],pL[0],pL[1]+32,12.5,T.muted,'center','alphabetic',true);
   rtext([MODE==='swap'?'右盘·物体':'右盘·砝码'],pR[0],pR[1]+32,12.5,T.muted,'center','alphabetic',true);
   drawCaption(T);
   drawBanner(T);
+  /* 物体压在最上层：砝码、盘标签、横幅都盖不住它 */
+  if(placed) drawObject(T,objSide<0?pL[0]:pR[0],(objSide<0?pL:pR)[1]);
   ctx.restore();
 }
 
@@ -444,7 +446,7 @@ function upd(){
   oRead.textContent=num(R,1);
   oPhase.textContent=placed?'称量':'调平';
   bPlace.disabled=!placed&&!balanced();
-  bPlace.textContent=placed?'取下物体':'放上物体';
+  bPlace.textContent=placed?'取下物体（重来）':'放上物体';
   bPlace.classList.toggle('ready',!placed&&balanced());
   var i;
   for(i=0;i<6;i++){
@@ -560,7 +562,8 @@ var mi;
 for(mi=0;mi<3;mi++){bM[mi].addEventListener('click',mk(mi));}
 var wk=function(k){
   return function(){
-    if(!placed) return;
+    /* 点砝码取放时，待测物体必须留在盘上 */
+    if(!placed){placed=true; a0=rider;}
     onPan[k]=!onPan[k];
     refresh();
   };
@@ -568,8 +571,18 @@ var wk=function(k){
 var wi;
 for(wi=0;wi<6;wi++){bW[wi].addEventListener('click',wk(wi));}
 
-/* ===== 重绘触发：不设独立动画循环，画面角度与物理状态始终同步 ===== */
+/* ===== 画布自愈重绘 ===== */
+/* canvas 位图可能被 iframe 合成层或标签页恢复丢弃；持续重画才能把当前状态贴回去。
+   物理角度依旧由状态即时决定，这里只重绘、不做动画积分。 */
+var lastDraw=0;
+function step(ts){
+  if(ts-lastDraw>=33){lastDraw=ts; draw();}
+  requestAnimationFrame(step);
+}
 window.addEventListener('resize',function(){resize(); draw();});
+D.addEventListener('visibilitychange',function(){if(!D.hidden) draw();});
+window.addEventListener('pageshow',function(){draw();});
+window.addEventListener('focus',function(){draw();});
 if(window.matchMedia){
   var mq=window.matchMedia('(prefers-color-scheme: dark)');
   function onSchemeChange(){refresh();}
@@ -605,6 +618,7 @@ if(QS.length>1){
 }
 if(D.fonts){D.fonts.load('italic 14px KaTeX_Math'); D.fonts.load('14px KaTeX_Main');}
 resize(); refresh();
+requestAnimationFrame(step);
 })();
 </script>
 </body>
