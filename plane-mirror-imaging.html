@@ -71,7 +71,7 @@ button{background:var(--btn);color:var(--fg);border:1px solid var(--line);
       <span>物像间距 ＝ <span class='n' id='oD'>—</span> <span class='n'>m</span></span>
     </div>
     <div class='rule'>结论：平面镜成等大的虚像。像与物到镜面的距离相等，对应点连线与镜面垂直，像与物关于镜面对称。镜面平移或转动时像跟着动，对称关系不变；反射光线的反向延长线在镜后汇聚于像点。</div>
-    <div class='hint' id='hint'>拖动小灯泡改变物的位置，拖动眼睛改变观察位置；虚线扇形表示眼睛的视野。两个滑块分别移动和转动镜面。</div>
+    <div class='hint' id='hint'>拖动小灯泡改变物的位置，拖动眼睛改变观察位置；两条虚线表示眼睛的视野范围。两个滑块分别移动和转动镜面。</div>
   </div>
 </div>
 <script>
@@ -85,7 +85,7 @@ var cv=$('cv'), ctx=cv.getContext('2d');
 var LW=900, LH=440;
 var OX=430, OY=250, PX=58;
 var GY=-2.6, MLEN=5.2;
-var FOVH=85*Math.PI/180;
+var FOVH=65*Math.PI/180;
 var PI=Math.PI, TAU=2*PI;
 
 /* ===== 状态（初值从滑块与 URL 参数读，便于外部置参） ===== */
@@ -408,20 +408,12 @@ function drawSymmetry(S,I,F,u,d,T){
     rtextBox([num(u,2)],X(m2x+d.ux*off),Y(m2y+d.uy*off),11.5,T.p3,'center','middle');
   }
 }
-/* 眼睛的视野：注视镜面中点，张角 ±85°，虚线弧标出角范围，两条虚线伸出边界 */
+/* 眼睛的视野：注视镜面中点，张角 ±85°，两条虚线射线从眼睛张开 */
 function drawFov(E,gaze,T){
-  var R=2.9*PX, r0=72;
+  var R=1.55*PX, r0=18;
   var ex0=X(E.x), ey0=Y(E.y);
   var a1=gaze-FOVH, a2=gaze+FOVH;
   dash([7,6]);
-  ctx.strokeStyle=T.muted; ctx.lineWidth=1.3;
-  ctx.beginPath();
-  var N=18,i,a,px,py;
-  for(i=0;i<=N;i++){
-    a=a1+sweep(a1,a2)*i/N; px=ex0+Math.cos(a)*r0; py=ey0+Math.sin(a)*r0;
-    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
-  }
-  ctx.stroke();
   lineC(ex0+Math.cos(a1)*r0,ey0+Math.sin(a1)*r0,ex0+Math.cos(a1)*R,ey0+Math.sin(a1)*R,T.muted,1.3);
   lineC(ex0+Math.cos(a2)*r0,ey0+Math.sin(a2)*r0,ex0+Math.cos(a2)*R,ey0+Math.sin(a2)*R,T.muted,1.3);
   dash();
@@ -558,7 +550,7 @@ kNor.addEventListener('change',function(){refresh('view');});
 bReset.addEventListener('click',function(){
   bx=-2.4; by=0.5; ex=-4.6; ey=-1.1; mpos=1.2; angDeg=0;
   sPos.value='1.2'; sAng.value='0';
-  hint.textContent='拖动小灯泡改变物的位置，拖动眼睛改变观察位置；虚线扇形表示眼睛的视野。两个滑块分别移动和转动镜面。';
+  hint.textContent='拖动小灯泡改变物的位置，拖动眼睛改变观察位置；两条虚线表示眼睛的视野范围。两个滑块分别移动和转动镜面。';
   refresh('view');
 });
 
