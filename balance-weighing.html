@@ -47,6 +47,14 @@ button:disabled{opacity:.45;cursor:default}
 .readout{display:flex;flex-wrap:wrap;gap:3px 22px;margin-top:8px;font-size:13px;line-height:1.7}
 .rule{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:13px;line-height:1.75}
 .hint{margin-top:6px;font-size:12.5px;color:var(--muted);min-height:1.6em}
+.hint.ready{color:var(--p3);font-weight:700;font-size:14px;background:rgba(79,122,69,.10);
+  border-left:3px solid var(--p3);padding:5px 10px;border-radius:0 6px 6px 0;min-height:2em}
+button.ready{background:var(--p3);color:#fff;border-color:var(--p3);font-weight:700;
+  box-shadow:0 0 0 3px rgba(79,122,69,.18)}
+@media (prefers-color-scheme: dark){
+  button.ready{color:#17181c;box-shadow:0 0 0 3px rgba(143,174,127,.22)}
+  .hint.ready{background:rgba(143,174,127,.12)}
+}
 .warn{color:var(--p1)}
 .ok{color:var(--p3)}
 .c1{color:var(--p1);font-weight:700}
@@ -128,7 +136,8 @@ var placed=false;
 var a0=0;                    /* 放上物体瞬间的游码值 */
 var mObj=52.4;
 var nutTouched=false;        /* 称量中动过平衡螺母 */
-var thC=0, thV=0;            /* 梁转角动画 */
+var baseBroken=false;        /* 动过螺母后回到空盘，零点需重新调 */
+var thC=0, thV=0;            /* 梁转角（由状态直接决定） */
 var HALO='#ffffff';
 
 var sRider=$('sRider'), oRider=$('oRider'), oPhase=$('oPhase'), oCode=$('oCode');
@@ -209,7 +218,7 @@ function tip(){
   else{mR+=mc; if(placed) mL+=mObj;}
   return mL-mR-rider+Z;
 }
-function balanced(){return Math.abs(tip())<0.15;}
+function balanced(){return Math.abs(tip())<0.05;}
 function phiTgt(){return clamp(tip()*1.8,-8,8)*PI/180;}
 
 /* ===== 画布 ===== */
@@ -369,6 +378,40 @@ function drawCaption(T){
   if(MODE==='norst') msg+='（当前：游码未归零就调平）';
   rtextBox([msg],14,10,13,T.fg,'left','top');
 }
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+function drawBanner(T){
+  /* 主界面状态横幅：只在平衡时出现，避免学生漏看下一步 */
+  var msg, sub;
+  if(!placed&&balanced()){
+    msg='已调平衡，请放上物体';
+    sub='点面板里的「放上物体」按钮，进入称量';
+  }else if(placed&&balanced()){
+    msg='天平已平衡';
+    sub='读出砝码总质量与游码示数';
+  }else return;
+  var w=360, h=62, x=(LW-w)/2, y=42, cx=x+31, cy=y+30;
+  ctx.save();
+  ctx.fillStyle=T.plate; ctx.strokeStyle=T.p3; ctx.lineWidth=1.6;
+  roundRect(x,y,w,h,10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=T.p3;
+  ctx.beginPath(); ctx.arc(cx,cy,13,0,TAU); ctx.fill();
+  ctx.strokeStyle=T.plate; ctx.lineWidth=2.4;
+  ctx.beginPath(); ctx.moveTo(cx-6,cy); ctx.lineTo(cx-1.5,cy+5); ctx.lineTo(cx+7,cy-6); ctx.stroke();
+  ctx.fillStyle=T.p3;
+  ctx.font='700 19px system-ui,"Microsoft YaHei",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText(msg,LW/2+8,y+30);
+  ctx.fillStyle=T.muted;
+  ctx.font='12.5px system-ui,"Microsoft YaHei",sans-serif';
+  ctx.fillText(sub,LW/2+8,y+49);
+  ctx.restore();
+}
 
 function draw(){
   if(SNAP){thC=phiTgt(); thV=0;}
@@ -388,6 +431,7 @@ function draw(){
   rtext([MODE==='swap'?'左盘·砝码':'左盘·物体'],pL[0],pL[1]+32,12.5,T.muted,'center','alphabetic',true);
   rtext([MODE==='swap'?'右盘·物体':'右盘·砝码'],pR[0],pR[1]+32,12.5,T.muted,'center','alphabetic',true);
   drawCaption(T);
+  drawBanner(T);
   ctx.restore();
 }
 
@@ -401,6 +445,7 @@ function upd(){
   oPhase.textContent=placed?'称量':'调平';
   bPlace.disabled=!placed&&!balanced();
   bPlace.textContent=placed?'取下物体':'放上物体';
+  bPlace.classList.toggle('ready',!placed&&balanced());
   var i;
   for(i=0;i<6;i++){
     if(onPan[i]) bW[i].classList.add('on'); else bW[i].classList.remove('on');
@@ -420,6 +465,8 @@ function upd(){
     }else{
       t='物体质量 <span class=n>'+num(mObj,1)+' g</span> <span class=ok>= 砝码 + 游码，读数正确</span>';
     }
+  }else if(!placed&&balanced()){
+    t='<span class=ok>已调平衡，请放上物体</span>';
   }else{
     t='平衡后揭晓物体质量';
   }
@@ -430,24 +477,33 @@ function upd(){
   else rule.innerHTML='结论：游码未归零就调平，初始示数 <span class=v>a</span><sub>0</sub> 被平衡螺母抵消，读数 <span class=n>=</span> <span class=v>m</span><sub>物</sub> <span class=n>+</span> <span class=v>a</span><sub>0</sub>，测量值偏大。';
 }
 function refreshHint(){
-  var s='', tp=tip();
+  var s='', tp=tip(), ready=false;
+  if(!placed&&balanced()) baseBroken=false;
   if(!placed){
     var dir=tp>0?'指针偏左，左侧偏重：平衡螺母向右调':'指针偏右，右侧偏重：平衡螺母向左调';
-    if(balanced()&&rider>0.01) s='空天平已平衡，但游码没有归零——继续称量，看读数会发生什么';
-    else if(balanced()) s='空天平已平衡，可以放上物体';
-    else if(MODE==='norst'&&rider>0.01) s=dir+'（游码停在 '+num(rider,1)+' g，可以就这样调平，也可以先把它移回零）';
+    if(balanced()&&rider>0.01){
+      s='已调平衡，请放上物体。游码停在 '+num(rider,1)+' g 未归零，保留它继续称量，看读数会发生什么';
+      ready=true;
+    }else if(balanced()){
+      s='已调平衡，请放上物体';
+      ready=true;
+    }else if(MODE==='norst'&&rider>0.01) s=dir+'（本模式请保留游码在 '+num(rider,1)+' g 处调平，再放上物体）';
     else if(rider>0.01) s='先把游码移到标尺左端零刻度线，再调平衡螺母';
     else s=dir;
   }else{
-    if(balanced()) s='天平平衡：读出砝码总质量与游码示数';
+    if(balanced()){s='天平平衡：读出砝码总质量与游码示数'; ready=true;}
     else if(tp>3) s=(MODE==='swap')?'左盘（砝码）下沉：砝码过重，取下换较小的':'左盘（物体）下沉：按从大到小的顺序向右盘加砝码';
-    else if(tp>0.15) s='接近平衡：改用小砝码或移动游码';
+    else if(tp>0.05) s='接近平衡：改用小砝码或移动游码';
     else s=(MODE==='swap')?'右盘（物体）下沉：砝码不足，继续加砝码':'右盘下沉：砝码过重，取下最小的砝码换小';
-    if(nutTouched) s+='。<span class=warn>称量过程中不能再调平衡螺母：比较基准已被改变</span>';
+    if(nutTouched){s+='。<span class=warn>称量过程中不能再调平衡螺母：比较基准已被改变</span>'; ready=false;}
   }
+  if(baseBroken&&!placed&&!balanced()) s+='（称量中动过平衡螺母，零点已变，请重新调平）';
+  hint.className=ready?'hint ready':'hint';
   hint.innerHTML=s;
 }
-function refresh(){upd(); refreshHint(); draw();}
+/* 画面角度直接由当前状态决定，状态一变立即重画，避免帧被节流时停在旧角度 */
+function syncAngle(){thC=phiTgt(); thV=0;}
+function refresh(){upd(); refreshHint(); syncAngle(); draw();}
 
 /* ===== 初始化与随机 ===== */
 function randMass(){
@@ -462,7 +518,7 @@ function reset(m){
   Z=(m==='norst'?0.6:0)+sgn*0.2*k;   /* 未归零模式下零点必然偏离 0.6，必须真去调 */
   sRider.value=String(rider);
   onPan=[false,false,false,false,false,false];
-  placed=false; a0=0; nutTouched=false;
+  placed=false; a0=0; nutTouched=false; baseBroken=false;
   mObj=randMass();
   thC=0; thV=0;
   refresh();
@@ -474,12 +530,21 @@ bNutL.addEventListener('click',function(){Z+=NSTEP; if(placed) nutTouched=true; 
 bNutR.addEventListener('click',function(){Z-=NSTEP; if(placed) nutTouched=true; refresh();});
 bPlace.addEventListener('click',function(){
   if(!placed){placed=true; a0=rider;}
-  else{placed=false; onPan=[false,false,false,false,false,false];}
+  else{
+    /* 取下物体后回到刚调平的空盘状态：游码退回放物体前的示数、砝码收盒 */
+    placed=false; onPan=[false,false,false,false,false,false];
+    if(nutTouched) baseBroken=true;
+    rider=a0; sRider.value=String(rider); a0=0; nutTouched=false;
+  }
   refresh();
 });
 bNew.addEventListener('click',function(){
   mObj=randMass();
-  onPan=[false,false,false,false,false,false];
+  if(placed){
+    onPan=[false,false,false,false,false,false];
+    if(nutTouched) baseBroken=true;
+    rider=a0; sRider.value=String(rider); nutTouched=false;
+  }
   refresh();
 });
 bReset.addEventListener('click',function(){reset(MODE);});
@@ -503,19 +568,14 @@ var wk=function(k){
 var wi;
 for(wi=0;wi<6;wi++){bW[wi].addEventListener('click',wk(wi));}
 
-/* ===== 主循环（梁转角阻尼趋稳） ===== */
-var last=0;
-function step(ts){
-  if(!last) last=ts;
-  var dt=Math.min(0.05,(ts-last)/1000); last=ts;
-  var thT=phiTgt();
-  thV+=((thT-thC)*26-thV*7)*dt;
-  thC+=thV*dt;
-  if(Math.abs(thT-thC)<1e-5&&Math.abs(thV)<1e-5){thC=thT; thV=0;}
-  draw();
-  requestAnimationFrame(step);
-}
+/* ===== 重绘触发：不设独立动画循环，画面角度与物理状态始终同步 ===== */
 window.addEventListener('resize',function(){resize(); draw();});
+if(window.matchMedia){
+  var mq=window.matchMedia('(prefers-color-scheme: dark)');
+  function onSchemeChange(){refresh();}
+  if(mq.addEventListener) mq.addEventListener('change',onSchemeChange);
+  else if(mq.addListener) mq.addListener(onSchemeChange);
+}
 if(typeof ResizeObserver!=='undefined'){
   var roW=0;
   new ResizeObserver(function(){
@@ -545,7 +605,6 @@ if(QS.length>1){
 }
 if(D.fonts){D.fonts.load('italic 14px KaTeX_Math'); D.fonts.load('14px KaTeX_Main');}
 resize(); refresh();
-requestAnimationFrame(step);
 })();
 </script>
 </body>
