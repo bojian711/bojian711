@@ -71,7 +71,7 @@ button{background:var(--btn);color:var(--fg);border:1px solid var(--line);
       <span>物像间距 ＝ <span class='n' id='oD'>—</span> <span class='n'>m</span></span>
     </div>
     <div class='rule'>结论：平面镜成等大的虚像。像与物到镜面的距离相等，对应点连线与镜面垂直，像与物关于镜面对称。镜面平移或转动时像跟着动，对称关系不变；反射光线的反向延长线在镜后汇聚于像点。</div>
-    <div class='hint' id='hint'>拖动小灯泡改变物的位置，拖动眼睛改变观察位置；两个滑块分别移动和转动镜面。</div>
+    <div class='hint' id='hint'>拖动小灯泡改变物的位置，拖动眼睛改变观察位置；虚线扇形表示眼睛的视野。两个滑块分别移动和转动镜面。</div>
   </div>
 </div>
 <script>
@@ -84,7 +84,8 @@ var cv=$('cv'), ctx=cv.getContext('2d');
 /* ===== 固定标尺：1 m = 58 px，不随参数变化 ===== */
 var LW=900, LH=440;
 var OX=430, OY=250, PX=58;
-var GY=-2.6, MLEN=4.2;
+var GY=-2.6, MLEN=5.2;
+var FOVH=85*Math.PI/180;
 var PI=Math.PI, TAU=2*PI;
 
 /* ===== 状态（初值从滑块与 URL 参数读，便于外部置参） ===== */
@@ -92,7 +93,7 @@ var bx=-2.4, by=0.5;
 var ex=-4.6, ey=-1.1;
 var mpos=1.2, angDeg=0;
 var HALO='#ffffff';
-var canSee=true;
+var canSee=true, seeWhy=0;
 
 var sPos=$('sPos'), oPos=$('oPos'), sAng=$('sAng'), oAng=$('oAng');
 var oU=$('oU'), oV=$('oV'), oD=$('oD'), hint=$('hint');
@@ -199,13 +200,15 @@ function theme(){
     grid:'rgba(255,255,255,0.07)', ground:'#8b9099', tick:'#9aa0a8',
     fg:'#e6e6e6', muted:'#9aa0a8',
     p1:'#d99a55', p2:'#7fa8d4', p3:'#8fae7f',
-    bulb:'#f0c269', bulbEdge:'#d99a55', glow:'rgba(240,194,105,0.15)'
+    bulb:'#f0c269', bulbEdge:'#d99a55', glow:'rgba(240,194,105,0.15)',
+    iris:'#b98d5f', pupil:'#0d0d0f'
   }:{
     bg:'#ffffff', halo:'#ffffff',
     grid:'rgba(20,24,32,0.07)', ground:'#6b7078', tick:'#6b7078',
     fg:'#23262b', muted:'#6b7078',
     p1:'#c07f2e', p2:'#3a6ea5', p3:'#4f7a45',
-    bulb:'#f2c063', bulbEdge:'#a3742c', glow:'rgba(232,161,58,0.15)'
+    bulb:'#f2c063', bulbEdge:'#a3742c', glow:'rgba(232,161,58,0.15)',
+    iris:'#7b5b34', pupil:'#1c1c1c'
   };
 }
 
@@ -250,6 +253,14 @@ function arrC(x1,y1,x2,y2,color,w){
   if(y2>yf){t=(yf-y1)/(y2-y1); x2=x1+(x2-x1)*t; y2=yf;}
   if(y1>yf){t=(yf-y2)/(y1-y2); x1=x2+(x1-x2)*t; y1=yf;}
   arr2(x1,y1,x2,y2,color,w);
+}
+/* 无箭头的线段，同样在地面处截断（视野边界用） */
+function lineC(x1,y1,x2,y2,color,w){
+  var yf=Y(GY)-2, t;
+  if(y1>yf&&y2>yf) return;
+  if(y2>yf){t=(yf-y1)/(y2-y1); x2=x1+(x2-x1)*t; y2=yf;}
+  if(y1>yf){t=(yf-y2)/(y1-y2); x1=x2+(x1-x2)*t; y1=yf;}
+  line(x1,y1,x2,y2,color,w);
 }
 function arcBetween(cx,cy,r,a1,a2,color){
   var sw=sweep(a1,a2);
@@ -338,18 +349,37 @@ function drawImageBulb(cx,cy,T){
   ctx.beginPath(); ctx.rect(cx-4.5,cy+12.5,9,6.5); ctx.stroke();
   dash();
 }
-function drawEye(cx,cy,T){
-  ctx.save(); ctx.translate(cx,cy); ctx.scale(1,0.62);
-  ctx.strokeStyle=T.fg; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.arc(0,0,14,0,TAU); ctx.stroke();
+function drawEye(cx,cy,T,gaze){
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(gaze);
+  /* 眼白（杏仁形：上眼睑弯一些，下眼睑平一些） */
+  ctx.fillStyle=T.bg; ctx.strokeStyle=T.fg; ctx.lineWidth=1.7; ctx.lineJoin='round';
+  ctx.beginPath();
+  ctx.moveTo(-17,0);
+  ctx.quadraticCurveTo(0,-13,17,0);
+  ctx.quadraticCurveTo(0,10.5,-17,0);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  /* 上眼睑加粗一道，显出眼睑的厚度 */
+  ctx.lineWidth=2.3; ctx.strokeStyle=T.fg;
+  ctx.beginPath();
+  ctx.moveTo(-16,0.4); ctx.quadraticCurveTo(0,-13.6,16,0.4);
+  ctx.stroke();
+  /* 上眼睑外侧的睫毛 */
+  ctx.lineWidth=1.4; ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(-9.5,-4.2); ctx.lineTo(-12.6,-8.0);
+  ctx.moveTo(-13.2,-2.4); ctx.lineTo(-16.8,-5.2);
+  ctx.stroke();
+  ctx.lineCap='butt';
+  /* 虹膜、瞳孔、高光 */
+  dot(1.0,0.4,5.2,T.iris);
+  dot(1.0,0.4,2.3,T.pupil);
+  dot(2.6,-1.5,1.2,'#ffffff');
   ctx.restore();
-  dot(cx,cy,4,T.fg);
 }
 function drawMirror(B,d,T){
   var bx1=X(B.x), by1=Y(B.y);
   var tp=mirrorTop(B,d);
   var bx2=X(tp.x), by2=Y(tp.y);
-  line(bx1-26,by1,bx1+26,by1,T.p2,4);
   line(bx1,by1,bx2,by2,T.p2,5.5);
   var s,p1x,p1y,p2x,p2y;
   for(s=0.18;s<MLEN;s+=0.26){
@@ -378,6 +408,25 @@ function drawSymmetry(S,I,F,u,d,T){
     rtextBox([num(u,2)],X(m2x+d.ux*off),Y(m2y+d.uy*off),11.5,T.p3,'center','middle');
   }
 }
+/* 眼睛的视野：注视镜面中点，张角 ±85°，虚线弧标出角范围，两条虚线伸出边界 */
+function drawFov(E,gaze,T){
+  var R=2.9*PX, r0=72;
+  var ex0=X(E.x), ey0=Y(E.y);
+  var a1=gaze-FOVH, a2=gaze+FOVH;
+  dash([7,6]);
+  ctx.strokeStyle=T.muted; ctx.lineWidth=1.3;
+  ctx.beginPath();
+  var N=18,i,a,px,py;
+  for(i=0;i<=N;i++){
+    a=a1+sweep(a1,a2)*i/N; px=ex0+Math.cos(a)*r0; py=ey0+Math.sin(a)*r0;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  lineC(ex0+Math.cos(a1)*r0,ey0+Math.sin(a1)*r0,ex0+Math.cos(a1)*R,ey0+Math.sin(a1)*R,T.muted,1.3);
+  lineC(ex0+Math.cos(a2)*r0,ey0+Math.sin(a2)*r0,ex0+Math.cos(a2)*R,ey0+Math.sin(a2)*R,T.muted,1.3);
+  dash();
+  rtext(['视野'],ex0-Math.cos(gaze)*44,ey0-Math.sin(gaze)*44,11.5,T.muted,'center','middle',true);
+}
 function draw(){
   var T=theme(); HALO=T.bg;
   ctx.save();
@@ -392,20 +441,32 @@ function draw(){
 
   drawGrid(T);
   drawGround(T);
+  /* 注视方向：眼睛看向镜面中点（画布坐标角） */
+  var mid={x:B.x+d.ux*MLEN*0.5, y:B.y+d.uy*MLEN*0.5};
+  var gaze=Math.atan2(-(mid.y-E.y), mid.x-E.x);
+  drawFov(E,gaze,T);
   if(kSym.checked) drawSymmetry(S,I,F,u,d,T);
   drawImageBulb(X(I.x),Y(I.y),T);
   drawMirror(B,d,T);
 
-  /* 光路 1：射向眼睛的光线（反射点由像点反推） */
+  /* 光路 1：射向眼睛的光线（反射点由像点反推），反射光在眼睛前停下 */
   var hit=lineHit(I,E,B,d);
-  canSee=!!hit;
+  var dI=Math.atan2(-(I.y-E.y), I.x-E.x);
+  var inFov=Math.abs(sweep(gaze,dI))<=FOVH;
+  canSee=!!hit&&inFov;
+  seeWhy=hit?(inFov?0:1):2;
   if(hit){
     arrC(X(S.x),Y(S.y),X(hit.x),Y(hit.y),T.p1,2);
-    arrC(X(hit.x),Y(hit.y),X(E.x),Y(E.y),T.p1,2);
+    var exx=X(E.x)-X(hit.x), eyy=Y(E.y)-Y(hit.y);
+    var em=Math.hypot(exx,eyy);
+    if(em>44){
+      var t2=(em-40)/em;
+      arrC(X(hit.x),Y(hit.y),X(hit.x)+exx*t2,Y(hit.y)+eyy*t2,T.p1,2);
+    }
     dash([6,5]); line(X(hit.x),Y(hit.y),X(I.x),Y(I.y),T.muted,1.3); dash();
   }
   /* 光路 2：反射点固定的参照光线 */
-  var R2={x:B.x+d.ux*MLEN*0.45, y:B.y+d.uy*MLEN*0.45};
+  var R2={x:B.x+d.ux*MLEN*0.38, y:B.y+d.uy*MLEN*0.38};
   var dvx=R2.x-S.x, dvy=R2.y-S.y;
   var dn2=dvx*d.nx+dvy*d.ny;
   var rx=dvx-2*dn2*d.nx, ry=dvy-2*dn2*d.ny;
@@ -440,7 +501,7 @@ function draw(){
   }
 
   drawBulb(X(S.x),Y(S.y),T);
-  drawEye(X(E.x),Y(E.y),T);
+  drawEye(X(E.x),Y(E.y),T,gaze);
 
   rtext([{t:'S',v:true}],X(S.x)-23,Y(S.y)-15,15,T.fg,'center','alphabetic',true);
   rtext([{t:'S',v:true},{t:'\u2032'}],X(I.x-d.nx*(u<1.0?0.60:0.42)),Y(I.y-d.ny*(u<1.0?0.60:0.42)),15,T.muted,'center','middle',true);
@@ -465,9 +526,14 @@ function setHint(kind){
   if(kind==='bulb') msg='物移动后：物距变为 '+num(u,2)+' m，像距同步变为 '+num(u,2)+' m，物像仍关于镜面对称。';
   else if(kind==='pos') msg='镜面平移：像随镜面一起移动，物距变为 '+num(u,2)+' m，像距仍等于物距。';
   else if(kind==='ang') msg='镜面转过 '+num(angDeg,0)+'°：像转到镜后等距处，物像连线仍与镜面垂直。';
-  else if(kind==='eye') msg='移动眼睛：只改变进入眼睛的光线，像的位置不变。';
-  else if(!canSee) msg='反射点落在镜片范围之外，眼睛在当前位置看不到 S 的像；换个位置，或把镜面放长一些即可看见。';
-  if(!canSee&&msg.indexOf('看不到')<0) msg+=' 反射点落在镜片之外，眼睛在当前位置看不到 S 的像。';
+  else if(kind==='eye') msg='移动眼睛：只改变视野的方向和进入眼睛的光线，像的位置不变。';
+  else if(!canSee){
+    if(seeWhy===1) msg='像落在视野范围之外，眼睛在当前位置看不到 S 的像；换个位置即可看见。';
+    else msg='反射点落在镜片范围之外，眼睛在当前位置看不到 S 的像；换个位置即可看见。';
+  }
+  if(!canSee&&msg.indexOf('看不到')<0){
+    msg+=seeWhy===1?' 像在当前视野之外，看不到 S 的像。':' 反射点落在镜片之外，眼睛在当前位置看不到 S 的像。';
+  }
   if(msg) hint.textContent=msg;
 }
 function refresh(kind){ upd(); draw(); setHint(kind); }
@@ -492,7 +558,7 @@ kNor.addEventListener('change',function(){refresh('view');});
 bReset.addEventListener('click',function(){
   bx=-2.4; by=0.5; ex=-4.6; ey=-1.1; mpos=1.2; angDeg=0;
   sPos.value='1.2'; sAng.value='0';
-  hint.textContent='拖动小灯泡改变物的位置，拖动眼睛改变观察位置；两个滑块分别移动和转动镜面。';
+  hint.textContent='拖动小灯泡改变物的位置，拖动眼睛改变观察位置；虚线扇形表示眼睛的视野。两个滑块分别移动和转动镜面。';
   refresh('view');
 });
 
