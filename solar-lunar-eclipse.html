@@ -449,7 +449,7 @@ function drawScene(T,ph){
   ctx.arc(-900,CY,930,-0.23,0.23);
   ctx.closePath(); ctx.fill();
   ctx.restore();
-  rtextBox(['太阳'],8,58,12,T.muted,'left','alphabetic');
+  rtextBox(['太阳'],4,52,12,T.muted,'left','alphabetic');
 
   var x0=-D_EM/2, x1=D_EM/2;
   var Rocc=MODE===0?R_M:R_E, Rtgt=MODE===0?R_E:R_M;
@@ -488,6 +488,10 @@ function drawScene(T,ph){
     }
     poly(topP.concat(botP.slice().reverse()),T.cone,null,0);
     poly(topU.concat(botU.slice().reverse()),T.umb,null,0);
+    if(MODE===1){
+      ellipseAt(xe,rPe,'rgba(70,82,104,0.10)',T.dim,1.2,[5,4]);
+      ellipseAt(xe,Math.abs(rUe),'rgba(12,16,24,0.30)',null,0);
+    }
     var mid=8;
     line(topP[mid][0],topP[mid][1],topP[mid+2][0],topP[mid+2][1],T.dim,1);
     line(botP[mid][0],botP[mid][1],botP[mid+2][0],botP[mid+2][1],T.dim,1);
@@ -495,14 +499,14 @@ function drawScene(T,ph){
   /* 天体（贴图球），远者先画 */
   var so=proj(x0,0,0), st=proj(x1,MODE===1?BODY*bNow():0,0);
   if(so[2]<st[2]){
-    drawSphere(so[0],so[1],ro,MODE===0?TEXM:TEXE,YAW*0.6);
-    drawSphere(st[0],st[1],rt,MODE===0?TEXE:TEXM,YAW*0.6+0.5);
+    drawSphere(so[0],so[1],ro,MODE===0?TEXM:TEXE,YAW*0.6,MODE===0?28:48);
+    drawSphere(st[0],st[1],rt,MODE===0?TEXE:TEXM,YAW*0.6+0.5,MODE===0?48:28);
   }else{
     drawSphere(st[0],st[1],rt,MODE===0?TEXE:TEXM,YAW*0.6+0.5);
     drawSphere(so[0],so[1],ro,MODE===0?TEXM:TEXE,YAW*0.6);
   }
   /* 影锥末端截面（贴在目标天体一侧） */
-  if(showCone){
+  if(showCone&&MODE===0){
     ctx.save();
     ctx.beginPath(); ctx.arc(st[0],st[1],rt+1,0,TAU); ctx.clip();
     ellipseAt(xe,rPe,'rgba(70,82,104,0.16)',T.dim,1.2,[5,4]);
@@ -531,19 +535,19 @@ function drawScene(T,ph){
     }
   }
   /* 文字层 */
-  rtext([MODE===0?'空间位置：太阳 → 月球 → 地球':'空间位置：太阳 → 地球 → 月球'],12,21,14,T.fg,'left','alphabetic');
-  rtext(['地月间距按真实距离；天体半径与影锥截面统一放大 20 倍（相对大小不变）'],12,40,11.5,T.muted,'left','alphabetic');
+  rtext([MODE===0?'空间位置：太阳 → 月球 → 地球':'空间位置：太阳 → 地球 → 月球'],30,21,14,T.fg,'left','alphabetic');
+  rtext(['地月间距按真实距离；天体半径与影锥截面统一放大 20 倍（相对大小不变）'],30,40,11.5,T.muted,'left','alphabetic');
   dot(66,60,4,'rgba(96,116,148,0.42)');
   rtextBox([MODE===0?'半影':'地球半影'],76,64,11.5,T.muted,'left','alphabetic');
   dot(66,78,4,'rgba(26,30,40,0.78)');
   rtextBox(['本影'+(ph.umb<0?'（伪本影 · 环食）':'')],76,82,11.5,T.fg,'left','alphabetic');
   dot(66,96,4,T.p3);
   rtextBox([MODE===0?'观测点 / 影轴偏离':'月心 / 影轴偏离'],76,100,11.5,T.muted,'left','alphabetic');
-  rtextBox(['离影轴 '+num(bNow(),0)+' km'],12,120,11.5,T.p3,'left','alphabetic');
+  rtextBox(['离影轴 '+num(bNow(),0)+' km'],30,120,11.5,T.p3,'left','alphabetic');
   rtextBox([MODE===0?'月球（遮挡）':'地球（遮挡）'],so[0],so[1]+ro+20,12,T.fg,'center','alphabetic');
   rtextBox([MODE===0?'地球':'月球'],st[0],clamp(st[1]+rt+20,248,288),12,T.fg,'center','alphabetic');
-  rtext(['太阳在左侧 1.496 亿 km 外，图中不按距离比例画出；光线取自太阳边缘'],12,307,11.5,T.muted,'left','alphabetic');
-  rtext(['影锥两端截面按真实半径计算，视直径与食相在右侧按真实角度呈现'],12,325,11.5,T.muted,'left','alphabetic');
+  rtext(['太阳在左侧 1.496 亿 km 外，图中不按距离比例画出；光线取自太阳边缘'],30,307,11.5,T.muted,'left','alphabetic');
+  rtext(['影锥两端截面按真实半径计算，视直径与食相在右侧按真实角度呈现'],30,325,11.5,T.muted,'left','alphabetic');
   HALO=T.bg;
 }
 
@@ -558,35 +562,27 @@ function drawView(T,ph){
   if(MODE===0){
     var rS=ph.aS*SANG, rM=ph.aM*SANG;
     var dx=Math.sign(bNow())*ph.del*SANG;
-    var k2;
+    var k2, isTotal=(ph.kind==='日全食');
     for(k2=5;k2>0;k2--){
-      ctx.fillStyle='rgba(240,196,120,'+(0.035*k2)+')';
+      ctx.fillStyle=isTotal?('rgba(226,234,255,'+(0.016*k2)+')'):('rgba(240,196,120,'+(0.035*k2)+')');
       ctx.beginPath(); ctx.arc(VX0,VY0,rS+k2*7,0,TAU); ctx.fill();
     }
-    ctx.fillStyle='#f6e7c2';
+    ctx.fillStyle=isTotal?'#f4ead0':'#f6e7c2';
     ctx.beginPath(); ctx.arc(VX0,VY0,rS,0,TAU); ctx.fill();
-    ctx.strokeStyle='rgba(190,140,70,0.55)'; ctx.lineWidth=1;
+    ctx.strokeStyle=isTotal?'rgba(220,226,240,0.35)':'rgba(190,140,70,0.55)'; ctx.lineWidth=1;
     ctx.beginPath(); ctx.arc(VX0,VY0,rS,0,TAU); ctx.stroke();
-    if(ph.kind==='日全食'){
-      for(k2=0;k2<28;k2++){
-        var th=TAU*k2/28, L1=rM+3+rnd(k2+7)*16;
+    if(isTotal){
+      for(k2=0;k2<32;k2++){
+        var th=TAU*k2/32, L1=rM+4+rnd(k2+7)*24;
         line(VX0+dx+Math.cos(th)*rM,VY0+Math.sin(th)*rM,
-             VX0+dx+Math.cos(th)*L1,VY0+Math.sin(th)*L1,'rgba(246,238,214,0.55)',1.1);
+             VX0+dx+Math.cos(th)*L1,VY0+Math.sin(th)*L1,'rgba(244,240,224,0.70)',1.2);
       }
     }
-    /* 月球剪影：贴图表采样成暗色圆面 */
+    /* 月球剪影：朝向地球的是夜面，不画月面细节 */
     var cm=texAt(TEXM,0,0);
-    ctx.fillStyle='rgb('+Math.round(cm[0]*0.20)+','+Math.round(cm[1]*0.21)+','+Math.round(cm[2]*0.24)+')';
+    ctx.fillStyle='rgb('+Math.round(cm[0]*0.17)+','+Math.round(cm[1]*0.18)+','+Math.round(cm[2]*0.21)+')';
     ctx.beginPath(); ctx.arc(VX0+dx,VY0,rM,0,TAU); ctx.fill();
-    for(k2=0;k2<16;k2++){
-      var ax=-40+rnd(k2*3.3+2)*80, ay=-30+rnd(k2*3.3+3)*60;
-      var rr=rM*0.13*Math.sqrt(Math.max(0,1-Math.pow(ax/50,2)-Math.pow(ay/40,2)));
-      if(rr>0.6){
-        ctx.strokeStyle='rgba(160,158,150,0.22)'; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.arc(VX0+dx+rM*ax/90,VY0+rM*ay/90,rr,0,TAU); ctx.stroke();
-      }
-    }
-    ctx.strokeStyle='rgba(20,22,28,0.85)'; ctx.lineWidth=1.2;
+    ctx.strokeStyle=isTotal?'rgba(226,232,246,0.30)':'rgba(20,22,28,0.85)'; ctx.lineWidth=1.2;
     ctx.beginPath(); ctx.arc(VX0+dx,VY0,rM,0,TAU); ctx.stroke();
   }else{
     var rp=ph.pen*SKM, ru=ph.umb*SKM, rm=R_M*SKM;
