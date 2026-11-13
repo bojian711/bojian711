@@ -543,7 +543,7 @@ function drawObject(T){
   drawBox(T,xw-CAP_W,xw+CAP_W,-CAP_H,0,-CAP_Z,CAP_Z);
   sliderBlock(xw,T);
   var a=P3(xw,0,0), b=P3(xw,OBJ_H,0);
-  var dx=a[0]-28;
+  var dx=a[0]-30;
   push(dep(xw,OBJ_H/2,0)+0.05,function(){
     /* 物高尺寸线：两端短横帽，标签由 drawText 统一排版 */
     line(dx,a[1],dx,b[1],T.muted,1.1);
@@ -697,8 +697,8 @@ function drawText(T){
   if(MODE==='point'){
     var pObj=P3(-G.u,OBJ_H,0);
     lab3([VR('P')],pObj[0]-10,pObj[1]-20,14,T.p1,'right');
-    var d0=P3(-G.u,0,0), d1=pObj, dmx=d0[0]-28;
-    label([VR('h')],dmx+11,(d0[1]+d1[1])/2-7,13.5,T.muted,'left');
+    var d0=P3(-G.u,0,0), d1=pObj, dmx=d0[0]-30;
+    label([VR('h')],dmx-18,(d0[1]+d1[1])/2-7,13.5,T.muted,'right');
     if(G.showImg){
       var st=P3(G.v,RAILY+SCR_H,0);
       lab3([CN('光屏')],st[0],st[1]-26,13.5,T.muted,'center');
