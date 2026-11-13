@@ -119,13 +119,13 @@
         }
 
         /* 二级分类小节 */
-        .cat-section { margin-bottom: 30px; scroll-margin-top: 24px; }
+        .cat-section { margin-bottom: 26px; scroll-margin-top: 24px; }
         .cat-section:last-child { margin-bottom: 0; }
         .cat-head {
             display: flex;
             align-items: baseline;
             gap: 10px;
-            margin: 0 0 14px;
+            margin: 0 0 6px;
             padding-bottom: 8px;
             border-bottom: 1px dashed var(--line);
         }
@@ -133,28 +133,38 @@
         .cat-num { font-size: 12.5px; color: var(--muted); }
         .cat-empty { color: #9aa0a8; font-size: 14px; margin: 0; }
 
-        .project-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-        .project-card {
-            background: rgba(255, 255, 255, 0.72);
-            border: 1px solid #eceef2;
-            border-radius: 18px;
-            padding: 18px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.032);
-            min-height: 150px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            transition: transform 0.16s ease, box-shadow 0.16s ease;
+        /* 演示列表 */
+        .demo-list { list-style: none; margin: 0; padding: 0; }
+        .demo-list li {
+            padding: 7px 4px 7px 14px;
+            border-bottom: 1px solid #f0f1f4;
+            position: relative;
+            line-height: 1.5;
         }
-        .project-card:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.06); }
-        .project-title { font-size: 17px; font-weight: 720; letter-spacing: -0.012em; margin-bottom: 6px; }
-        .project-title a { color: var(--text); text-decoration: none; transition: color 0.12s ease; }
-        .project-title a:hover { color: var(--link); }
-        .project-desc { color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+        .demo-list li:last-child { border-bottom: none; }
+        .demo-list li::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 15px;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #c7ccd4;
+        }
+        .demo-list a {
+            font-size: 15.5px;
+            font-weight: 650;
+            letter-spacing: -0.008em;
+            color: var(--text);
+            text-decoration: none;
+            transition: color 0.12s ease;
+        }
+        .demo-list a:hover { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+        .demo-list .en-name { color: #8a8f98; font-size: 12.5px; margin-left: 8px; white-space: nowrap; }
+        .demo-list .desc { color: var(--muted); font-size: 13.8px; margin-left: 8px; }
 
         /* 双语排版 */
-        .title-en { display: block; font-size: 12.8px; font-weight: 500; letter-spacing: 0; color: #8a8f98; margin-top: 2px; }
-        .desc-en { color: #9aa0a8; font-size: 12.6px; line-height: 1.5; margin-top: 5px; }
         .en-sub { font-size: 0.68em; font-weight: 500; letter-spacing: 0; color: var(--muted); margin-left: 8px; }
         .en-block { display: block; margin-top: 3px; font-size: 0.9em; color: var(--muted); }
 
@@ -164,11 +174,7 @@
 
         @media (prefers-reduced-motion: reduce) {
             html { scroll-behavior: auto; }
-            .pill-link, .project-card, .cat-chip { transition: none; }
-        }
-        @media (max-width: 900px) {
-            .project-grid { grid-template-columns: 1fr 1fr; }
-            .project-card { min-height: auto; }
+            .pill-link, .cat-chip { transition: none; }
         }
         @media (max-width: 820px) {
             .container { padding: 24px 14px 36px; }
@@ -178,7 +184,7 @@
         @media (max-width: 560px) {
             h1 { font-size: 34px; }
             h2 { font-size: 23px; }
-            .project-grid { grid-template-columns: 1fr; }
+            .demo-list .en-name { display: none; }
             .pill-link { font-size: 14px; padding: 5px 11px; }
         }
     </style>
@@ -211,11 +217,12 @@
             <div class="cat-nav">
                 <a class="cat-chip" href="#cat-apparatus">实验器材<span class="en-sub">Apparatus</span> <span class="count">4</span></a>
                 <a class="cat-chip" href="#cat-math">数学知识<span class="en-sub">Maths</span> <span class="count">3</span></a>
-                <a class="cat-chip" href="#cat-mechanics">力学模拟<span class="en-sub">Mechanics</span> <span class="count">15</span></a>
-                <a class="cat-chip" href="#cat-EM">电磁学模拟<span class="en-sub">E&M</span> <span class="count">3</span></a>
-                <a class="cat-chip" href="#cat-optics">光学模拟<span class="en-sub">Optics</span> <span class="count">3</span></a>
-                <a class="cat-chip" href="#cat-thermal">热学模拟<span class="en-sub">Thermal</span> <span class="count">0</span></a>
-                <a class="cat-chip" href="#cat-modern">近代物理模拟<span class="en-sub">Modern</span> <span class="count">0</span></a>
+                <a class="cat-chip" href="#cat-acoustics">声学模拟<span class="en-sub">Acoustics</span> <span class="count">4</span></a>
+                <a class="cat-chip" href="#cat-mechanics">力学模拟<span class="en-sub">Mechanics</span> <span class="count">22</span></a>
+                <a class="cat-chip" href="#cat-thermal">热学模拟<span class="en-sub">Thermal</span> <span class="count">2</span></a>
+                <a class="cat-chip" href="#cat-EM">电磁学模拟<span class="en-sub">E&M</span> <span class="count">4</span></a>
+                <a class="cat-chip" href="#cat-optics">光学模拟<span class="en-sub">Optics</span> <span class="count">8</span></a>
+                <a class="cat-chip" href="#cat-modern">近代物理模拟<span class="en-sub">Modern</span> <span class="count">1</span></a>
             </div>
 
             <div class="cat-section" id="cat-apparatus">
@@ -223,32 +230,12 @@
                     <span class="cat-title">实验器材<span class="en-sub">Laboratory Apparatus</span></span>
                     <span class="cat-num">共 4 项 · 4 items</span>
                 </div>
-                <div class="project-grid">
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./vernier-caliper.html">游标卡尺读数</a><span class="title-en">Vernier Caliper Reading</span></div>
-                            <div class="project-desc">拖动游标，练习主尺与游标读数</div><div class="desc-en">Drag the vernier slider and practise reading the main scale and the vernier scale.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./micrometer-reading.html">螺旋测微器读数</a><span class="title-en">Micrometer Reading</span></div>
-                            <div class="project-desc">旋转微分筒，练习螺旋测微器读数</div><div class="desc-en">Turn the thimble and practise taking a reading from a micrometer screw gauge.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./optical-lever.html">光的反射放大：桌面微小形变</a><span class="title-en">Optical Lever: Micro-Deformation of a Tabletop</span></div>
-                            <div class="project-desc">调桌面下沉量、支架脚距与镜到墙距离，看极小倾角被长光路拉长成墙上光斑的可见位移</div><div class="desc-en">Set the tabletop sag, the support spacing and the mirror-to-wall distance; see a tiny tilt stretched by a long light path into a visible shift of the laser spot.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./balance-weighing.html">托盘天平的使用</a><span class="title-en">Using a Beam Balance</span></div>
-                            <div class="project-desc">待测物体质量随机给出，先调平衡螺母使空盘平衡，再放上物体、取放砝码、移动游码读数；另可切换左码右物、游码未归零调平两种反常操作</div><div class="desc-en">The mass of the object is set at random. Level the empty balance with the adjusting nuts, then place the object, add or remove weights and move the rider to read the result. Two faulty procedures are included: swapping the pans and levelling with the rider off zero.</div>
-                        </div>
-                    </div>
-                </div>
+                <ul class="demo-list">
+                    <li><a href="./vernier-caliper.html">游标卡尺读数</a><span class="en-name">Vernier Caliper Reading</span><span class="desc">拖动游标，练习主尺与游标读数</span></li>
+                    <li><a href="./micrometer-reading.html">螺旋测微器读数</a><span class="en-name">Micrometer Reading</span><span class="desc">旋转微分筒，练习螺旋测微器读数</span></li>
+                    <li><a href="./optical-lever.html">光的反射放大：桌面微小形变</a><span class="en-name">Optical Lever</span><span class="desc">调桌面下沉量、支架脚距与镜到墙距离，看极小倾角被长光路拉长成墙上光斑的可见位移</span></li>
+                    <li><a href="./balance-weighing.html">托盘天平的使用</a><span class="en-name">Using a Beam Balance</span><span class="desc">调平、称量、读数完整流程，另可切换左码右物、游码未归零调平两种反常操作</span></li>
+                </ul>
             </div>
 
             <div class="cat-section" id="cat-math">
@@ -256,207 +243,114 @@
                     <span class="cat-title">数学知识<span class="en-sub">Mathematical Tools</span></span>
                     <span class="cat-num">共 3 项 · 3 items</span>
                 </div>
-                <div class="project-grid">
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./sine-graph.html">正弦型函数</a><span class="title-en">Sinusoidal Functions</span></div>
-                            <div class="project-desc">调节参数，观察正弦型函数图像变化</div><div class="desc-en">Adjust A, ω and φ, and watch how the graph of a sinusoidal function changes.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./vector-addition.html">平面矢量的加法</a><span class="title-en">Addition of Plane Vectors</span></div>
-                            <div class="project-desc">拖出任意多个矢量，按平行四边形或三角形法则分步求和</div><div class="desc-en">Pull out any number of vectors and add them step by step by the parallelogram or triangle rule.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./vector-scaling.html">平面矢量的倍乘</a><span class="title-en">Scalar Multiplication of Vectors</span></div>
-                            <div class="project-desc">在网格上拖出矢量，输入系数观察倍乘结果</div><div class="desc-en">Draw a vector on the grid, enter a scalar, and look at the scaled vector.</div>
-                        </div>
-                    </div>
+                <ul class="demo-list">
+                    <li><a href="./sine-graph.html">正弦型函数</a><span class="en-name">Sinusoidal Functions</span><span class="desc">调节参数，观察正弦型函数图像变化</span></li>
+                    <li><a href="./vector-addition.html">平面矢量的加法</a><span class="en-name">Addition of Plane Vectors</span><span class="desc">拖出任意多个矢量，按平行四边形或三角形法则分步求和</span></li>
+                    <li><a href="./vector-scaling.html">平面矢量的倍乘</a><span class="en-name">Scalar Multiplication of Vectors</span><span class="desc">在网格上拖出矢量，输入系数观察倍乘结果</span></li>
+                </ul>
+            </div>
+
+            <div class="cat-section" id="cat-acoustics">
+                <div class="cat-head">
+                    <span class="cat-title">声学模拟<span class="en-sub">Acoustics Simulations</span></span>
+                    <span class="cat-num">共 4 项 · 4 items</span>
                 </div>
+                <ul class="demo-list">
+                    <li><a href="./bottle-music.html">水瓶琴：吹与敲</a><span class="en-name">Bottle Xylophone</span><span class="desc">同一排瓶子，吹瓶口与敲瓶壁的音调顺序相反</span></li>
+                    <li><a href="./pitch-loudness-timbre.html">音调、响度与音色</a><span class="en-name">Pitch, Loudness and Timbre</span><span class="desc">波形与声音模拟，改变频率、振幅与波形听差别</span></li>
+                    <li><a href="./echo-reverb.html">回声与混响</a><span class="en-name">Echo and Reverberation</span><span class="desc">改变墙距，听回声到达的早晚，τ = 2d/v</span></li>
+                    <li><a href="./sound-light-speed.html">声波与光波的传播时间</a><span class="en-name">Travel Time of Sound and Light</span><span class="desc">同一距离，光几乎即刻到达，声音要走 t = d/v</span></li>
+                </ul>
             </div>
 
             <div class="cat-section" id="cat-mechanics">
                 <div class="cat-head">
                     <span class="cat-title">力学模拟<span class="en-sub">Mechanics Simulations</span></span>
-                    <span class="cat-num">共 15 项 · 15 items</span>
+                    <span class="cat-num">共 22 项 · 22 items</span>
                 </div>
-                <div class="project-grid">
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./line-pursuit.html">同一直线上的相遇与追及</a><span class="title-en">Meeting and Pursuit on a Straight Line</span></div>
-                            <div class="project-desc">调节初速度与加速度，可选减速到零后静止或反向加速，按钮切换地面参考系与以 1 号为参考系，观察追及、相遇与 v-t 图</div><div class="desc-en">Set initial velocities and accelerations; each object either stops at rest or reverses after slowing to zero; switch between the ground frame and the frame of No. 1; follow the pursuit, the meetings and the v–t graphs.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./reference-frame-drop.html">飞机投球与参考系</a><span class="title-en">Dropping a Ball from a Plane: Reference Frames</span></div>
-                            <div class="project-desc">水平飞行的飞机每隔 T 相对自身静止释放一小球，一键切换地面参考系与飞机参考系：单球轨迹随参考系改变，各球之间的相对运动不变</div><div class="desc-en">A plane in level flight releases a ball from rest relative to itself every T seconds. Switch between the ground frame and the plane frame with one click: a single ball’s trajectory depends on the frame, while the relative motion of the balls does not.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./oblique-projectile.html">斜抛运动</a><span class="title-en">Oblique Projectile Motion</span></div>
-                            <div class="project-desc">调节抛出高度、初速度大小与方向角，观察轨迹、位移与速度的斜交分解三角形、射程与包络线</div><div class="desc-en">Set launch height, initial speed and direction angle; view the trajectory, the oblique decomposition triangles of displacement and velocity, the range and the envelope.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./block-on-plank.html">板块模型</a><span class="title-en">Block-on-Plank Model</span></div>
-                            <div class="project-desc">木块—木板 v-t 图象，观察相对滑动与共速过程</div><div class="desc-en">v–t graphs for block and plank: watch relative sliding and how they reach a common speed.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./ball-groove-motion.html">小球与光滑球槽</a><span class="title-en">Ball in a Smooth Spherical Groove</span></div>
-                            <div class="project-desc">小球在光滑球槽内的运动演示</div><div class="desc-en">A demonstration of a ball moving inside a smooth spherical groove.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./spring-oscillator.html">水平弹簧振子</a><span class="title-en">Horizontal Spring Oscillator</span></div>
-                            <div class="project-desc">x-t、v-t、a-t 三图对比，观察简谐振动的相位关系</div><div class="desc-en">Compare the x–t, v–t and a–t graphs and read off the phase relations of simple harmonic motion.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./two-mass-spring.html">弹簧双振子</a><span class="title-en">Two Masses Coupled by a Spring</span></div>
-                            <div class="project-desc">弹簧连接的双振子 v-t 图像演示</div><div class="desc-en">v–t graphs for two oscillators coupled by a spring.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./sand-pendulum.html">沙摆描绘振动图像</a><span class="title-en">Sand Pendulum Tracing the Oscillation Graph</span></div>
-                            <div class="project-desc">沙摆运动，描出简谐振动图像</div><div class="desc-en">A sand pendulum traces out the graph of simple harmonic motion.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./wave-superposition.html">波的叠加演示</a><span class="title-en">Superposition of Waves</span></div>
-                            <div class="project-desc">观察两列波叠加时的干涉加强与减弱</div><div class="desc-en">Watch constructive and destructive interference as two waves superpose.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./conveyor-belt.html">传送带模型</a><span class="title-en">Conveyor Belt Model</span></div>
-                            <div class="project-desc">调带速、初速、摩擦因数、带长与倾角，物块可选摆在带的最下方或最上方，看分段匀变速与 v-t 图；离开带端后按抛体运动落向地面，给出落地时间与水平位移</div><div class="desc-en">Set belt speed, initial speed, friction coefficient, belt length and inclination; place the block at the lower or the upper end; follow the piecewise acceleration and the v–t graph. Leaving the belt end, it falls as a projectile — the landing time and horizontal displacement are given.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./vertical-spring-oscillator.html">竖直弹簧振子</a><span class="title-en">Vertical Spring Oscillator</span></div>
-                            <div class="project-desc">调质量、劲度系数与轴向恒力 F/mg，振球先静止在平衡位置，可选①给初速度或②拖球设定释放点后启动；标出平衡位置与最高/最低点，给出形变量 x、位移 y、振幅、周期，以及势能–位移图上的动能与势能分配</div><div class="desc-en">Set the mass, the spring constant and an axial constant force F/mg; the bob first rests at the equilibrium position, then either ① an initial velocity is given or ② the bob is dragged to set the release point. Equilibrium, highest and lowest positions are marked, together with deformation x, displacement y, amplitude and period, and the split of kinetic and potential energy on the energy–displacement graph.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./clothesline-equilibrium.html">晾衣绳模型</a><span class="title-en">Clothesline Equilibrium</span></div>
-                            <div class="project-desc">输入墙距、绳长、衣物质量与额外恒力的大小和方向，拖动两侧悬点；给出绳的位形与张力，并在结点处画出 T、mg、F 及合力的共点力系</div><div class="desc-en">Enter the wall distance, rope length, the mass of the laundry and the magnitude and direction of an extra force, then drag the two suspension points. The rope shape and tension are given, and T, mg, F with their resultant are drawn as a concurrent force system at the knot.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./boat-crossing.html">小船过河</a><span class="title-en">Boat Crossing a River</span></div>
-                            <div class="project-desc">调河宽、水速与船速，在速度图中拖动 v合 端点改变船头方向；俯视图给出航迹与下游漂移，速度图给出速度圆与最短时间/最短位移方向，对比船速大于、等于、小于水速三种情形</div><div class="desc-en">Set river width, current speed and boat speed, and drag the tip of the resultant velocity to change the heading. The top view gives the path and the downstream drift; the velocity diagram gives the velocity circle together with the shortest-time and shortest-displacement directions. Compare boat speed greater than, equal to, and less than the current.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./force-decomposition.html">力的分解</a><span class="title-en">Decomposition of a Force</span></div>
-                            <div class="project-desc">拖动设定合力的大小与方向，选择已知条件，用矢量圆作图法分步推出分力——交点个数就是解的个数</div><div class="desc-en">Drag to set the magnitude and direction of the resultant force, choose the given conditions, and derive the components step by step with the vector-circle construction — the number of intersection points is the number of solutions.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./circular-track.html">光滑圆轨道上的小球</a><span class="title-en">Ball on a Smooth Circular Track</span></div>
-                            <div class="project-desc">指定轨道半径、初速与上下端位置，可选单侧或双侧约束、重力场或等效力场；给出运动轨迹与 v-θ 图，对最大速率点、最小速率点与脱离点作逐步的详细计算，脱离后沿切线做抛体运动</div><div class="desc-en">Specify the radius, the initial speed and the lower and upper ends of the track; choose a single-sided or double-sided constraint and either a gravity field or an equivalent field. The trajectory and the v–θ graph are drawn, with step-by-step calculations for the maximum-speed point, the minimum-speed point and the detachment point; after detaching the ball follows projectile motion along the tangent.</div>
-                        </div>
-                    </div>
-            </div>
-
-            <div class="cat-section" id="cat-EM">
-                <div class="cat-head">
-                    <span class="cat-title">电磁学模拟<span class="en-sub">Electromagnetism Simulations</span></span>
-                    <span class="cat-num">共 3 项 · 3 items</span>
-                </div>
-                <div class="project-grid">
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./electric-field-superposition.html">电场强度的叠加</a><span class="title-en">Superposition of Electric Field</span></div>
-                            <div class="project-desc">两个场源电荷对称置于 x 轴两侧，任取场点 P，按平行四边形定则分步合成 E₁、E₂；可拉网点出矢量场、画电场线、画等势面</div><div class="desc-en">Two source charges sit symmetrically on either side of the x-axis. Pick any field point P and combine E₁ and E₂ step by step by the parallelogram rule; plot the vector field, draw field lines and equipotential surfaces.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./charged-particle-bfield.html">带电粒子在有界磁场中的圆周运动</a><span class="title-en">Charged Particle in a Bounded Magnetic Field</span></div>
-                            <div class="project-desc">调节磁场与粒子参数，观察圆周运动的半径、周期与出射方向</div><div class="desc-en">Adjust the magnetic field and the particle parameters; observe the radius, the period and the exit direction of the circular motion.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./potential-to-field.html">由三点电势求匀强电场</a><span class="title-en">Finding a Uniform Field from Three Potentials</span></div>
-                            <div class="project-desc">在匀强场区任取三点，按电势差与距离求两个分场，再作垂线交点定出总场矢量，最后用圆内接四边形算出场强大小</div><div class="desc-en">Take any three points in a uniform field region, obtain two component fields from the potential differences and distances, locate the total field vector at the intersection of perpendiculars, and finally read off the field strength from a cyclic quadrilateral.</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="cat-section" id="cat-optics">
-                <div class="cat-head">
-                    <span class="cat-title">光学模拟<span class="en-sub">Optics Simulations</span></span>
-                    <span class="cat-num">共 3 项 · 3 items</span>
-                </div>
-                <div class="project-grid">
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./light-refraction.html">光的折射与全反射</a><span class="title-en">Refraction and Total Internal Reflection</span></div>
-                            <div class="project-desc">改变入射角，观察折射与全反射</div><div class="desc-en">Change the angle of incidence and watch refraction and total internal reflection.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./double-slit.html">杨氏双缝干涉</a><span class="title-en">Young's Double-Slit Interference</span></div>
-                            <div class="project-desc">立体视角调节缝间距、缝屏距离与光的频率，观察屏上条纹疏密与颜色</div><div class="desc-en">In a three-dimensional view, adjust the slit separation, the slit-to-screen distance and the light frequency, and look at the fringe spacing and colour on the screen.</div>
-                        </div>
-                    </div>
-                    <div class="project-card">
-                        <div>
-                            <div class="project-title"><a href="./single-slit-diffraction.html">单缝与圆孔衍射</a><span class="title-en">Single-Slit and Circular-Aperture Diffraction</span></div>
-                            <div class="project-desc">立体视角观察单缝与圆孔衍射的图样变化</div><div class="desc-en">A three-dimensional view of how the diffraction patterns of a single slit and a circular aperture change.</div>
-                        </div>
-                    </div>
-                </div>
+                <ul class="demo-list">
+                    <li><a href="./line-pursuit.html">同一直线上的相遇与追及</a><span class="en-name">Meeting and Pursuit</span><span class="desc">调节初速度与加速度，切换地面参考系与以 1 号为参考系，观察追及、相遇与 v-t 图</span></li>
+                    <li><a href="./reference-frame-drop.html">飞机投球与参考系</a><span class="en-name">Reference Frames</span><span class="desc">一键切换地面参考系与飞机参考系：单球轨迹随参考系改变，各球之间的相对运动不变</span></li>
+                    <li><a href="./oblique-projectile.html">斜抛运动</a><span class="en-name">Oblique Projectile Motion</span><span class="desc">调节抛出高度、初速度大小与方向角，观察轨迹、斜交分解三角形、射程与包络线</span></li>
+                    <li><a href="./block-on-plank.html">板块模型</a><span class="en-name">Block-on-Plank Model</span><span class="desc">木块—木板 v-t 图象，观察相对滑动与共速过程</span></li>
+                    <li><a href="./ball-groove-motion.html">小球与光滑球槽</a><span class="en-name">Ball in a Smooth Groove</span><span class="desc">小球在光滑球槽内的运动演示</span></li>
+                    <li><a href="./spring-oscillator.html">水平弹簧振子</a><span class="en-name">Horizontal Spring Oscillator</span><span class="desc">x-t、v-t、a-t 三图对比，观察简谐振动的相位关系</span></li>
+                    <li><a href="./two-mass-spring.html">弹簧双振子</a><span class="en-name">Two Coupled Oscillators</span><span class="desc">弹簧连接的双振子 v-t 图像演示</span></li>
+                    <li><a href="./sand-pendulum.html">沙摆描绘振动图像</a><span class="en-name">Sand Pendulum</span><span class="desc">沙摆运动，描出简谐振动图像</span></li>
+                    <li><a href="./wave-superposition.html">波的叠加演示</a><span class="en-name">Superposition of Waves</span><span class="desc">观察两列波叠加时的干涉加强与减弱</span></li>
+                    <li><a href="./conveyor-belt.html">传送带模型</a><span class="en-name">Conveyor Belt Model</span><span class="desc">调带速、初速、摩擦因数、带长与倾角，看分段匀变速与 v-t 图，离开带端后按抛体运动落地</span></li>
+                    <li><a href="./vertical-spring-oscillator.html">竖直弹簧振子</a><span class="en-name">Vertical Spring Oscillator</span><span class="desc">调质量、劲度系数与轴向恒力，标出平衡位置与振幅，给出势能–位移图上的能量分配</span></li>
+                    <li><a href="./clothesline-equilibrium.html">晾衣绳模型</a><span class="en-name">Clothesline Equilibrium</span><span class="desc">拖动两侧悬点，给出绳的位形与张力，画出结点处的共点力系</span></li>
+                    <li><a href="./boat-crossing.html">小船过河</a><span class="en-name">Boat Crossing a River</span><span class="desc">调河宽、水速与船速，对比最短时间与最短位移两种航向，及船速大于、等于、小于水速三种情形</span></li>
+                    <li><a href="./force-decomposition.html">力的分解</a><span class="en-name">Decomposition of a Force</span><span class="desc">用矢量圆作图法分步推出分力，交点个数就是解的个数</span></li>
+                    <li><a href="./circular-track.html">光滑圆轨道上的小球</a><span class="en-name">Ball on a Circular Track</span><span class="desc">可选单侧或双侧约束、重力场或等效力场，逐步计算最大速率点、最小速率点与脱离点</span></li>
+                    <li><a href="./board-ball-dynamic.html">球靠墙与斜板的动态平衡</a><span class="en-name">Ball, Wall and Tilting Board</span><span class="desc">木板绕底端缓慢转动，α 增大时墙与板的支持力都减小</span></li>
+                    <li><a href="./wedge-ball-dynamic.html">球被绳拉住停在斜面上</a><span class="en-name">Ball Held on an Incline</span><span class="desc">改变绳的方向，斜面支持力一直增大，绳的拉力先减小后增大</span></li>
+                    <li><a href="./two-plates-circle.html">两板夹球绕 O 转动</a><span class="en-name">Ball Between Two Plates</span><span class="desc">两板夹角恒为 60°，装置转动时一个力一直增大，另一个先增后减</span></li>
+                    <li><a href="./rod-string-triangle.html">杆 OB 抬起时的力三角形</a><span class="en-name">Force Triangle of a Rising Rod</span><span class="desc">杆绕 O 缓慢抬起，α 减小时绳拉力减小、杆的支持力不变</span></li>
+                    <li><a href="./ship-waterline.html">轮船吃水线</a><span class="en-name">Waterline of a Ship</span><span class="desc">装货卸货、海水换淡水，漂浮时浮力等于总重力，看吃水线怎么变</span></li>
+                    <li><a href="./hydrometer-scale.html">密度计的刻度为什么不均匀</a><span class="en-name">Why Hydrometer Scales Are Uneven</span><span class="desc">拖动液体密度看密度计浮沉，浮力不随密度改变；放大的杆身刻度下密上疏，附均匀刻度的错误标法对照</span></li>
+                    <li><a href="./heart-pumping-cycle.html">心脏的泵血过程</a><span class="en-name">The Heart's Pumping Cycle</span><span class="desc">心房心室交替收缩舒张，瓣膜单向开闭，看血压怎么推动血液单向流动</span></li>
+                </ul>
             </div>
 
             <div class="cat-section" id="cat-thermal">
                 <div class="cat-head">
                     <span class="cat-title">热学模拟<span class="en-sub">Thermal Physics Simulations</span></span>
-                    <span class="cat-num">共 0 项 · 0 items</span>
+                    <span class="cat-num">共 2 项 · 2 items</span>
                 </div>
-                <p class="cat-empty">暂无演示，持续更新中。<span class="en-block">No demos yet - more coming.</span></p>
+                <ul class="demo-list">
+                    <li><a href="./gasoline-engine-strokes.html">汽油机的四个冲程</a><span class="en-name">Four Strokes of a Gasoline Engine</span><span class="desc">火花塞点火，曲轴转两周完成一个工作循环</span></li>
+                    <li><a href="./diesel-engine-strokes.html">柴油机的四个冲程</a><span class="en-name">Four Strokes of a Diesel Engine</span><span class="desc">压燃点火，曲轴转两周完成一个工作循环</span></li>
+                </ul>
+            </div>
+
+            <div class="cat-section" id="cat-EM">
+                <div class="cat-head">
+                    <span class="cat-title">电磁学模拟<span class="en-sub">Electromagnetism Simulations</span></span>
+                    <span class="cat-num">共 4 项 · 4 items</span>
+                </div>
+                <ul class="demo-list">
+                    <li><a href="./electric-field-superposition.html">电场强度的叠加</a><span class="en-name">Superposition of Electric Field</span><span class="desc">两个场源电荷对称放置，任取场点按平行四边形定则合成；可拉网点出矢量场、画电场线与等势面</span></li>
+                    <li><a href="./charged-particle-bfield.html">带电粒子在有界磁场中的圆周运动</a><span class="en-name">Charged Particle in a B-Field</span><span class="desc">调节磁场与粒子参数，观察圆周运动的半径、周期与出射方向</span></li>
+                    <li><a href="./potential-to-field.html">由三点电势求匀强电场</a><span class="en-name">Field from Three Potentials</span><span class="desc">由电势差与距离求两个分场，作垂线交点定出总场矢量，用圆内接四边形算出场强大小</span></li>
+                    <li><a href="./em-spectrum.html">电磁波谱</a><span class="en-name">The Electromagnetic Spectrum</span><span class="desc">拖动滑块改频率，波长、波段与用途跟着变，调到台位自动播报</span></li>
+                </ul>
+            </div>
+
+            <div class="cat-section" id="cat-optics">
+                <div class="cat-head">
+                    <span class="cat-title">光学模拟<span class="en-sub">Optics Simulations</span></span>
+                    <span class="cat-num">共 8 项 · 8 items</span>
+                </div>
+                <ul class="demo-list">
+                    <li><a href="./light-refraction.html">光的折射与全反射</a><span class="en-name">Refraction and Total Internal Reflection</span><span class="desc">改变入射角，观察折射与全反射</span></li>
+                    <li><a href="./plane-mirror-imaging.html">平面镜成像</a><span class="en-name">Plane Mirror Imaging</span><span class="desc">动态光路图，像与物关于镜面对称</span></li>
+                    <li><a href="./refraction-sight.html">岸上的人与水中的鱼</a><span class="en-name">Seeing Through Water</span><span class="desc">折射观察光路，看视深与实深的差别</span></li>
+                    <li><a href="./convex-lens-imaging.html">凸透镜成像</a><span class="en-name">Convex Lens Imaging</span><span class="desc">光具座三维模拟，拖蜡烛看像的位置、大小与虚实</span></li>
+                    <li><a href="./double-slit.html">杨氏双缝干涉</a><span class="en-name">Young's Double-Slit Interference</span><span class="desc">立体视角调节缝间距、缝屏距离与光的频率，观察屏上条纹疏密与颜色</span></li>
+                    <li><a href="./single-slit-diffraction.html">单缝与圆孔衍射</a><span class="en-name">Single-Slit and Circular-Aperture Diffraction</span><span class="desc">立体视角观察单缝与圆孔衍射的图样变化</span></li>
+                    <li><a href="./grating-diffraction.html">光栅衍射动态模拟</a><span class="en-name">Grating Diffraction</span><span class="desc">调缝宽、缝数与波长，看主极强的位置与锐度</span></li>
+                    <li><a href="./solar-lunar-eclipse.html">日食与月食的三维几何</a><span class="en-name">Geometry of Eclipses</span><span class="desc">三维视角看本影、半影与日食、月食的形成</span></li>
+                </ul>
             </div>
 
             <div class="cat-section" id="cat-modern">
                 <div class="cat-head">
                     <span class="cat-title">近代物理模拟<span class="en-sub">Modern Physics Simulations</span></span>
-                    <span class="cat-num">共 0 项 · 0 items</span>
+                    <span class="cat-num">共 1 项 · 1 item</span>
                 </div>
-                <p class="cat-empty">暂无演示，持续更新中。<span class="en-block">No demos yet - more coming.</span></p>
+                <ul class="demo-list">
+                    <li><a href="./nuclear-reactor.html">核裂变反应堆动态模拟</a><span class="en-name">Nuclear Fission Reactor</span><span class="desc">中子引发链式反应，看控制棒与慢化剂怎么控制反应快慢</span></li>
+                </ul>
             </div>
         </section>
 
         <section class="card" id="english">
             <h2>英语<span class="en-sub">English</span></h2>
-            <div class="project-grid">
-                <div class="project-card">
-                    <div>
-                        <div class="project-title"><a href="./sentence-builder.html">词块造句训练</a><span class="title-en">Chunk-Based Sentence Building</span></div>
-                        <div class="project-desc">初中英语词块组合造句训练</div><div class="desc-en">Sentence-building practice with junior-high English lexical chunks.</div>
-                    </div>
-                </div>
-            </div>
+            <ul class="demo-list">
+                <li><a href="./sentence-builder.html">词块造句训练</a><span class="en-name">Chunk-Based Sentence Building</span><span class="desc">初中英语词块组合造句训练</span></li>
+            </ul>
         </section>
     </main>
 
