@@ -28,7 +28,7 @@ body{background:var(--bg);color:var(--fg);border:none;
 .n{font-family:KaTeX_Main,Georgia,serif}
 .wrap{width:100%;max-width:1000px;margin:0 auto;padding:4px 8px 10px;
   font-size:clamp(12.5px,2.6vw,14.5px)}
-canvas{display:block;width:100%;height:auto;touch-action:none}
+canvas{display:block;width:100%;height:auto;touch-action:none;cursor:grab}
 .head{padding:2px 4px 5px;display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline}
 .head .ttl{font-weight:600;letter-spacing:.2px}
 .head .fx{margin-left:auto;color:var(--muted);white-space:nowrap}
@@ -46,6 +46,7 @@ button:disabled{opacity:.45;cursor:default}
 .ctl .unit{font-family:KaTeX_Main,Georgia,serif;color:var(--muted)}
 input[type=range]{flex:1 1 60px;min-width:44px;max-width:230px;accent-color:var(--p2)}
 .ctl.dis{opacity:.42}
+.vstat{color:var(--muted);font-size:12.5px;white-space:nowrap}
 .readout{display:flex;flex-wrap:wrap;gap:2px 20px;margin-top:7px;line-height:1.65}
 .readout.sm{color:var(--muted);font-size:12.5px;gap:2px 14px}
 .rule{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);line-height:1.65}
@@ -79,6 +80,8 @@ input[type=range]{flex:1 1 60px;min-width:44px;max-width:230px;accent-color:var(
       </div>
       <button id='bPlay' class='on'>开始</button>
       <button id='bReset'>复位</button>
+      <button id='bView'>复位视角</button>
+      <span class='vstat' id='oView'>方位 −18° · 仰角 16°</span>
     </div>
     <div class='grid'>
       <div class='ctl' id='cF'>
@@ -122,18 +125,77 @@ function $(id){return D.getElementById(id);}
 var cv=$('cv'), ctx=cv.getContext('2d');
 
 /* ===== 固定标尺：px/cm 恒定，参数改变的是位置而非缩放 ===== */
-var LW=1000, LH=450;
+var LW=1000, LH=500;
 var AX=496, AY=198;                  /* 光心 O 的屏幕位置 */
 var PX=8.0, PY=8.0;                  /* x、y 每厘米像素，等比保证光线角度不失真 */
-var QX=2.9, QY=-2.2;                 /* z 轴斜二测投影（每厘米像素） */
 var XMIN=-52, XMAX=52;               /* 光具座显示范围 cm */
-var RAILY=-15.5, RAILH=2.6, RAILW=7.5;
-var LENS_R=11.5, BEAM_R=8, OBJ_H=9;
-var SCR_H=25, SCR_W=7;
+var RAILY=-19, RAILH=2.6, RAILW=7.5;
+var RAIL_T=2.6;                      /* 单根导轨在 z 方向的厚度 */
+var GAP=RAILW-RAIL_T;                /* 中空区半宽 */
+var LENS_R=11.5, BEAM_R=8, OBJ_H=7;
+/* 主光轴以下是固定高度的基座：矮台座 + 细支柱 + 托板，不随 u、f 变化 */
+var PED_W=2.4, PED_Z=2.0, PED_H=4.2, STEM_W=0.8, STEM_Z=0.8;
+var CAP_W=2.0, CAP_Z=1.5, CAP_H=0.9;
+var SCR_H=27, SCR_W=4.3, SCR_BOT=-22; /* 光屏下缘穿过中空区，接住下方光线 */
 var XIN=-42;                         /* 平行光入射端 */
-var YUP=18, YDN=-12.5;               /* 光线纵向裁剪 */
-var ROW_T=374, ROW_A=398, ROW_B=420; /* 三行刻度文字 */
+var YUP=19, YDN=-20;                 /* 光线纵向裁剪 */
+var ROW_T=424, ROW_A=448, ROW_B=472; /* 三行刻度文字 */
+var SCENE_BOT=410;                   /* 三维场景裁剪下界 */
 var PI=Math.PI, TAU=2*PI, TP=12;     /* 光点动画周期 s */
+
+/* ===== 可拖动旋转的视角：正交轨道相机 ===== */
+var YAW0=-18*PI/180, ELV0=16*PI/180;
+var CAM={yaw:YAW0, elev:ELV0};
+var B={sY:0,cY:1,sE:0,cE:1,cx:0,cy:0,cz:-1};
+function camBasis(){
+  var sY=Math.sin(CAM.yaw), cY=Math.cos(CAM.yaw),
+      sE=Math.sin(CAM.elev), cE=Math.cos(CAM.elev);
+  B.sY=sY; B.cY=cY; B.sE=sE; B.cE=cE;
+  B.cx=-sY*cE; B.cy=sE; B.cz=-cY*cE;  /* 由原点指向观察者的单位向量 */
+}
+camBasis();
+/* 自动适配：绕到侧向或俯视时，长导轨会斜出画面，按比例收进可视区 */
+var FIT={s:1,tx:0,ty:0};
+function fitCamera(){
+  /* 只取实际存在的器材端点与光线包络，不用空角落的假想顶点撑大包围盒 */
+  var yb=RAILY-RAILH-1.8, sxw=(MODE==='parallel')?G.f:(G.showImg?G.v:20), i,p,rx,ry;
+  var pts=[
+    [XMIN,RAILY,-RAILW],[XMIN,RAILY,RAILW],[XMAX,RAILY,-RAILW],[XMAX,RAILY,RAILW],
+    [XMIN,yb,-RAILW],[XMIN,yb,RAILW],[XMAX,yb,-RAILW],[XMAX,yb,RAILW],
+    [0,LENS_R,0],[0,-LENS_R,0],[0,0,LENS_R],[0,0,-LENS_R],
+    [0,YUP,0],[0,YDN,0],[0,0,BEAM_R],[0,0,-BEAM_R],
+    [-G.u,OBJ_H,0],[-G.u,RAILY,0],
+    [XIN,-G.tn*XIN+BEAM_R,0],[XIN,-G.tn*XIN-BEAM_R,0],
+    [G.xEnd,YUP,0],[G.xEnd,YDN,0],
+    [sxw,RAILY+SCR_H,-SCR_W],[sxw,RAILY+SCR_H,SCR_W],
+    [sxw,SCR_BOT,-SCR_W],[sxw,SCR_BOT,SCR_W]
+  ];
+  var mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+  for(i=0;i<pts.length;i++){
+    p=pts[i];
+    rx=AX+PX*(B.cY*p[0]-B.sY*p[2]);
+    ry=AY-PY*(B.sY*B.sE*p[0]+B.cE*p[1]+B.cY*B.sE*p[2]);
+    if(rx<mnx)mnx=rx; if(rx>mxx)mxx=rx;
+    if(ry<mny)mny=ry; if(ry>mxy)mxy=ry;
+  }
+  var s=Math.min(1,(LW-40)/Math.max(1,mxx-mnx),(SCENE_BOT-22)/Math.max(1,mxy-mny));
+  var lo=AX+(mnx-AX)*s, hi=AX+(mxx-AX)*s;
+  var tx=lo<20?20-lo:(hi>LW-20?LW-20-hi:0);
+  lo=AY+(mny-AY)*s; hi=AY+(mxy-AY)*s;
+  var ty=lo<14?14-lo:(hi>SCENE_BOT-8?SCENE_BOT-8-hi:0);
+  FIT.s=s; FIT.tx=tx; FIT.ty=ty;
+}
+/* 世界坐标 → 屏幕：横向 p·r，纵向 p·u */
+function P3(x,y,z){
+  var rx=AX+PX*(B.cY*x-B.sY*z);
+  var ry=AY-PY*(B.sY*B.sE*x+B.cE*y+B.cY*B.sE*z);
+  return [AX+(rx-AX)*FIT.s+FIT.tx, AY+(ry-AY)*FIT.s+FIT.ty];
+}
+/* 深度：p·c，越大越靠近观察者 */
+function dep(x,y,z){return B.cx*x+B.cy*y+B.cz*z;}
+/* 底部光轴坐标尺用冻结投影，视角旋转时刻度不跳动 */
+var FX=2.9, FY=-2.2;
+function P3F(x,y,z){return [AX+PX*x+FX*z, AY-PY*y+FY*z];}
 
 /* ===== 状态 ===== */
 var MODE='point';
@@ -141,8 +203,8 @@ var sF=$('sF'), sU=$('sU'), sT=$('sT');
 var oF=$('oF'), oU=$('oU'), oT=$('oT');
 var oV=$('oV'), oM=$('oM'), oKind=$('oKind');
 var oF2m=$('oF2m'), oFm=$('oFm'), oF1=$('oF1'), oF2=$('oF2');
-var rule=$('rule'), hint=$('hint');
-var bPoint=$('bPoint'), bParallel=$('bParallel'), bPlay=$('bPlay'), bReset=$('bReset');
+var rule=$('rule'), hint=$('hint'), oView=$('oView');
+var bPoint=$('bPoint'), bParallel=$('bParallel'), bPlay=$('bPlay'), bReset=$('bReset'), bView=$('bView');
 var cF=$('cF'), cU=$('cU'), cT=$('cT');
 var P={f:10,u:30,th:0};
 var G={};
@@ -150,13 +212,14 @@ var running=false, last=0;
 var tCur=0;
 var HALO='#ffffff';
 var snap={f:10,u:30,th:0};
+var QUEUE=[], PHOTONS=[];
 
 /* URL 预置参数，便于定帧截图 */
 var QS=(typeof window.location!=='undefined'&&window.location&&window.location.search)||'';
 function qp(k){var m=new RegExp('[?&]'+k+'=([^&]+)').exec(QS);return m?parseFloat(m[1]):null;}
 var qm=/[?&]mode=([^&]+)/.exec(QS);
 if(qm) MODE=(qm[1]==='parallel')?'parallel':'point';
-var qf=qp('f'), qu=qp('u'), qt=qp('th'), qtv=qp('t');
+var qf=qp('f'), qu=qp('u'), qt=qp('th'), qtv=qp('t'), qy=qp('yaw'), qe=qp('elev');
 if(qf!==null){P.f=clamp(qf,5,20); sF.value=P.f;}
 else P.f=parseFloat(sF.value);
 if(qu!==null){P.u=clamp(qu,5,40); sU.value=P.u;}
@@ -164,6 +227,9 @@ else P.u=parseFloat(sU.value);
 if(qt!==null){P.th=clamp(qt,-14,14); sT.value=P.th;}
 else P.th=parseFloat(sT.value);
 if(qtv!==null) tCur=qtv;
+if(qy!==null) CAM.yaw=clamp(qy,-180,180)*PI/180;
+if(qe!==null) CAM.elev=clamp(qe,-72,78)*PI/180;
+camBasis();
 snap={f:P.f,u:P.u,th:P.th};
 
 /* ===== 小工具 ===== */
@@ -207,13 +273,34 @@ function rtextBox(ps,x,y,size,color,align,base){
   for(i=0;i<p.length;i++){ctx.font=fontOf(p[i],size); ctx.fillText(p[i].t,cx,y); cx+=ctx.measureText(p[i].t).width;}
   return w;
 }
-/* 统一标签入口：带底色块（断线）、越界夹住、字号 13–14.5 */
+/* 统一标签入口：带底色块（断线）、越界夹住、撞已落位标签就上下错开 */
+var OCC=[];
+function resetOcc(){OCC=[];}
 function label(ps,x,y,size,color,align){
-  var w=rtWidth(ps,size), xx=x;
+  var w=rtWidth(ps,size), xx=x, sx, b, i, j, o, hit, cy, chosen=null;
   if(align==='center') xx=clamp(x,w/2+6,LW-w/2-6);
   else if(align==='right') xx=clamp(x,w+6,LW-6);
   else xx=clamp(x,6,LW-w-6);
-  rtextBox(ps,xx,y,size,color,align,'top');
+  sx=align==='center'?xx-w/2:(align==='right'?xx-w:xx);
+  var dys=[0,-18,18,-36,36,-54,54], dy;
+  for(i=0;i<dys.length;i++){
+    dy=dys[i]; cy=clamp(y+dy,18,LH-20);
+    b={x:sx-2.5,y:cy-1.5,w:w+5,h:size*1.12};
+    hit=false;
+    for(j=0;j<OCC.length;j++){
+      o=OCC[j];
+      if(Math.min(b.x+b.w,o.x+o.w)-Math.max(b.x,o.x)>2 &&
+         Math.min(b.y+b.h,o.y+o.h)-Math.max(b.y,o.y)>2){hit=true;break;}
+    }
+    if(!hit){chosen=cy;break;}
+  }
+  if(chosen===null) chosen=clamp(y,18,LH-20);
+  OCC.push({x:sx-2.5,y:chosen-1.5,w:w+5,h:size*1.12});
+  rtextBox(ps,xx,chosen,size,color,align,'top');
+}
+/* 跟随三维器材的标签：纵向也夹进场景区 */
+function lab3(ps,x,y,size,color,align){
+  label(ps,x,clamp(y,24,SCENE_BOT-22),size,color,align);
 }
 function bright(h){
   var m=/^#([0-9a-f]{6})$/i.exec(h||'');
@@ -235,7 +322,7 @@ function theme(){
   return dark?{
     bg:bg, halo:bg, fg:'#e6e6e6', muted:'#9aa0a8', tick:'#9aa0a8',
     axis:'rgba(154,160,168,0.55)', grid:'rgba(255,255,255,0.06)',
-    railTop:'#262930', railSide:'#1e2127', railEdge:'#3a3d45',
+    railTop:'#262930', railSide:'#1e2127', railEnd:'#22252b', railBottom:'#181a1f', railEdge:'#3a3d45',
     p1:'#cf9179', p2:'#7fa8d4', p3:'#8fae7f',
     glass:'rgba(127,168,212,0.15)', glassEdge:'#7fa8d4',
     screen:'rgba(154,160,168,0.10)', screenEdge:'#5a606a',
@@ -245,7 +332,7 @@ function theme(){
   }:{
     bg:bg, halo:bg, fg:'#23262b', muted:'#6b7078', tick:'#6b7078',
     axis:'rgba(107,112,120,0.50)', grid:'rgba(20,24,32,0.06)',
-    railTop:'#eef0f3', railSide:'#dfe3e8', railEdge:'#c4c9d1',
+    railTop:'#eef0f3', railSide:'#dfe3e8', railEnd:'#e4e7ec', railBottom:'#cdd2da', railEdge:'#c4c9d1',
     p1:'#a3563c', p2:'#3a6ea5', p3:'#4f7a45',
     glass:'rgba(58,110,165,0.13)', glassEdge:'#3a6ea5',
     screen:'rgba(107,112,120,0.09)', screenEdge:'#a8adb6',
@@ -264,7 +351,6 @@ function resize(){
   cv.width=Math.round(w*ss); cv.height=Math.round(h*ss);
   ctx.setTransform(cv.width/LW,0,0,cv.height/LH,0,0);
 }
-function P3(x,y,z){return [AX+PX*x+QX*z, AY-PY*y+QY*z];}
 
 /* ===== 图元 ===== */
 function dash(a){ctx.setLineDash(a||[]);}
@@ -299,6 +385,52 @@ function vect(x1,y1,x2,y2,color,w,hs){
   ctx.closePath(); ctx.fill();
 }
 
+/* ===== 画家算法：远的先画，近的后画，旋转到任何角度遮挡关系都成立 ===== */
+function push(d,fn){QUEUE.push({d:d,f:fn});}
+function flush(){
+  QUEUE.sort(function(a,b){return a.d-b.d;});
+  var i;
+  for(i=0;i<QUEUE.length;i++) QUEUE[i].f();
+  QUEUE=[];
+}
+function face(wq,fill,stroke,lw){
+  var i,d=0,sq=[];
+  for(i=0;i<wq.length;i++){
+    d+=dep(wq[i][0],wq[i][1],wq[i][2]);
+    sq.push(P3(wq[i][0],wq[i][1],wq[i][2]));
+  }
+  push(d/wq.length,function(){poly(sq,fill,stroke,lw);});
+}
+function boxFace(T,wq,n,fill){
+  var f=n[0]*B.cx+n[1]*B.cy+n[2]*B.cz;
+  if(f<=0) return;                 /* 背面剔除 */
+  face(wq,fill,T.railEdge,1.05);
+}
+function drawBox(T,x0,x1,y0,y1,z0,z1){
+  boxFace(T,[[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]],[0,1,0],T.railTop);
+  boxFace(T,[[x0,y0,z1],[x1,y0,z1],[x1,y0,z0],[x0,y0,z0]],[0,-1,0],T.railBottom);
+  boxFace(T,[[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]],[1,0,0],T.railEnd);
+  boxFace(T,[[x0,y0,z1],[x0,y1,z1],[x0,y1,z0],[x0,y0,z0]],[-1,0,0],T.railEnd);
+  boxFace(T,[[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],[0,0,1],T.railSide);
+  boxFace(T,[[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]],[0,0,-1],T.railSide);
+}
+/* 光线拆成小段各自进深度队列，才能被导轨、光屏正确遮住 */
+function raySeg(a,b,color,w,split,dashes){
+  var L=Math.sqrt((b[0]-a[0])*(b[0]-a[0])+(b[1]-a[1])*(b[1]-a[1])+(b[2]-a[2])*(b[2]-a[2]));
+  var n=split?Math.max(1,Math.ceil(L/5)):1, i,p,q,pa,pb,d;
+  for(i=0;i<n;i++){
+    p=[a[0]+(b[0]-a[0])*i/n, a[1]+(b[1]-a[1])*i/n, a[2]+(b[2]-a[2])*i/n];
+    q=[a[0]+(b[0]-a[0])*(i+1)/n, a[1]+(b[1]-a[1])*(i+1)/n, a[2]+(b[2]-a[2])*(i+1)/n];
+    pa=P3(p[0],p[1],p[2]); pb=P3(q[0],q[1],q[2]);
+    d=dep((p[0]+q[0])/2,(p[1]+q[1])/2,(p[2]+q[2])/2);
+    (function(AA,BB,DD,CC,WW,DS){push(DD,function(){
+      if(DS) dash(DS);
+      line(AA[0],AA[1],BB[0],BB[1],CC,WW);
+      if(DS) dash();
+    });})(pa,pb,d,color,w,dashes);
+  }
+}
+
 /* ===== 几何计算：薄透镜傍轴变换 ===== */
 function compute(){
   var f=P.f,u=P.u,th=P.th*PI/180;
@@ -307,7 +439,7 @@ function compute(){
   var hp=isFinite(v)?-OBJ_H*v/u:Infinity;
   var real=isFinite(v)&&v>0;
   var showImg=real&&v<=48&&Math.abs(hp)<=16;
-  var showVir=isFinite(v)&&v<0&&v>=-48&&Math.abs(hp)<=16;
+  var showVir=isFinite(v)&&v<0&&v>=-48&&Math.abs(hp)<=19;
   G={f:f,u:u,th:th,tn:Math.tan(th),q:q,v:v,hp:hp,real:real,
      showImg:showImg,showVir:showVir,
      focusY:(MODE==='parallel')?-f*Math.tan(th):0,
@@ -326,29 +458,47 @@ function outRay(yL,zL,syIn,szIn){
   return {x:xe,y:yL+sy*xe,z:zL+sz*xe,sy:sy,sz:sz};
 }
 
-/* ===== 场景：光具座（斜二测长方体） ===== */
+/* ===== 场景：中空光具座（两根平行导轨 + 稀疏横撑，中间通透） ===== */
 function drawRail(T){
-  var x0=XMIN,x1=XMAX,yt=RAILY,yb=RAILY-RAILH,zw=RAILW,i,k;
-  poly([P3(x0,yt,-zw),P3(x1,yt,-zw),P3(x1,yt,zw),P3(x0,yt,zw)],T.railTop,T.railEdge,1.1);
-  poly([P3(x0,yt,-zw),P3(x1,yt,-zw),P3(x1,yb,-zw),P3(x0,yb,-zw)],T.railSide,T.railEdge,1.1);
-  poly([P3(x1,yt,-zw),P3(x1,yt,zw),P3(x1,yb,zw),P3(x1,yb,-zw)],T.railSide,T.railEdge,1.1);
-  /* 顶面刻度线 */
-  for(k=-50;k<=50;k+=10){
-    var a=P3(k,yt,-zw), b=P3(k,yt,-zw+3);
-    line(a[0],a[1],b[0],b[1],T.tick,k===0?1.6:1);
+  var yt=RAILY, yb=RAILY-RAILH, i,k,xx;
+  drawBox(T,XMIN,XMAX,yb,yt,-RAILW,-GAP);
+  drawBox(T,XMIN,XMAX,yb,yt, GAP, RAILW);
+  /* 横撑贴着导轨下部，上方看下去仍是空的 */
+  var ties=[-46,-22,22,46];
+  for(i=0;i<ties.length;i++){
+    drawBox(T,ties[i]-1.1,ties[i]+1.1,yb,yb+0.85,-GAP,GAP);
   }
   /* 两端支脚 */
   for(i=0;i<2;i++){
-    var xx=i?42:-46;
-    poly([P3(xx-2,yb,-zw+1),P3(xx+2,yb,-zw+1),P3(xx+2,yb-1.6,-zw+1),P3(xx-2,yb-1.6,-zw+1)],T.railSide,T.railEdge,1);
+    xx=i?42:-46;
+    drawBox(T,xx-2.2,xx+2.2,yb-1.8,yb,-6,6);
+  }
+  /* 近侧导轨顶面的厘米刻度 */
+  for(k=-50;k<=50;k+=10){
+    var a=P3(k,yt,-RAILW), b=P3(k,yt,-RAILW+1.7);
+    (function(AA,BB,DD,CC,WW){push(DD,function(){line(AA[0],AA[1],BB[0],BB[1],CC,WW);});})
+      (a,b,dep(k,yt,-RAILW+0.85),T.tick,k===0?1.6:1);
   }
 }
-/* 装夹滑座 */
+/* 焦点在两根导轨顶面的短刻线 */
+function drawFocusMarks(T){
+  var ms=[-2*G.f,-G.f,G.f,2*G.f],i,j,xw,zs;
+  for(i=0;i<ms.length;i++){
+    xw=ms[i]; if(xw<XMIN||xw>XMAX) continue;
+    var zr=[[-RAILW-0.6,-GAP],[GAP,RAILW+0.6]];
+    for(j=0;j<2;j++){
+      zs=zr[j];
+      var a=P3(xw,RAILY,zs[0]), b=P3(xw,RAILY,zs[1]);
+      (function(AA,BB,DD){push(DD,function(){line(AA[0],AA[1],BB[0],BB[1],T.focus,1.7);});})
+        (a,b,dep(xw,RAILY,(zs[0]+zs[1])/2));
+    }
+  }
+}
+/* 装夹滑座：只画中空区上的一圈轮廓，不挡光 */
 function sliderBlock(xw,T){
   if(xw<XMIN+2||xw>XMAX-2) return;
-  poly([P3(xw-1.7,RAILY,-RAILW+0.5),P3(xw+1.7,RAILY,-RAILW+0.5),
-        P3(xw+1.7,RAILY,RAILW-0.5),P3(xw-1.7,RAILY,RAILW-0.5)],
-       null,T.tick,1.2);
+  face([[xw-1.7,RAILY,-GAP],[xw+1.7,RAILY,-GAP],
+        [xw+1.7,RAILY,GAP],[xw-1.7,RAILY,GAP]],null,T.tick,1.2);
 }
 /* 透镜：yz 平面圆盘 */
 function lensPts(r){
@@ -357,39 +507,63 @@ function lensPts(r){
   return pts;
 }
 function drawLens(T){
-  poly(lensPts(LENS_R),T.glass,T.glassEdge,2.1);
-  var a=P3(0,LENS_R,0), b=P3(0,-LENS_R,0);
-  seg3(a,b,T.faint,1,[4,4]);
-  /* 上下凸透镜尖端标记 */
-  var top=a, bot=b, w=6;
-  poly([[top[0]-w,top[1]+9],[top[0]+w,top[1]+9],[top[0],top[1]-3]],T.glassEdge,null,0);
-  poly([[bot[0]-w,bot[1]-9],[bot[0]+w,bot[1]-9],[bot[0],bot[1]+3]],T.glassEdge,null,0);
-  dot(AX,AY,3.1,T.fg);
+  var pts=lensPts(LENS_R),i,d=0;
+  for(i=0;i<=64;i++) d+=dep(0,LENS_R*Math.cos(i*TAU/64),LENS_R*Math.sin(i*TAU/64));
+  push(d/65,function(){poly(pts,T.glass,T.glassEdge,2.1);});
+  var a=P3(0,LENS_R,0), b=P3(0,-LENS_R,0), top=a, bot=b, w=6, oo=P3(0,0,0);
+  push(dep(0,0,0)+0.03,function(){
+    seg3(a,b,T.faint,1,[4,4]);
+    poly([[top[0]-w,top[1]+9],[top[0]+w,top[1]+9],[top[0],top[1]-3]],T.glassEdge,null,0);
+    poly([[bot[0]-w,bot[1]-9],[bot[0]+w,bot[1]-9],[bot[0],bot[1]+3]],T.glassEdge,null,0);
+    dot(oo[0],oo[1],3.1,T.fg);
+  });
 }
-/* 光屏：yz 平面矩形板 */
+/* 光屏：下缘穿过中空区，能接住主光轴下方的会聚光线 */
 function drawScreen(xw,T){
   if(!(xw>0&&xw<=50)) return;
-  var y0=RAILY,y1=RAILY+SCR_H,zw=SCR_W;
-  poly([P3(xw,y0,-zw),P3(xw,y1,-zw),P3(xw,y1,zw),P3(xw,y0,zw)],
-       T.screen,T.screenEdge,1.3);
+  var y0=SCR_BOT, y1=RAILY+SCR_H, zw=SCR_W;
+  face([[xw,y0,-zw],[xw,y1,-zw],[xw,y1,zw],[xw,y0,zw]],T.screen,T.screenEdge,1.3);
   var a=P3(xw,y1,0), b=P3(xw,y0,0);
-  seg3(a,b,T.faint,1,[3,4]);
+  push(dep(xw,(y0+y1)/2,0)+0.02,function(){seg3(a,b,T.faint,1,[3,4]);});
+  /* 屏上被照亮的那一横行与像点 */
+  if(MODE==='point'&&G.showImg){
+    var hy=G.hp, c=P3(xw,hy,0), l=P3(xw,hy,-zw), r=P3(xw,hy,zw);
+    push(dep(xw,hy,0)+0.06,function(){
+      line(l[0],l[1],r[0],r[1],T.rayOut,1.5);
+      ring(c[0],c[1],4.4,T.photon,T.halo,1.1);
+      dot(c[0],c[1],1.9,T.photon);
+    });
+  }
 }
-/* 物体：竖直支架 + 顶端点光源 */
+/* 物体：主光轴以下是固定高度的中性基座；主光轴到 P 才描红，表示物高 h */
 function drawObject(T){
-  var xw=-G.u;
-  var a=P3(xw,RAILY,0), b=P3(xw,OBJ_H,0);
-  seg3(a,b,T.rayIn,2.2);
+  var xw=-G.u, yPed=RAILY+PED_H;
+  drawBox(T,xw-PED_W,xw+PED_W,RAILY+0.1,yPed,-PED_Z,PED_Z);
+  drawBox(T,xw-STEM_W,xw+STEM_W,yPed,-CAP_H,-STEM_Z,STEM_Z);
+  drawBox(T,xw-CAP_W,xw+CAP_W,-CAP_H,0,-CAP_Z,CAP_Z);
   sliderBlock(xw,T);
-  ring(b[0],b[1],5.2,T.p1,T.halo,1.4);
-  dot(b[0],b[1],2.4,T.p1);
+  var a=P3(xw,0,0), b=P3(xw,OBJ_H,0);
+  var footL=P3(xw,0,-CAP_Z*0.8), footR=P3(xw,0,CAP_Z*0.8);
+  var dx=a[0]-30;
+  push(dep(xw,OBJ_H/2,0)+0.05,function(){
+    /* 物高尺寸线：两端短横帽，标签由 drawText 统一排版 */
+    line(dx,a[1],dx,b[1],T.muted,1.1);
+    line(dx-4,a[1],dx+5,a[1],T.muted,1.1);
+    line(dx-4,b[1],dx+5,b[1],T.muted,1.1);
+    seg3(footL,footR,T.p1,2.2);
+    seg3(a,b,T.p1,3.0);
+    ring(b[0],b[1],5.2,T.p1,T.halo,1.4);
+    dot(b[0],b[1],2.4,T.p1);
+  });
 }
 /* 像：倒立（实像）或正立（虚像）竖杆 */
 function drawImageMark(xw,hgt,T,ghost){
   var a=P3(xw,0,0), b=P3(xw,hgt,0);
-  if(ghost){seg3(a,b,T.p1,1.8,[5,4]);}
-  else {vect(a[0],a[1],b[0],b[1],T.p1,2.2,6);}
-  ring(b[0],b[1],4.4,T.p1,T.halo,1.2);
+  push(dep(xw,hgt/2,0)+0.07,function(){
+    if(ghost) seg3(a,b,T.p1,1.8,[5,4]);
+    else vect(a[0],a[1],b[0],b[1],T.p1,2.2,6);
+    ring(b[0],b[1],4.4,T.p1,T.halo,1.2);
+  });
 }
 /* 平行光入射端：垂直于 d 的圆截面 */
 function discPoint(cp,sp){
@@ -407,16 +581,15 @@ function beamDisc(T){
   return pts;
 }
 function drawSourceParallel(T){
-  var pts=beamDisc(T);
-  poly(pts,T.beamIn,T.rayIn,1.4);
+  var pts=beamDisc(T), d0=dep(XIN,-G.tn*XIN,0);
+  push(d0,function(){poly(pts,T.beamIn,T.rayIn,1.4);});
   var c=P3(XIN,-G.tn*XIN,0);
-  dot(c[0],c[1],2.2,T.rayIn);
+  push(d0+0.02,function(){dot(c[0],c[1],2.2,T.rayIn);});
 }
 
 /* ===== 光线 ===== */
 function drawPointRays(T){
-  var i,a,yL,zL,R,syIn,szIn,E,L,Q,n=12;
-  var rays=[];
+  var i,a,yL,zL,R,syIn,szIn,E,n=12,rays=[];
   for(i=0;i<n;i++){
     a=i*TAU/n;
     rays.push({y:BEAM_R*Math.cos(a),z:BEAM_R*Math.sin(a),main:i%3===0});
@@ -427,24 +600,23 @@ function drawPointRays(T){
     var yf=-OBJ_H*G.f/(G.u-G.f);
     if(Math.abs(yf)<=LENS_R*0.95) rays.push({y:yf,z:0,special:3});
   }
-  var from=P3(-G.u,OBJ_H,0);
+  var src=[-G.u,OBJ_H,0];
   for(i=0;i<rays.length;i++){
     R=rays[i]; yL=R.y; zL=R.z;
-    L=P3(0,yL,zL);
     syIn=(yL-OBJ_H)/G.u; szIn=zL/G.u;
     E=outRay(yL,zL,syIn,szIn);
-    Q=P3(E.x,E.y,E.z);
-    seg3(from,L,R.special?T.rayIn:T.beamIn,R.special?2.1:1.05);
-    seg3(L,Q,R.special?T.rayOut:T.beamOut,R.special?2.1:1.05);
+    var L3=[0,yL,zL], Q3=[E.x,E.y,E.z];
+    raySeg(src,L3,R.special?T.rayIn:T.beamIn,R.special?2.1:1.05,true);
+    raySeg(L3,Q3,R.special?T.rayOut:T.beamOut,R.special?2.1:1.05,true);
     /* 虚像：出射光的反向延长线 */
-    if(isFinite(G.v)&&G.v<0&&G.v>-48&&Math.abs(G.hp)<18){
-      seg3(L,P3(G.v,G.hp,0),T.faint,1,[6,5]);
+    if(isFinite(G.v)&&G.v<0&&G.v>-48&&Math.abs(G.hp)<20){
+      raySeg(L3,[G.v,G.hp,0],T.faint,1,false,[6,5]);
     }
-    if(R.main||R.special) PHOTONS.push({a:from,b:L,c:Q});
+    if(R.main||R.special) PHOTONS.push({a:src,b:L3,c:Q3});
   }
 }
 function drawParallelRays(T){
-  var i,a,cp,sp,yL,zL,L,Q,E,from,w3,n=12,rays=[];
+  var i,a,cp,sp,yL,zL,E,L3,Q3,w3,n=12,rays=[];
   var c=Math.cos(G.th);
   for(i=0;i<n;i++){
     a=i*TAU/n; cp=Math.cos(a); sp=Math.sin(a);
@@ -454,49 +626,55 @@ function drawParallelRays(T){
   }
   for(i=0;i<rays.length;i++){
     w3=discPoint(rays[i].cp,rays[i].sp);
-    from=P3(w3[0],w3[1],w3[2]);
-    L=P3(0,rays[i].y,rays[i].z);
+    L3=[0,rays[i].y,rays[i].z];
     E=outRay(rays[i].y,rays[i].z,-G.tn,0);
-    Q=P3(E.x,E.y,E.z);
-    seg3(from,L,rays[i].main?T.rayIn:T.beamIn,rays[i].main?2.0:1.05);
-    seg3(L,Q,rays[i].main?T.rayOut:T.beamOut,rays[i].main?2.0:1.05);
-    if(rays[i].main) PHOTONS.push({a:from,b:L,c:Q});
+    Q3=[E.x,E.y,E.z];
+    raySeg(w3,L3,rays[i].main?T.rayIn:T.beamIn,rays[i].main?2.0:1.05,true);
+    raySeg(L3,Q3,rays[i].main?T.rayOut:T.beamOut,rays[i].main?2.0:1.05,true);
+    if(rays[i].main) PHOTONS.push({a:w3,b:L3,c:Q3});
   }
   /* 中心轴：θ≠0 时即副光轴 */
-  var c0=P3(0,0,0), a0=P3(-48,48*G.tn,0), b0=P3(G.f+7,-(G.f+7)*G.tn,0);
   if(Math.abs(P.th)>0.5){
-    seg3(a0,b0,T.p3,1.7,[8,5]);
+    raySeg([-48,48*G.tn,0],[G.f+7,-(G.f+7)*G.tn,0],T.p3,1.7,false,[8,5]);
   }else{
-    seg3(a0,c0,T.faint,1.2,[5,5]);
+    raySeg([-48,0,0],[0,0,0],T.faint,1.2,false,[5,5]);
   }
-  PHOTONS.push({a:P3(XIN,-G.tn*XIN,0),b:c0,c:P3(G.xEnd,-G.tn*G.xEnd,0)});
+  PHOTONS.push({a:[XIN,-G.tn*XIN,0],b:[0,0,0],c:[G.xEnd,-G.tn*G.xEnd,0]});
 }
-var PHOTONS=[];
 function drawPhotons(T){
   if(!running&&tCur<=0) return;
-  var k=(tCur%TP)/TP, i,p,px,py;
+  var k=(tCur%TP)/TP, i,p,f,w3,p3,d;
   for(i=0;i<PHOTONS.length;i++){
     p=PHOTONS[i];
-    if(k<0.5){var s=k/0.5; px=p.a[0]+(p.b[0]-p.a[0])*s; py=p.a[1]+(p.b[1]-p.a[1])*s;}
-    else{var s2=(k-0.5)/0.5; px=p.b[0]+(p.c[0]-p.b[0])*s2; py=p.b[1]+(p.c[1]-p.b[1])*s2;}
-    dot(px,py,3.0,T.photon);
+    f=k<0.5?k/0.5:(k-0.5)/0.5;
+    if(k<0.5) w3=[p.a[0]+(p.b[0]-p.a[0])*f,p.a[1]+(p.b[1]-p.a[1])*f,p.a[2]+(p.b[2]-p.a[2])*f];
+    else w3=[p.b[0]+(p.c[0]-p.b[0])*f,p.b[1]+(p.c[1]-p.b[1])*f,p.b[2]+(p.c[2]-p.b[2])*f];
+    p3=P3(w3[0],w3[1],w3[2]);
+    d=dep(w3[0],w3[1],w3[2])+0.09;
+    (function(AA,DD){push(DD,function(){dot(AA[0],AA[1],3.0,T.photon);});})(p3,d);
   }
 }
 
 /* ===== 文字层：全部最后绘制、带底色块 ===== */
 function drawText(T){
-  var i,k,x,xw,parts;
+  var i,k,x,parts;
+  resetOcc();
   /* 状态行 */
   if(MODE==='point'){
-    parts=[CN('点光源'),NM('  '),VR('u'),NM(' = '),NM(num(G.u,1)),NM(' cm')];
+    parts=[CN('点光源'),NM('  '),VR('u'),NM(' = '),NM(num(G.u,1)),NM(' cm'),
+           NM('   ·   '),CN('物高'),NM(' '),VR('h'),NM(' = '),NM(num(OBJ_H,1)),NM(' cm')];
   }else{
     parts=[CN('平行光 · 圆截面'),NM('  '),VR('θ'),NM(' = '),NM(num(P.th,0)),NM('°')];
   }
   label(parts,24,20,13.5,T.muted,'left');
+  label([CN('在画面上拖动可旋转视角')],976,20,12.5,T.muted,'right');
 
-  /* 主刻度数字 */
+  /* 固定的二维光轴坐标尺：视角旋转不改变读数 */
+  var ax0=P3F(-50,RAILY,-RAILW)[0], ax1=P3F(50,RAILY,-RAILW)[0];
+  line(ax0,ROW_T-15,ax1,ROW_T-15,T.axis,1.1);
   for(k=-50;k<=50;k+=10){
-    x=P3(k,RAILY,-RAILW)[0];
+    x=P3F(k,RAILY,-RAILW)[0];
+    line(x,ROW_T-15,x,ROW_T-11,T.tick,1.1);
     label([NM(num(k,0))],x,ROW_T,12.5,T.tick,'center');
   }
   label([VR('x'),NM('/cm')],902,ROW_T,12.5,T.tick,'left');
@@ -506,49 +684,49 @@ function drawText(T){
              {w:-G.f,row:ROW_B,ps:[NM('\u2212'),VR('f'),NM(' = '),NM(num(-G.f,1))]},
              {w:G.f,row:ROW_B,ps:[VR('f'),NM(' = '),NM(num(G.f,1))]},
              {w:2*G.f,row:ROW_A,ps:[NM('2'),VR('f'),NM(' = '),NM(num(2*G.f,1))]}];
-  /* 顶面焦点横线（画在文字之前） */
-  for(i=0;i<marks.length;i++){
-    xw=marks[i].w;
-    if(xw<XMIN||xw>XMAX) continue;
-    var a=P3(xw,RAILY,-RAILW-1), b=P3(xw,RAILY,RAILW+1);
-    line(a[0],a[1],b[0],b[1],T.focus,1.7);
-  }
   for(i=0;i<marks.length;i++){
     if(marks[i].w<XMIN||marks[i].w>XMAX) continue;
-    label(marks[i].ps,P3(marks[i].w,RAILY,-RAILW)[0],marks[i].row,13.5,T.focus,'center');
+    x=P3F(marks[i].w,RAILY,-RAILW)[0];
+    line(x,ROW_T-15,x,ROW_T-5,T.focus,2);
+    label(marks[i].ps,x,marks[i].row,13.5,T.focus,'center');
   }
 
   /* 上半部器材与关键点标签 */
-  label([CN('凸透镜')],AX-76,70,13.5,T.glassEdge,'right');
-  label([VR('O')],AX+12,AY-22,14,T.fg,'left');
+  var lt=P3(0,LENS_R,0), oo=P3(0,0,0);
+  label([CN('凸透镜')],lt[0]-76,clamp(lt[1]-66,24,150),13.5,T.glassEdge,'right');
+  label([VR('O')],oo[0]+12,oo[1]-22,14,T.fg,'left');
 
   if(MODE==='point'){
     var pObj=P3(-G.u,OBJ_H,0);
-    label([VR('P')],pObj[0]-10,pObj[1]-20,14,T.p1,'right');
+    lab3([VR('P')],pObj[0]-10,pObj[1]-20,14,T.p1,'right');
+    var d0=P3(-G.u,0,0), d1=pObj, dmx=d0[0]-30;
+    label([VR('h')],dmx-13,(d0[1]+d1[1])/2-7,13.5,T.muted,'right');
     if(G.showImg){
-      label([CN('光屏')],P3(G.v,RAILY+SCR_H,0)[0],84,13.5,T.muted,'center');
+      var st=P3(G.v,RAILY+SCR_H,0);
+      lab3([CN('光屏')],st[0],st[1]-26,13.5,T.muted,'center');
       var pImg=P3(G.v,G.hp,0);
-      label([VR('P'),NM('\u2032')],pImg[0]+12,pImg[1]+8,14,T.p1,'left');
+      lab3([VR('P'),NM('\u2032')],pImg[0]+12,pImg[1]+8,14,T.p1,'left');
     }else if(G.showVir){
       var pVir=P3(G.v,G.hp,0);
-      label([VR('P'),NM('\u2032'),CN('（虚像）')],pVir[0]+12,pVir[1]-20,14,T.p1,'left');
+      lab3([VR('P'),NM('\u2032'),CN('（虚像）')],pVir[0]+12,pVir[1]-20,14,T.p1,'left');
     }
   }else{
-    var fpx=P3(G.f,0,0)[0];
-    label([CN('焦平面')],fpx+12,70,13.5,T.p3,'left');
     var fp=P3(G.f,G.focusY,0);
     if(Math.abs(P.th)>0.5){
-      label([CN('副光轴')],P3(-32,32*G.tn,0)[0],P3(-32,32*G.tn,0)[1]-24,13.5,T.p3,'center');
-      label([VR('F'),NM('\u2032')],fp[0]+12,fp[1]+8,14,T.p3,'left');
+      label([CN('焦平面')],P3(G.f,0,0)[0]+12,44,13.5,T.p3,'left');
+      /* 副光轴图例放在左上角留白，标签不落在光束里 */
+      seg3([26,56],[56,56+30*G.tn],T.p3,1.7,[6,4]);
+      label([CN('副光轴')],64,46,13.5,T.p3,'left');
+      lab3([VR('F'),NM('\u2032')],fp[0]+12,fp[1]+8,14,T.p3,'left');
     }else{
-      label([VR('F')],fp[0]+12,fp[1]+10,14,T.p2,'left');
+      lab3([VR('F')],fp[0]+12,fp[1]+10,14,T.p2,'left');
     }
   }
 
-  /* 成像区之外的提示，放在主光轴上方留白处 */
+  /* 像超出画面时的提示放到右上留白，避开光线 */
   if(MODE==='point'&&!G.showImg&&!G.showVir){
-    var msg=Math.abs(G.q)<1e-9?[CN('出射光平行，有限位置不成清晰像')]:[CN('像在光具座之外，读数仍给出完整结果')];
-    label(msg,AX+150,AY+34,14,T.warn,'center');
+    var msg=Math.abs(G.q)<1e-9?[CN('出射光平行，有限位置不成清晰像')]:[CN('像超出画面，读数仍给出完整结果')];
+    label(msg,976,44,14,T.warn,'right');
   }
 }
 
@@ -559,21 +737,24 @@ function draw(){
   ctx.save();
   ctx.setTransform(cv.width/LW,0,0,cv.height/LH,0,0);
   ctx.clearRect(0,0,LW,LH);
-  PHOTONS=[];
   compute();
+  camBasis(); fitCamera();
+  QUEUE=[]; PHOTONS=[];
 
-  /* 主光轴 */
-  var a0=P3(XMIN+2,0,0), a1=P3(XMAX-2,0,0);
-  seg3(a0,a1,T.axis,1.2,[9,6]);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,0,LW,SCENE_BOT); ctx.clip();
 
-  /* 焦平面（平行光模式，淡） */
-  if(MODE==='parallel'){
+  /* 主光轴：始终垫在最底层 */
+  push(-1e6,function(){seg3(P3(XMIN+2,0,0),P3(XMAX-2,0,0),T.axis,1.2,[9,6]);});
+
+  /* 焦平面：只在倾斜入射（需用到副焦点）时画，避免与光屏混淆 */
+  if(MODE==='parallel'&&Math.abs(P.th)>0.5){
     var y0=RAILY,y1=RAILY+SCR_H,zw=SCR_W;
-    poly([P3(G.f,y0,-zw),P3(G.f,y1,-zw),P3(G.f,y1,zw),P3(G.f,y0,zw)],
-         null,T.faint,1.1);
+    face([[G.f,y0,-zw],[G.f,y1,-zw],[G.f,y1,zw],[G.f,y0,zw]],null,T.faint,1.1);
   }
 
   drawRail(T);
+  drawFocusMarks(T);
 
   /* 器材：先画淡的光屏与玻璃，再画光路，主体才突出 */
   if(MODE==='point'){
@@ -596,9 +777,13 @@ function draw(){
     else if(G.showVir) drawImageMark(G.v,G.hp,T,true);
   }else{
     var fp=P3(G.f,G.focusY,0);
-    ring(fp[0],fp[1],4.2,Math.abs(P.th)>0.5?T.p3:T.p2,T.halo,1.2);
+    push(dep(G.f,G.focusY,0)+0.08,function(){
+      ring(fp[0],fp[1],4.2,Math.abs(P.th)>0.5?T.p3:T.p2,T.halo,1.2);
+    });
   }
   drawPhotons(T);
+  flush();
+  ctx.restore();          /* 解除三维场景裁剪 */
   drawText(T);
   ctx.restore();
 }
@@ -617,42 +802,61 @@ function upd(){
   oF.textContent=num(P.f,1);
   oU.textContent=num(P.u,1);
   oT.textContent=num(P.th,0);
-  oV.textContent=num(G.v,1);
-  oM.textContent=Math.abs(G.q)<1e-9?'—':num(-G.v/G.u,2);
-  oKind.textContent=(MODE==='parallel')?'平行光会聚于焦平面上的焦点':kindText();
+  if(MODE==='parallel'){
+    /* 平行光相当于物在无穷远，像距就是焦距；不存在物的放大率 */
+    oV.textContent=num(G.f,1);
+    oM.textContent='—';
+    oKind.innerHTML='平行光会聚于焦平面，<span class=v>v</span> <span class=n>=</span> <span class=v>f</span>';
+  }else{
+    oV.textContent=num(G.v,1);
+    oM.textContent=Math.abs(G.q)<1e-9?'—':num(-G.v/G.u,2);
+    oKind.textContent=kindText();
+  }
   oF2m.textContent=num(-2*P.f,1);
   oFm.textContent=num(-P.f,1);
   oF1.textContent=num(P.f,1);
   oF2.textContent=num(2*P.f,1);
   if(MODE==='point'){
-    cU.className='ctl'; cT.className='ctl dis'; sT.disabled=true;
+    cU.className='ctl'; cT.className='ctl dis'; sT.disabled=true; sU.disabled=false;
   }else{
-    cU.className='ctl dis'; cT.className='ctl'; sT.disabled=false;
+    cU.className='ctl dis'; cT.className='ctl'; sT.disabled=false; sU.disabled=true;
   }
   rule.innerHTML=(MODE==='point')
     ? '<span class=v>u</span> 与 <span class=v>f</span> 的关系决定像的位置与大小：<span class=v>u</span> <span class=n>&gt; 2</span><span class=v>f</span> 缩小、<span class=v>u</span> <span class=n>= 2</span><span class=v>f</span> 等大、<span class=v>f</span> <span class=n>&lt;</span> <span class=v>u</span> <span class=n>&lt; 2</span><span class=v>f</span> 放大、<span class=v>u</span> <span class=n>&lt;</span> <span class=v>f</span> 成虚像。'
-    : '平行于某一副光轴的光束经透镜后会聚于该副光轴与焦平面的交点 <span class=v>F</span><span class=n>\u2032</span>；<span class=v>\u03b8</span> <span class=n>= 0</span> 时交于主焦点 <span class=v>F</span>。';
+    : (Math.abs(P.th)>0.5
+        ? '平行于副光轴的光束经透镜后会聚于该副光轴与焦平面的交点 <span class=v>F</span><sup class=n>\u2032</sup>。'
+        : '平行于主光轴的光束经透镜后会聚于主焦点 <span class=v>F</span>；倾斜入射时改用副光轴判断。');
   bPlay.textContent=running?'暂停':((tCur<=0)?'开始':((tCur>=TP)?'重新播放':'继续'));
   bPlay.className=running?'':'on';
 }
 function upHint(){
   var s='',df=P.f-snap.f,du=P.u-snap.u,dt=P.th-snap.th;
-  if(Math.abs(df)>1e-9){
-    var vo=vOf(snap.f,snap.u);
-    s+='<span class=v>f</span> 由 '+num(snap.f,1)+' 变为 '+num(P.f,1)+' cm，焦点外移，像距 <span class=v>v</span> 由 '+num(vo,1)+' 变为 '+num(G.v,1)+' cm。';
-  }else if(Math.abs(du)>1e-9){
-    var vo2=vOf(P.f,snap.u);
-    s+='<span class=v>u</span> 由 '+num(snap.u,1)+' 变为 '+num(P.u,1)+' cm，像距 <span class=v>v</span> 由 '+num(vo2,1)+' 变为 '+num(G.v,1)+' cm。';
-  }else if(Math.abs(dt)>1e-9){
-    s+='入射光倾斜 '+num(P.th,0)+'°，会聚点移到焦平面上的副焦点。';
+  if(MODE==='parallel'){
+    /* 平行光相当于物在无穷远，物距不参与成像 */
+    if(Math.abs(df)>1e-9){
+      s+='<span class=v>f</span> 由 '+num(snap.f,1)+' 变为 '+num(P.f,1)+' cm，焦平面移到 <span class=v>x</span> <span class=n>=</span> '+num(P.f,1)+' cm 处。';
+    }else if(Math.abs(dt)>1e-9){
+      s+='入射光倾斜 '+num(P.th,0)+'°，会聚点移到焦平面上的副焦点。';
+    }else{
+      s+='拖动焦距与倾角滑块观察会聚点；按「开始」看光沿光线传播。';
+    }
+    if(Math.abs(P.th)>0.5){
+      s+=' 拓展：过光心且平行于入射光的直线是副光轴，它与焦平面的交点即副焦点 <span class=v>F</span><sup class=n>\u2032</sup>。';
+    }
   }else{
-    s+='拖动滑块观察光路与像的变化；按「开始」看光沿光线传播。';
-  }
-  if(MODE==='parallel'&&Math.abs(P.th)>0.5){
-    s+=' 拓展：过光心且平行于入射光的直线是副光轴，它与焦平面的交点即副焦点 <span class=v>F</span><span class=n>\u2032</span>。';
-  }else if(MODE==='point'){
+    if(Math.abs(df)>1e-9){
+      s+='<span class=v>f</span> 由 '+num(snap.f,1)+' 变为 '+num(P.f,1)+' cm，焦点外移，像距 <span class=v>v</span> 由 '+num(vOf(snap.f,snap.u),1)+' 变为 '+num(G.v,1)+' cm。';
+    }else if(Math.abs(du)>1e-9){
+      s+='<span class=v>u</span> 由 '+num(snap.u,1)+' 变为 '+num(P.u,1)+' cm，像距 <span class=v>v</span> 由 '+num(vOf(P.f,snap.u),1)+' 变为 '+num(G.v,1)+' cm。';
+    }else{
+      s+='拖动滑块观察光路与像的变化；按「开始」看光沿光线传播。';
+    }
     s+=' 拓展：过光心方向不变的那条光线也沿一条副光轴。';
   }
+  s+=MODE==='point'
+    ? ' 主轴以下是固定高度的基座，红色竖段表示物高 <span class=v>h</span>；光屏下缘穿过中空框架，主光轴下方的光线也能落在屏上。'
+    : ' 光具座是中空框架，转动视角能看到两根导轨之间的空隙。';
+  s+=' 在画面上拖动可旋转视角；底部刻度是固定的光轴坐标，不随视角转动。';
   hint.innerHTML=s;
   snap={f:P.f,u:P.u,th:P.th};
 }
@@ -661,6 +865,9 @@ function arm(){
   tCur=0;
 }
 function refresh(){ compute(); upHint(); upd(); draw(); }
+function updView(){
+  if(oView) oView.textContent='方位 '+num(CAM.yaw*180/PI,0)+'° · 仰角 '+num(CAM.elev*180/PI,0)+'°';
+}
 
 /* ===== 交互 ===== */
 function setMode(m){
@@ -682,8 +889,47 @@ bPlay.addEventListener('click',function(){
 bReset.addEventListener('click',function(){
   P.f=10; P.u=30; P.th=0;
   sF.value='10'; sU.value='30'; sT.value='0';
+  CAM.yaw=YAW0; CAM.elev=ELV0; camBasis(); updView();
   setMode('point');
 });
+if(bView) bView.addEventListener('click',function(){
+  CAM.yaw=YAW0; CAM.elev=ELV0; camBasis(); updView(); draw();
+});
+
+/* 拖动旋转：左右改方位、上下改仰角，方位可绕满一圈 */
+var drag=false, px0=0, py0=0;
+function pxScale(){
+  var r=cv.getBoundingClientRect();
+  return LW/Math.max(320,(r&&r.width)||LW);
+}
+function onDown(e){
+  drag=true;
+  px0=(e&&typeof e.clientX==='number')?e.clientX:0;
+  py0=(e&&typeof e.clientY==='number')?e.clientY:0;
+  if(cv.setPointerCapture&&e&&e.pointerId!==undefined){
+    try{cv.setPointerCapture(e.pointerId);}catch(err){}
+  }
+  if(cv.style) cv.style.cursor='grabbing';
+}
+function onMove(e){
+  if(!drag) return;
+  var ex=(e&&typeof e.clientX==='number')?e.clientX:px0;
+  var ey=(e&&typeof e.clientY==='number')?e.clientY:py0;
+  var k=pxScale();
+  CAM.yaw+=(ex-px0)*k*0.006;
+  CAM.elev=clamp(CAM.elev-(ey-py0)*k*0.005,-72*PI/180,78*PI/180);
+  px0=ex; py0=ey;
+  camBasis(); updView(); draw();
+}
+function onUp(){drag=false; if(cv.style) cv.style.cursor='grab';}
+if(cv.addEventListener){
+  cv.addEventListener('pointerdown',onDown);
+  cv.addEventListener('pointermove',onMove);
+  cv.addEventListener('pointerup',onUp);
+  cv.addEventListener('pointercancel',onUp);
+  cv.addEventListener('pointerleave',onUp);
+}
+if(cv.style) cv.style.cursor='grab';
 
 /* ===== 主循环 ===== */
 function step(ts){
@@ -697,7 +943,7 @@ window.addEventListener('resize',function(){resize();draw();});
 if(typeof ResizeObserver!=='undefined'){
   var lastW=0;
   new ResizeObserver(function(){
-    var w=cv.getBoundingClientRect().width;
+    var r=cv.getBoundingClientRect(), w=r?r.width:0;
     if(Math.abs(w-lastW)<1) return;
     lastW=w; resize(); draw();
   }).observe(cv);
@@ -705,6 +951,7 @@ if(typeof ResizeObserver!=='undefined'){
 if(D.fonts){D.fonts.load('italic 14px KaTeX_Math'); D.fonts.load('14px KaTeX_Main');}
 bPoint.className=(MODE==='point')?'on':'';
 bParallel.className=(MODE==='parallel')?'on':'';
+updView();
 resize(); refresh();
 requestAnimationFrame(step);
 })();
