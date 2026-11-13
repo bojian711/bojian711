@@ -404,6 +404,16 @@ function pathPoint(pts,L,s,close){
   return [pts[0][0],pts[0][1],0];
 }
 function inBox(x,y,b){return x>b[0]&&x<b[1]&&y>b[2]&&y<b[3];}
+/* 流向箭头：沿管段切向的小三角 */
+function chev(x,y,ang,size,color){
+  var ca=Math.cos(ang), sa=Math.sin(ang);
+  var s=size, w=size*0.62;
+  poly(ctx,[[x+ca*s,y+sa*s],[x-ca*s*0.72-sa*w,y-sa*s*0.72+ca*w],[x-ca*s*0.72+sa*w,y-sa*s*0.72-ca*w]],true,color,null,0);
+}
+function segAng(pts,idx,close){
+  var a=pts[idx], b=pts[(idx+1)%pts.length];
+  return Math.atan2(b[1]-a[1],b[0]-a[0]);
+}
 var HIDES=[[SG0+2,SG1-2,SGY0+2,SGY1-2],[TBX0+2,TBX1-2,TBYT+2,TBYB-2],[CD0+2,CD1-2,CDY0+2,CDY1-2]];
 
 /* ===== 场景绘制 ===== */
@@ -503,22 +513,29 @@ function drawPlant(T){
       ctx.globalAlpha=1;
     }
   }
-  /* 冷却剂流点 */
+  /* 冷却剂流向箭头 */
   if(kFlow.checked){
     var spd=(0.12+0.88*clamp(PW/P0,0,2))*34;
-    var n1=10, n2=20;
+    var n1=8, n2=16;
     for(i=0;i<n1;i++){
       var q=pathPoint(P1,L1,flowPh*spd+L1*i/n1,true);
+      /* 跳过压力壳内部的回程段：那一段贴着堆芯与中子，箭头会变成噪声 */
+      if(q[2]===3) continue;
       if(inBox(q[0],q[1],HIDES[0])) continue;
-      dot(q[0],q[1],2.6,q[2]<=1?T.hotP:T.coldP);
+      chev(q[0],q[1],segAng(P1,q[2],true),9.5,q[2]<=1?T.hotP:T.coldP);
     }
     for(i=0;i<n2;i++){
       var q2=pathPoint(P2,L2,flowPh*spd+L2*i/n2,false);
       var hide=false,j;
       for(j=0;j<HIDES.length;j++) if(inBox(q2[0],q2[1],HIDES[j])){hide=true;break;}
       if(hide) continue;
-      dot(q2[0],q2[1],2.6,q2[2]<=6?T.steamP:T.coldP);
+      chev(q2[0],q2[1],segAng(P2,q2[2],false),9.5,q2[2]<=6?T.steamP:T.coldP);
     }
+    /* 固定流向标记：回路注记旁各一枚，停堆时也能读出方向 */
+    chev(288,300,0,8.5,T.hotP);
+    chev(310,408,PI,8.5,T.coldP);
+    chev(470,150,0,8.5,T.steamP);
+    chev(560,388,PI,8.5,T.coldP);
   }
   /* 标签 */
   rtext([{t:'安全壳（核岛）',sys:true}],34,84,12.5,T.fg,'left','alphabetic',false);
@@ -556,6 +573,8 @@ function drawPlant(T){
   rtext([{t:'控制棒吸收',sys:true}],568,ly,11.5,T.muted,'left','alphabetic',false);
   arrow2(668,ly-4,690,ly-4,T.muted,1.4,5);
   rtext([{t:'泄漏（飞出堆芯）',sys:true}],696,ly,11.5,T.muted,'left','alphabetic',false);
+  chev(806,ly-4,0,6.5,T.hotP); chev(824,ly-4,0,6.5,T.coldP);
+  rtext([{t:'工质流向',sys:true}],836,ly,11.5,T.muted,'left','alphabetic',false);
 }
 
 /* ===== 燃耗图 ===== */
