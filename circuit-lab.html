@@ -61,6 +61,15 @@ button:disabled{opacity:.4;cursor:default}
 canvas{display:block;touch-action:none;cursor:crosshair}
 .tip{position:absolute;left:10px;bottom:8px;font-size:11.5px;color:var(--muted);
   background:var(--stage);padding:2px 6px;border-radius:4px;pointer-events:none}
+.tidy{position:absolute;right:10px;top:8px;z-index:2;padding:5px 11px;font-size:12px;
+  background:var(--panel);box-shadow:0 2px 9px rgba(0,0,0,.10)}
+.tidy:hover{filter:brightness(1.05)}
+.savedlist{font-size:11.5px;line-height:1.5;color:var(--muted);max-height:132px;overflow:auto}
+.savedlist .empty{padding:3px 2px}
+.srow{display:flex;align-items:center;gap:5px;padding:3px 2px;border-bottom:1px solid var(--line)}
+.srow .sw{width:14px;height:3px;border-radius:2px;flex:0 0 14px}
+.srow .nm{flex:1;min-width:0;color:var(--fg);line-height:1.35;word-break:break-all}
+.srow .del{flex:0 0 auto;padding:1px 6px;font-size:12px;line-height:1.2}
 .side .tabs{display:flex;gap:6px;margin-bottom:8px}
 .side .tabs button{flex:1;padding:5px 4px;font-size:12px}
 .sec{font-size:11.5px;color:var(--muted);margin:5px 0 2px;padding-top:3px;border-top:1px solid var(--line)}
@@ -153,7 +162,7 @@ select{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--li
       <div id='modExam'></div>
       <div class='hint'>模块插入到当前画布，可多个组合；电源、开关、变阻器构成控制模块，电表与待测元件构成测量模块。</div>
     </div>
-    <div class='stage' id='stage'><canvas id='cv'></canvas><div class='tip' id='tip'>点接线柱连线；拖动元件移动；点开关切换通断</div></div>
+    <div class='stage' id='stage'><canvas id='cv'></canvas><button id='bTidy' class='tidy' title='按主回路重排元件，并重布导线，消除交叉'>一键规整</button><div class='tip' id='tip'>点接线柱连线；拖动元件移动；点开关切换通断</div></div>
     <div class='side'>
       <div class='tabs'><button id='tabData' class='on'>参数与读数</button><button id='tabGraph'>函数图像</button><button id='tabCode'>源码 / 导入</button></div>
       <div class='panes'>
@@ -184,6 +193,9 @@ select{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--li
         <select id='gscan'><option value='auto'>自动（变阻器改滑片，其余改第一个参数）</option><option value='A'>选中元件的第一个参数</option><option value='B'>选中元件的第二个参数</option></select>
         <div class='row2' id='gSweepRow'><button id='gSweep'>连续改变并作图</button><button id='gClear'>清空</button></div>
         <div class='row2' id='gTimeRow' style='display:none'><button id='gReRec'>储能清零，从 t = 0 重录</button><button id='gClear2'>清空曲线</button></div>
+        <div class='row2'><button id='gSave'>保存当前曲线</button><button id='gSaveClear'>清空已存</button></div>
+        <div class='sec'>已存曲线 · 叠加对比</div>
+        <div class='savedlist' id='gSaved'><div class='empty'>还没有保存的曲线。</div></div>
         <div class='hint' id='gHint'>选好横轴、纵轴，点「连续改变并作图」，程序把选中元件的参数从最小连续变到最大，一次画出整条曲线。自己拖动参数滑块时，工作点也会实时落到图上，演示不会暂停。</div>
         <div class='rule' id='gInfo'>还没有曲线。</div>
       </div>
@@ -223,6 +235,9 @@ var COMPS=[], WIRES=[], sel=null, selWire=null, pending=null, drag=null, mouse=n
 var refMode='bat', showPot=true, showCur=true, showInfo=true, allIdeal=true;
 var TRACE=[], CURVE=[], CURVEX='', CURVEY='', CURVEKEY='';
 var TREC=[], scopeT0=0;   /* 时间轴（示波器）记录：{x: t − scopeT0, y: 纵轴量}，只在运行时逐帧追加 */
+var SAVED=[], SAVESEQ=0;  /* 冻结的曲线：切换横纵轴后仍留在图上，用于叠加对比 */
+var SAVECOL={light:['#3a6ea5','#a3563c','#4c7a5d','#7b6397','#9a7b3f','#6b6f78'],
+             dark:['#7fa8d4','#cf9179','#8fb89b','#b39dd0','#c9b077','#a9b0ba']};
 function timeMode(){return $('gx').value==='time';}
 var SEQ;                             /* 在 TYPENAME 定义后由 resetSeq() 初始化 */
 var RMAX=[10,20,100,1000,10000];   /* 变阻器最大阻值档：覆盖到 10 kΩ */
@@ -894,6 +909,305 @@ function insertModule(k,additive){
   return {ok:true,ox:ox,oy:oy};
 }
 function loadPreset(k){return insertModule(k,false);}
+
+/* ===== 一键规整 =====
+   只改元件坐标和导线的绕行点，接线关系一动不动。
+   并查集求节点 → 沿主回路找最长元件链 → 所有元件蛇形排进网格 →
+   每根导线在若干条走廊里试走，选交叉、穿透、长度综合最小的那条。 */
+function tidySamples(w,n){
+  var P=wirePath(w),a=[],i,p;
+  if(!P)return a;
+  for(i=0;i<=n;i++){p=bezP(P,i/n);a.push([p.x,p.y]);}
+  return a;
+}
+function tidyBox(c){
+  var d=DEFS[c.type];
+  return [c.x-d.w*CS/2+4,c.y-d.h*CS/2+4,c.x+d.w*CS/2-4,c.y+d.h*CS/2-4];
+}
+function tidyPen(pts,w){
+  var hit=0,i,j,b;
+  for(i=0;i<COMPS.length;i++){
+    if(COMPS[i].id===w.a.c||COMPS[i].id===w.b.c)continue;
+    b=tidyBox(COMPS[i]);
+    for(j=0;j<pts.length;j++)
+      if(pts[j][0]>b[0]&&pts[j][0]<b[2]&&pts[j][1]>b[1]&&pts[j][1]<b[3])hit++;
+  }
+  return hit>1?1:0;
+}
+function tidyShared(p,q){
+  var A=[p.a.c+':'+p.a.t,p.b.c+':'+p.b.t],B=[q.a.c+':'+q.a.t,q.b.c+':'+q.b.t];
+  return A[0]===B[0]||A[0]===B[1]||A[1]===B[0]||A[1]===B[1];
+}
+function tidyHit(a,b,c,d){
+  var s1x=b[0]-a[0],s1y=b[1]-a[1],s2x=d[0]-c[0],s2y=d[1]-c[1];
+  var den=-s2x*s1y+s1x*s2y;
+  if(Math.abs(den)<1e-9)return null;
+  var s=(-s1y*(a[0]-c[0])+s1x*(a[1]-c[1]))/den;
+  var t=(s2x*(a[1]-c[1])-s2y*(a[0]-c[0]))/den;
+  if(s<0||s>1||t<0||t>1)return null;
+  return [a[0]+s*s1x,a[1]+s*s1y];
+}
+function tidyNear(p,ends,r){
+  for(var i=0;i<ends.length;i++)
+    if(Math.hypot(p[0]-ends[i][0],p[1]-ends[i][1])<r)return true;
+  return false;
+}
+function tidyCross(p,q,shared){
+  var ends=[p[0],p[p.length-1],q[0],q[q.length-1]],i,j,x;
+  for(i=0;i<p.length-1;i++)for(j=0;j<q.length-1;j++){
+    x=tidyHit(p[i],p[i+1],q[j],q[j+1]);
+    if(!x)continue;
+    if(tidyNear(x,ends,shared?46:17))continue;
+    return 1;
+  }
+  return 0;
+}
+function tidyStats(){
+  var S=WIRES.map(function(w){return tidySamples(w,36);}),i,j,c=0,pn=0;
+  for(i=0;i<WIRES.length;i++){
+    if(S[i].length)pn+=tidyPen(S[i],WIRES[i]);
+    for(j=i+1;j<WIRES.length;j++)
+      if(S[i].length&&S[j].length)c+=tidyCross(S[i],S[j],tidyShared(WIRES[i],WIRES[j]));
+  }
+  return {cross:c,pen:pn};
+}
+/* 全局分数：局部最优逐根拼起来未必最优，最后再按这个复核一遍 */
+function tidyGlobal(){
+  var S=WIRES.map(function(w){return tidySamples(w,36);}),i,j,s=0,L=0;
+  for(i=0;i<WIRES.length;i++){
+    s+=6*tidyPen(S[i],WIRES[i]);
+    for(j=1;j<S[i].length;j++)L+=Math.hypot(S[i][j][0]-S[i][j-1][0],S[i][j][1]-S[i][j-1][1]);
+    for(j=i+1;j<WIRES.length;j++)
+      if(S[i].length&&S[j].length)s+=4*tidyCross(S[i],S[j],tidyShared(WIRES[i],WIRES[j]));
+  }
+  return s+L/1200;
+}
+function tidyChain(){
+  var pa={};
+  function K(c,t){return c+':'+t;}
+  function find(x){if(pa[x]===undefined)pa[x]=x;
+    while(pa[x]!==x){pa[x]=pa[pa[x]];x=pa[x];}return x;}
+  WIRES.forEach(function(w){
+    var a=K(w.a.c,w.a.t),b=K(w.b.c,w.b.t);find(a);find(b);
+    a=find(a);b=find(b);if(a!==b)pa[b]=a;
+  });
+  var used={};
+  WIRES.forEach(function(w){used[K(w.a.c,w.a.t)]=true;used[K(w.b.c,w.b.t)]=true;});
+  var edges=[];
+  COMPS.forEach(function(c){
+    if(c.type==='gnd')return;
+    var ts=Object.keys(DEFS[c.type].terms).filter(function(t){return used[K(c.id,t)];});
+    if(ts.length<2)return;
+    var u=find(K(c.id,ts[0])),v=find(K(c.id,ts[1]));
+    if(u===v)return;
+    edges.push({id:c.id,u:u,v:v,type:c.type});
+  });
+  var adj={};
+  edges.forEach(function(e){
+    (adj[e.u]=adj[e.u]||[]).push({e:e,to:e.v});
+    (adj[e.v]=adj[e.v]||[]).push({e:e,to:e.u});
+  });
+  var starts=edges.filter(function(e){
+    return e.type==='cell'||e.type==='ac'||e.type==='idc'||e.type==='om';});
+  if(!starts.length)starts=edges.slice(0,3);
+  var best=[],seen={},guard=0,i;
+  function dfs(node,path,ue){
+    if(++guard>40000)return;
+    if(path.length>best.length)best=path.slice();
+    var nb=adj[node]||[],k,z;
+    for(k=0;k<nb.length;k++){
+      z=nb[k];
+      if(ue[z.e.id]||seen[z.to])continue;
+      ue[z.e.id]=true;seen[z.to]=true;path.push(z.e);
+      dfs(z.to,path,ue);
+      path.pop();delete ue[z.e.id];delete seen[z.to];
+    }
+  }
+  for(i=0;i<starts.length&&guard<40000;i++){
+    var s=starts[i],ue={};
+    seen={};seen[s.u]=true;ue[s.id]=true;dfs(s.u,[s],ue);
+    seen={};seen[s.v]=true;ue={};ue[s.id]=true;dfs(s.v,[s],ue);
+  }
+  return best;
+}
+function tidyCandidates(w,idx){
+  var A=termPos(w.a),B=termPos(w.b);
+  if(!A||!B)return [null];
+  var out=[null],i,Y,X,ys=[56,112,246,376,504,534],xs=[34,966];
+  for(i=0;i<ys.length;i++){
+    Y=ys[i]+((idx%3)-1)*8;
+    out.push([[A.x+A.nx*54,Y],[B.x+B.nx*54,Y]]);
+  }
+  for(i=0;i<xs.length;i++){
+    X=xs[i]+((idx%3)-1)*8;
+    out.push([[X,A.y+A.ny*54],[X,B.y+B.ny*54]]);
+  }
+  out.push([[A.x+A.nx*72,A.y+A.ny*112],[B.x+B.nx*72,B.y+B.ny*112]]);
+  /* 只绕开局部障碍的短通道，不必整根线走到画布外圈 */
+  var my=(A.y+B.y)/2;
+  out.push([[A.x+A.nx*58,my-96],[B.x+B.nx*58,my-96]]);
+  out.push([[A.x+A.nx*58,my+96],[B.x+B.nx*58,my+96]]);
+  return out;
+}
+function tidyScore(idx,v){
+  WIRES[idx].v=v;
+  var me=tidySamples(WIRES[idx],36),s=0,k,L=0,ot;
+  if(!me.length)return 1e6;
+  for(k=1;k<me.length;k++)L+=Math.hypot(me[k][0]-me[k-1][0],me[k][1]-me[k-1][1]);
+  for(k=0;k<WIRES.length;k++){
+    if(k===idx)continue;
+    ot=tidySamples(WIRES[k],36);
+    if(ot.length)s+=4*tidyCross(me,ot,tidyShared(WIRES[idx],WIRES[k]));
+  }
+  s+=6*tidyPen(me,WIRES[idx]);
+  s+=L/900;
+  return s;
+}
+/* 某种排法下所有接线柱的直线跨度之和，用来挑最顺的元件顺序 */
+function tidySpan(order,perRow,y0,dy){
+  var pos={},i;
+  for(i=0;i<order.length;i++){
+    var r=Math.floor(i/perRow),q=i%perRow,cnt=Math.min(perRow,order.length-r*perRow);
+    var xa=cnt===1?500:(r%2?810-620*q/(cnt-1):190+620*q/(cnt-1));
+    pos[order[i]]=[clamp(xa,90,910),y0+r*dy];
+  }
+  var s=0;
+  WIRES.forEach(function(w){
+    var a=pos[w.a.c],b=pos[w.b.c],ca=byId(w.a.c),cb=byId(w.b.c);
+    if(!a||!b||!ca||!cb)return;
+    var ta=DEFS[ca.type].terms[w.a.t],tb=DEFS[cb.type].terms[w.b.t];
+    if(!ta||!tb)return;
+    s+=Math.hypot(a[0]+S(ta.x)-b[0]-S(tb.x),a[1]+S(ta.y)-b[1]-S(tb.y));
+  });
+  return s;
+}
+function tidyApply(order,perRow,y0,dy){
+  var i;
+  for(i=0;i<order.length;i++){
+    var c=byId(order[i]);if(!c)continue;
+    var r=Math.floor(i/perRow),q=i%perRow,cnt=Math.min(perRow,order.length-r*perRow);
+    var xa=cnt===1?500:(r%2?810-620*q/(cnt-1):190+620*q/(cnt-1));
+    c.x=clamp(xa,90,910);c.y=y0+r*dy;
+  }
+}
+/* 课本实物接线图的三层：负载在上、电源与控制在下、电压表等跨接表在中 */
+function tidyLayer(order){
+  var g={top:[],mid:[],bot:[]};
+  order.forEach(function(id){
+    var c=byId(id);if(!c)return;
+    if(c.type==='vm'||c.type==='gnd')g.mid.push(id);
+    else if(c.type==='cell'||c.type==='ac'||c.type==='idc'||c.type==='om'||
+            c.type==='sw'||c.type==='rh')g.bot.push(id);
+    else g.top.push(id);
+  });
+  function row(ids,y){
+    for(var k=0;k<ids.length;k++){
+      var c=byId(ids[k]);if(!c)continue;
+      c.x=ids.length===1?500:190+620*k/(ids.length-1);
+      c.y=y;
+    }
+  }
+  row(g.top,160);row(g.mid,300);row(g.bot,452);
+}
+function tidyPlace(V,o){
+  if(V.layer)tidyLayer(o);
+  else tidyApply(o,V.p,V.y,V.dy);
+}
+/* 在当前元件位置上重布每根导线，返回交叉/穿透统计 */
+function tidyRoute(){
+  var i,j,round,pass;
+  WIRES.forEach(function(w){w.v=null;});
+  for(round=0;round<3;round++){
+    for(i=0;i<WIRES.length;i++){
+      var cands=tidyCandidates(WIRES[i],i),bv=null,bs=Infinity;
+      for(j=0;j<cands.length;j++){
+        var sc=tidyScore(i,cands[j]);
+        if(sc<bs-1e-9){bs=sc;bv=cands[j];}
+      }
+      WIRES[i].v=bv;
+    }
+  }
+  for(pass=0;pass<2;pass++){
+    for(i=0;i<WIRES.length;i++){
+      var keep=WIRES[i].v,bg=tidyGlobal(),bv2=keep,bs2=bg,cs=tidyCandidates(WIRES[i],i);
+      for(j=0;j<cs.length;j++){
+        WIRES[i].v=cs[j];
+        var gg=tidyGlobal();
+        if(gg<bs2-1e-9){bs2=gg;bv2=cs[j];}
+      }
+      WIRES[i].v=bv2;
+    }
+  }
+  /* 成对改变才能跳出的局部最小：全直连作为一种整体方案再比一次 */
+  var keepAll=WIRES.map(function(w){return w.v;}),gCur=tidyGlobal();
+  WIRES.forEach(function(w){w.v=null;});
+  if(tidyGlobal()>gCur+1e-9)WIRES.forEach(function(w,i){w.v=keepAll[i];});
+  return tidyStats();
+}
+function tidyLayout(){
+  if(COMPS.length<2)return {ok:false,msg:'元件太少，没什么可规整的。'};
+  var before=tidyStats(),i,j,chain=tidyChain(),inChain={};
+  chain.forEach(function(e){inChain[e.id]=true;});
+  var base=chain.map(function(e){return e.id;});
+  COMPS.forEach(function(c){if(!inChain[c.id]&&c.type!=='gnd')base.push(c.id);});
+  COMPS.forEach(function(c){if(c.type==='gnd')base.push(c.id);});
+  var maxW=0;
+  COMPS.forEach(function(c){maxW=Math.max(maxW,DEFS[c.type].w*CS);});
+  var perRow=clamp(Math.floor(680/(maxW+22)),2,6);
+  var nrow=Math.max(1,Math.ceil(base.length/perRow));
+  var y0=nrow===1?300:150,y1=nrow===1?300:452,dy=nrow>1?(y1-y0)/(nrow-1):0;
+  /* 同一个环从不同端点起排，导线跨度差很多；主链、反向、沿导线贪心、原顺序、循环移位都比一遍 */
+  var orders=[base,base.slice().reverse(),COMPS.map(function(c){return c.id;})],sh;
+  var greedy=[],used={},cur=base[0],guard=0;
+  while(cur&&!used[cur]&&guard++<60){
+    greedy.push(cur);used[cur]=true;
+    var nx=null;
+    for(j=0;j<WIRES.length&&!nx;j++){
+      var w=WIRES[j];
+      if(w.a.c===cur&&!used[w.b.c])nx=w.b.c;
+      else if(w.b.c===cur&&!used[w.a.c])nx=w.a.c;
+    }
+    cur=nx;
+  }
+  base.forEach(function(id){if(!used[id])greedy.push(id);});
+  if(greedy.length===base.length)orders.push(greedy);
+  for(sh=1;sh<Math.min(5,base.length);sh++)orders.push(base.slice(sh).concat(base.slice(0,sh)));
+  /* 变体：每行放几个元件会改变行分布，复杂电路换一种往往就能全避开 */
+  var variants=[{layer:true,n:3},{p:perRow,y:y0,dy:dy,n:nrow}];
+  [perRow-1,perRow+1].forEach(function(q){
+    q=clamp(q,2,6);
+    if(q===perRow||variants.some(function(v){return v.p===q;}))return;
+    var nq=Math.max(1,Math.ceil(base.length/q));
+    variants.push({p:q,y:nq===1?300:150,dy:nq>1?302/(nq-1):0,n:nq});
+  });
+  var pool=orders.filter(function(o){return o.length===base.length;});
+  if(!pool.length)pool=[base];
+  var bestV=null,bestO=base,bestVar=variants[0],bestG=Infinity,vi,ci,st,g,done=false;
+  for(vi=0;vi<variants.length&&!done;vi++){
+    var V=variants[vi];
+    var rk=V.layer?[{o:base,sp:0},{o:greedy,sp:0}]:
+      pool.map(function(o){return {o:o,sp:tidySpan(o,V.p,V.y,V.dy)};})
+        .sort(function(a,b){return a.sp-b.sp;}).slice(0,4);
+    for(ci=0;ci<rk.length;ci++){
+      tidyPlace(V,rk[ci].o);
+      st=tidyRoute();g=tidyGlobal();
+      if(g<bestG){bestG=g;bestO=rk[ci].o;bestVar=V;bestV=WIRES.map(function(w){return w.v;});}
+      /* 零交叉的方案一律优先，哪怕走线长一点，也不被长度分数压下去 */
+      if(st.cross===0&&st.pen===0){
+        bestO=rk[ci].o;bestVar=V;bestV=WIRES.map(function(w){return w.v;});
+        done=true;break;
+      }
+    }
+  }
+  tidyPlace(bestVar,bestO);
+  WIRES.forEach(function(w,i){w.v=bestV[i];});
+  var after=tidyStats();
+  refresh();
+  $('status').innerHTML+='　已按主回路重排：导线交叉 '+after.cross+
+    ' 处，穿过元件 '+after.pen+' 处';
+  return {ok:true,cross0:before.cross,pen0:before.pen,cross:after.cross,
+    pen:after.pen,n:base.length,rows:bestVar.n};
+}
 
 /* ===== 求解与读数 ===== */
 var RES=null;
@@ -2250,8 +2564,46 @@ function collectPoint(){
   $('gInfo').textContent='当前工作点 X = '+num(x,3)+'，Y = '+num(y,3)+
     (CURVE.length?'；曲线上共 '+CURVE.length+' 个点。':'；点「连续改变并作图」得到整条曲线。');
 }
-var HINTSWEEP='选好横轴、纵轴，点「连续改变并作图」，程序把选中元件的参数从最小连续变到最大，一次画出整条曲线。自己拖动参数滑块时，工作点也会实时落到图上，演示不会暂停。';
-var HINTTIME='横轴是时间（示波器）：按「开始」运行后，纵轴量随时间逐点画出来，暂停时停住。看电容充电就把纵轴选成电容的端电压；「储能清零重录」把电容电荷、电感电流清掉，从 t = 0 重新记录。';
+var HINTSWEEP='选好横轴、纵轴，点「连续改变并作图」，程序把选中元件的参数从最小连续变到最大，一次画出整条曲线。自己拖动参数滑块时，工作点也会实时落到图上，演示不会暂停。点「保存当前曲线」把这条线冻结在图上，再换一组横纵轴画第二条，两条线共用同一套坐标叠加对比；测电源电动势和内阻时，理想线取干路电流与电源端电压，实验线取电流表读数与电压表读数。';
+var HINTTIME='横轴是时间（示波器）：按「开始」运行后，纵轴量随时间逐点画出来，暂停时停住。看电容充电就把纵轴选成电容的端电压；「储能清零重录」把电容电荷、电感电流清掉，从 t = 0 重新记录。记录好的曲线也能保存下来，换参数再录一条作对比。';
+function savedColor(i){
+  var dk=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var pal=SAVECOL[dk?'dark':'light'];
+  return pal[(i+1)%pal.length];
+}
+/* 把当前曲线冻结成数值，换横纵轴、换电路后仍留在图上 */
+function saveCurve(){
+  var tm=timeMode(),src=tm?TREC:CURVE;
+  if(!src||src.length<2){
+    $('gInfo').textContent=tm?
+      '时间轴还没有记录到点：按「开始」运行一段时间，再回来保存。':
+      '当前还没有曲线：先点「连续改变并作图」，再保存。';
+    return 0;
+  }
+  var xk=tm?'time':(CURVEX||$('gx').value),yk=tm?$('gy').value:(CURVEY||$('gy').value);
+  SAVESEQ++;
+  SAVED.push({id:SAVESEQ,pts:src.map(function(p){return {x:p.x,y:p.y};}),
+    xk:xk,yk:yk,xn:chanName(xk),yn:chanName(yk),
+    kind:tm?'time':'scan',n:src.length});
+  renderSaved();
+  $('gInfo').textContent='已保存曲线 '+SAVESEQ+'（'+src.length+' 点）：X '+chanName(xk)+
+    '，Y '+chanName(yk)+'。换一组横纵轴再作图，两条线叠在同一张图上。'+
+    '两条线完全重合时，把电表切到真实内阻就能看出实验线偏离理想线；'+
+    '横纵轴单位不同的曲线叠加只作形状参考。';
+  draw();
+  return SAVED.length;
+}
+function renderSaved(){
+  var h='',i;
+  if(!SAVED.length)h="<div class='empty'>还没有保存的曲线。</div>";
+  for(i=0;i<SAVED.length;i++){
+    var s=SAVED[i];
+    h+="<div class='srow'><span class='sw' style='background:"+savedColor(i)+"'></span>"+
+       "<span class='nm'>曲线 "+s.id+"　"+s.n+" 点<br>X "+s.xn+"<br>Y "+s.yn+"</span>"+
+       "<button class='del' data-id='"+s.id+"' title='删除这条曲线'>×</button></div>";
+  }
+  $('gSaved').innerHTML=h;
+}
 function syncGraphUI(){
   var tm=timeMode();
   $('gScanSec').style.display=tm?'none':'';
@@ -2306,8 +2658,10 @@ function drawGraph(T,W,H,compact){
   var tm=timeMode();
   var lineData=tm?TREC:CURVE;
   var cx=readChannel($('gx').value),cy=readChannel($('gy').value);
-  var pts=lineData.concat(tm?[]:TRACE);
-  if(!pts.length){
+  var pts=lineData.concat(tm?[]:TRACE),allPts=pts.slice(),si;
+  /* 已存曲线与当前曲线共用一套坐标，刻度范围按两者合起来取 */
+  for(si=0;si<SAVED.length;si++)allPts=allPts.concat(SAVED[si].pts);
+  if(!allPts.length){
     if(tm){
       if(big){
         rtextBox(['横轴是时间：按「开始」运行，纵轴量随时间逐点记录'],W/2,H/2-10,15,T.muted,'center','middle');
@@ -2326,8 +2680,8 @@ function drawGraph(T,W,H,compact){
     return;
   }
   var minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
-  for(i=0;i<pts.length;i++){
-    var p=pts[i];
+  for(i=0;i<allPts.length;i++){
+    var p=allPts[i];
     if(isFinite(p.x)){minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);}
     if(isFinite(p.y)){minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);}
   }
@@ -2381,6 +2735,20 @@ function drawGraph(T,W,H,compact){
     rtextBox([{t:'Y\u3000'}].concat(yp),6,7,lab,T.fg,'left','top');
     rtextBox([{t:'X\u3000'}].concat(xp),W-6,H-7,lab,T.fg,'right','bottom');
   }
+  /* 已存曲线先画，当前曲线压在上面，颜色按保存顺序轮转 */
+  for(si=0;si<SAVED.length;si++){
+    var sv=SAVED[si];
+    if(sv.pts.length<2)continue;
+    /* 画得比当前曲线粗，且越早保存的越粗：几条线数值重合时仍能看到分层的颜色 */
+    ctx.strokeStyle=savedColor(si);
+    ctx.lineWidth=clamp(3.4+(SAVED.length-1-si)*1.3,3.4,7);ctx.lineJoin='round';
+    ctx.globalAlpha=0.92;ctx.beginPath();
+    for(i=0;i<sv.pts.length;i++){
+      var sxp=PX(sv.pts[i].x),syp=PY(sv.pts[i].y);
+      if(i===0)ctx.moveTo(sxp,syp);else ctx.lineTo(sxp,syp);
+    }
+    ctx.stroke();ctx.globalAlpha=1;
+  }
   if(TRACE.length){
     ctx.globalAlpha=0.42;
     for(i=0;i<TRACE.length;i++)dot(PX(TRACE[i].x),PY(TRACE[i].y),2,T.muted);
@@ -2399,9 +2767,30 @@ function drawGraph(T,W,H,compact){
     dash([4,4]);line(x0,qy,qx,qy,T.mark,1);line(qx,y1,qx,qy,T.mark,1);dash([]);
     ring(qx,qy,big?5:4,T.mark,T.stage,1.2);
   }
+  /* 图例：完整名称只在放大图里写，小图只出色块与编号，右侧面板另有清单 */
+  if(SAVED.length){
+    if(big){
+      var lgx=x0+12,lgy=y0+12,lgw=Math.min(W-x0-30,540),lgh=SAVED.length*17+12;
+      ctx.save();ctx.globalAlpha=0.88;ctx.fillStyle=T.stage;
+      ctx.fillRect(lgx-7,lgy-9,lgw,lgh);ctx.restore();
+      for(si=0;si<SAVED.length;si++){
+        var ly=lgy+si*17;
+        line(lgx,ly,lgx+17,ly,savedColor(si),3);
+        rtextBox(['已存 '+SAVED[si].id+'　X '+SAVED[si].xn+' · Y '+SAVED[si].yn],
+          lgx+23,ly,10.5,T.fg,'left','middle');
+      }
+    }else{
+      for(si=0;si<SAVED.length;si++){
+        var lpx=W-12-si*17;
+        ctx.fillStyle=savedColor(si);ctx.fillRect(lpx-10,9,11,4);
+        rtextBox([String(SAVED[si].id)],lpx-5,20,8.5,T.muted,'center','top');
+      }
+    }
+  }
   if(big)rtextBox([tm?
     ('时间轴记录 '+TREC.length+' 点；暂停时停住，继续运行接着画'):
-    (CURVEKEY?'已连续改变 '+CURVEKEY:'还没有曲线')+'；拖动参数滑块时工作点实时更新'],18,H-16,11.5,T.muted,'left','bottom');
+    (CURVEKEY?'已连续改变 '+CURVEKEY:'还没有曲线')+'；拖动参数滑块时工作点实时更新']+
+    (SAVED.length?'　已存 '+SAVED.length+' 条，叠加对比':''),18,H-16,11.5,T.muted,'left','bottom');
 }
 
 /* ===== 参数控件映射 ===== */
@@ -2627,6 +3016,7 @@ function draw(){
 }
 function setMode(m){
   MODE=m;
+  $('bTidy').style.display=(m==='phys')?'':'none';
   if(m==='sch'){$('tex').value=texCode();openTab('code');}
   else if(m==='graph')openTab('graph');
   else openTab('data');
@@ -2733,7 +3123,11 @@ function onMove(e){
   if(!drag)return;
   if(drag.mode==='comp'){
     var c=byId(drag.id);
-    if(c){c.x=clamp(p.x-drag.dx,60,LW-60);c.y=clamp(p.y-drag.dy,50,LH-50);}
+    if(c){
+      c.x=clamp(p.x-drag.dx,60,LW-60);c.y=clamp(p.y-drag.dy,50,LH-50);
+      /* 规整生成的绕行点按旧位置算，元件一拖动就失效，改回直连 */
+      WIRES.forEach(function(w){if(w.a.c===c.id||w.b.c===c.id)w.v=null;});
+    }
     if(Math.hypot(p.x-drag.x0,p.y-drag.y0)>4)drag.moved=true;
   }else if(drag.mode==='rh'){
     var r=byId(drag.id);
@@ -2823,6 +3217,7 @@ $('mSch').addEventListener('click',function(){setMode('sch');});
 $('mGraph').addEventListener('click',function(){setMode('graph');});
 $('bGen').addEventListener('click',function(){setMode(MODE==='sch'?'phys':'sch');});
 $('bDel').addEventListener('click',deleteSel);
+$('bTidy').addEventListener('click',tidyLayout);
 $('bClear').addEventListener('click',function(){
   COMPS=[];WIRES=[];sel=null;selWire=null;pending=null;
   SEQ=resetSeq();
@@ -2836,6 +3231,19 @@ $('tabData').addEventListener('click',function(){openTab('data');});
 $('tabGraph').addEventListener('click',function(){openTab('graph');});
 $('tabCode').addEventListener('click',function(){openTab('code');if(MODE==='sch')$('tex').value=texCode();});
 $('gSweep').addEventListener('click',function(){sweepCurve();});
+$('gSave').addEventListener('click',saveCurve);
+$('gSaveClear').addEventListener('click',function(){
+  SAVED=[];renderSaved();draw();
+  $('gInfo').textContent='已清空保存的曲线，当前曲线仍在。';
+});
+$('gSaved').addEventListener('click',function(e){
+  var b=e&&e.target&&e.target.closest?e.target.closest('button.del'):null;
+  if(!b)return;
+  var id=+b.getAttribute('data-id');
+  SAVED=SAVED.filter(function(s){return s.id!==id;});
+  renderSaved();draw();
+  $('gInfo').textContent='已删除曲线 '+id+'，其余已存曲线继续叠加。';
+});
 $('gClear').addEventListener('click',function(){
   CURVE=[];TRACE=[];TREC=[];scopeT0=tCur;CURVEKEY='';$('gInfo').textContent='已清空。';
   collectPoint();draw();
@@ -2942,7 +3350,22 @@ window.CIRCUITDBG={
  param:function(k,v){if(sel)setVal(sel,k,v);refresh();},
  graph:function(){return {n:CURVE.length,t:TRACE.length,rec:TREC.length,x:CURVEX,y:CURVEY,key:CURVEKEY,
    xNow:readChannel($('gx').value),yNow:readChannel($('gy').value),
-   recLast:TREC.length?TREC[TREC.length-1]:null};},
+   saved:SAVED.length,recLast:TREC.length?TREC[TREC.length-1]:null};},
+ saved:function(){return SAVED.map(function(s){return {id:s.id,n:s.n,xk:s.xk,yk:s.yk,
+   xn:s.xn,yn:s.yn,first:s.pts[0],last:s.pts[s.pts.length-1]};});},
+ save:function(){return saveCurve();},
+ saveClear:function(){SAVED=[];renderSaved();draw();},
+ tidy:function(){return tidyLayout();},
+ geom:function(){return tidyStats();},
+ scramble:function(sd){
+   var x=sd||7;
+   COMPS.forEach(function(c){
+     x=(x*1103515245+12345)&0x7fffffff;c.x=120+(x%760);
+     x=(x*1103515245+12345)&0x7fffffff;c.y=110+(x%340);
+   });
+   WIRES.forEach(function(w){w.v=null;});
+   refresh();return true;
+ },
  rec:function(){return TREC.map(function(p){return [Math.round(p.x*1000)/1000,Math.round(p.y*10000)/10000];});},
  es:function(){return COMPS.filter(function(c){return c.type==='cap'||c.type==='ind';})
    .map(function(c){return {name:c.name,type:c.type,vC:c.vC,iL:c.iL};});},
@@ -2989,7 +3412,7 @@ window.CIRCUITDBG={
  },
  clear:function(){COMPS=[];WIRES=[];sel=null;FREELEADS=[];FLENOTE='';PRESETNOTE='';refresh();}
 };
-initChannels();syncGraphUI();fit();loadPreset(0);openTab('data');
+initChannels();syncGraphUI();renderSaved();fit();loadPreset(0);openTab('data');
 if(typeof requestAnimationFrame==='function')requestAnimationFrame(step);
 })();
 </script>
