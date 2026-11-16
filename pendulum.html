@@ -292,7 +292,7 @@ function drawScene(TH){
   if(Lf>4.5) vect(bx,by,bx+Fvx,by+Fvy,TH.p2,2.1);
 
   /* 标签：mg 在箭头下方偏外侧，T 在矢杆外侧，F 沿半径向外 */
-  rT([{t:'m',v:1},{t:'g',v:1}],bx+14,by+Lg+3,13.5,TH.p1,'left','middle',false,true);
+  rT([{t:'m',v:1},{t:'g',v:1}],bx,by+Lg+7,13.5,TH.p1,'center','top',false,true);
   var sg=a>=-1e-9?1:-1;
   rT([{t:'T',v:1}],bx+ux*Lt*0.68-uy*sg*14,by+uy*Lt*0.68+ux*sg*14,13.5,TH.p3,'center','middle',false,true);
   if(Lf>4.5){
