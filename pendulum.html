@@ -256,8 +256,8 @@ function drawScene(TH){
   var mg=MASS*GRAV, k=FS.k, Lg=k*mg;
 
   /* 天花板与悬点 */
-  line(PIVX-54,PIVY-7,PIVX+54,PIVY-7,TH.axis,2.2);
-  for(i=-48;i<=48;i+=16) line(PIVX+i,PIVY-7,PIVX+i-9,PIVY-19,TH.muted,1.1);
+  line(PIVX-54,PIVY,PIVX+54,PIVY,TH.axis,2.4);
+  for(i=-48;i<=48;i+=16) line(PIVX+i,PIVY-2,PIVX+i-9,PIVY-13,TH.muted,1.1);
 
   /* 摆动轨迹弧 */
   ctx.save();
@@ -272,12 +272,12 @@ function drawScene(TH){
 
   /* 平衡位置竖直线 */
   dash([2,5]);
-  line(PIVX,PIVY+7,PIVX,PIVY+Lp+20,TH.muted,1);
+  line(PIVX,PIVY+4,PIVX,PIVY+Lp+20,TH.muted,1);
   dash();
 
   /* 摆线、摆球 */
   line(PIVX,PIVY,bx,by,TH.axis,1.6);
-  dot(PIVX,PIVY,3.4,TH.axis);
+  dot(PIVX,PIVY,3.6,TH.axis);
   ring(bx,by,8,TH.ball,TH.ball,1.2);
 
   /* 力的三个矢量：重力、拉力、回复力（画在球之上，箭尾从球心起） */
