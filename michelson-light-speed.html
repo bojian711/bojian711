@@ -62,6 +62,7 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
 .scene-card figcaption{background:#182428;border-color:#324147;color:#edf6f2;padding:4px 8px}
 .scene-card figcaption span{color:#b8c9c6}
 #scene{aspect-ratio:650/134}
+html[data-kind='michelson'] #scene{aspect-ratio:650/188}
 .compare canvas{aspect-ratio:650/153;touch-action:pan-y;cursor:grab}
 .compare canvas:active{cursor:grabbing}
 .compare canvas:focus-visible{outline:2px solid #72e5d0;outline-offset:-2px}
@@ -136,26 +137,26 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
   </section>
   <section class='apparatus' aria-label='三维光路和八面镜'>
     <figure class='scene-card'>
-      <figcaption><strong>光路总览</strong><span id='path-stage'>待发射</span></figcaption>
-      <canvas id='scene' role='img' aria-label='狭缝光经八面镜和近端折转光路去往远端，返回后由八面镜反射向观察端'></canvas>
+      <figcaption><strong>图 18.5 光路</strong><span id='path-stage'>待发射</span></figcaption>
+      <canvas id='scene' role='img' aria-label='光源 S 穿过狭缝 O，经八面镜 A 的面 1 射向凹镜 B。光依次经 B、平面镜 M、B 返回八面镜，最后射向望远镜 C。'></canvas>
     </figure>
     <div class='detail-key'>
-      <span class='slot-key'>标记面 B</span><span class='axis-key'>参与反射的镜面</span>
+      <span class='slot-key'>面 2</span><span class='axis-key'>当前反射面</span>
       <button type='button' id='reset-camera'>恢复视角</button>
     </div>
     <figure class='scene-card compare'>
       <figcaption><strong>出射时</strong><span>拖动两图可转动视角</span></figcaption>
-      <canvas id='departure' tabindex='0' role='img' aria-label='出射时的八面镜。A 为出射镜面，B 为静止时的回光镜面。左右键转动视角。'></canvas>
+      <canvas id='departure' tabindex='0' role='img' aria-label='八面镜 A 的面 1 将入射光向左反射。面 2 在左，面 3 在左下。左右键转动视角。'></canvas>
     </figure>
     <figure class='scene-card compare'>
-      <figcaption><strong id='return-title'>等待回光</strong><span>与上图采用同一观察方向</span></figcaption>
-      <canvas id='arrival' tabindex='0' role='img' aria-label='回光时的八面镜。青色标记面 B，金色标记接到回光的镜面。左右键转动视角。'></canvas>
+      <figcaption><strong id='return-title'>等待回光</strong><span id='return-detail'>与上图同视角</span></figcaption>
+      <canvas id='arrival' tabindex='0' role='img' aria-label='回光到达八面镜。静止时面 3 接到回光，转过 45 度时面 2 接替面 3。左右键转动视角。'></canvas>
       <div class='arc-caption'><span id='arc-label'>八面镜转过的角度</span><output id='arc-distance' aria-labelledby='arc-label'>—</output></div>
     </figure>
   </section>
   <figure class='scene-card detector'>
-    <figcaption><strong>观察端</strong><span id='light-state'>等待回光</span></figcaption>
-    <canvas id='detector' role='img' aria-label='狭缝回光像与固定基准刻线'></canvas>
+    <figcaption><strong>望远镜 C</strong><span id='light-state'>等待回光</span></figcaption>
+    <canvas id='detector' role='img' aria-label='望远镜视野中的光源 S 的像与基准刻线'></canvas>
   </figure>
 </div>
 
@@ -167,19 +168,57 @@ const optics = (() => {
   const airSpeed = 299792458 / 1.00027;
   const experiments = Object.freeze({
     fizeau: Object.freeze({ distance: 8630, count: 720, radius: 0.10, scale: 2, min: 0, max: 26, step: 0.01, initial: 5 }),
-    michelson: Object.freeze({ distance: 35400, count: 8, scale: 1, min: 320, max: 650, step: 0.1, initial: 430 })
+    michelson: Object.freeze({ distance: 35373.21, count: 8, scale: 1, min: 0, max: 650, step: 0.1, initial: 120, reference: 528 })
   });
   const degrees = value => value * 180 / Math.PI;
 
-  function observe(kind, frequency, mediumSpeed = airSpeed) {
+  function michelsonReturn(phase, radius) {
+    const step = 2 * Math.PI / experiments.michelson.count;
+    const z = radius / Math.sqrt(2);
+    let hitX = -Infinity;
+    let face = 0;
+    let normalX = 0;
+    let normalZ = 0;
+    // Return beam travels along +x at a fixed z. Find the first face of the convex prism it meets.
+    for (let i = 0; i < experiments.michelson.count; i++) {
+      const angle = 5 * Math.PI / 4 + phase + i * step;
+      const nx = Math.cos(angle);
+      const nz = -Math.sin(angle);
+      if (nx >= -1e-12) continue;
+      const x = (radius - z * nz) / nx;
+      if (x > hitX) {
+        hitX = x;
+        face = i;
+        normalX = nx;
+        normalZ = nz;
+      }
+    }
+    const reflectedX = 1 - 2 * normalX ** 2;
+    const reflectedZ = -2 * normalX * normalZ;
+    return { x: hitX, z, face, reflectedX, reflectedZ, angle: Math.atan2(reflectedX, reflectedZ) };
+  }
+
+  function michelsonRemote(vertex, radius, halfSeparation) {
+    const adjacent = Math.sqrt(radius ** 2 - halfSeparation ** 2);
+    const x = vertex + radius - adjacent;
+    const nx = adjacent / radius;
+    const nz = halfSeparation / radius;
+    const focusX = x + halfSeparation * (2 * nx ** 2 - 1) / (2 * nx * nz);
+    return { x, focusX };
+  }
+
+  function observe(kind, frequency, mediumSpeed) {
     const apparatus = experiments[kind];
+    // The textbook supplies the first return frequency and the mountaintop distance.
+    mediumSpeed ??= kind === 'michelson' ? michelsonFromAngle(apparatus.reference).speed : airSpeed;
     const time = 2 * apparatus.distance / mediumSpeed;
     const revolutions = frequency * time;
     const pitchTravel = apparatus.count * revolutions;
     const residualPitches = pitchTravel - Math.round(pitchTravel);
     const relativeLight = 1 - 2 * Math.abs(residualPitches);
     // The return ray deviates by twice the normal's angular mismatch.
-    const angularOffset = 4 * Math.PI * residualPitches / apparatus.count;
+    const angularOffset = kind === 'michelson' ? michelsonReturn(2 * Math.PI * revolutions, 1).angle
+      : 4 * Math.PI * residualPitches / apparatus.count;
     const aligned = kind === 'fizeau'
       ? Math.abs(pitchTravel - 0.5) <= 0.0045
       : Math.abs(pitchTravel - 1) <= 0.004;
@@ -212,7 +251,7 @@ const optics = (() => {
     return { turnAngle, angularSpeed, time, length, speed: length / time };
   }
 
-  return { experiments, observe, measure, degrees, fizeauFromArc, michelsonFromAngle };
+  return { experiments, observe, measure, degrees, fizeauFromArc, michelsonFromAngle, michelsonReturn, michelsonRemote };
 })();
 
 
@@ -359,24 +398,26 @@ function createMichelsonScene() {
   const detector = byId('detector');
   const pathStage = byId('path-stage');
   const returnTitle = byId('return-title');
+  const returnDetail = byId('return-detail');
   const angleLabel = byId('arc-label');
   const angleReading = byId('arc-distance');
   const lightState = byId('light-state');
   const { palette, point, clamp, projectFrom, canvasFrame, stroke, disc, words, beam, box, paintFaces } = spatialGraphics;
   const { count } = optics.experiments.michelson;
   const faceAngle = 2 * Math.PI / count;
-  const baseline = -Math.PI / 4;
-  const halfField = 16 * Math.PI / 180;
-  const faceB = [74, 170, 157];
+  const baseline = 5 * Math.PI / 4;
+  const halfField = 4 * Math.PI / 180;
+  const faceTwo = [74, 170, 157];
   const lightFace = [220, 171, 100];
-  const view = { yaw: .36, elevation: .82 };
+  const view = { yaw: -.29, elevation: .86 };
   const initialYaw = view.yaw;
   let snapshot;
   let drag;
 
   const planePoint = (angle, radius, y = 0) => point(radius * Math.cos(angle), y, -radius * Math.sin(angle));
   const move = (p, x, y, z) => point(p.x + x, p.y + y, p.z + z);
-  const faceIndex = phase => (count - Math.round(phase / faceAngle)) % count;
+  const faceNumbers = [{ index:6, number:1, color:palette.path },{ index:7, number:2, color:palette.slot },{ index:0, number:3, color:'#c5ddf1' }];
+  const numberFace = index => faceNumbers.find(face=>face.index===index)?.number;
 
   function prism(faces, { phase, active, radius, height, x = 0, y = 0, z = 0, highlighted = true }) {
     const vertexRadius = radius / Math.cos(faceAngle / 2);
@@ -386,19 +427,14 @@ function createMichelsonScene() {
     faces.push({ vertices: top, material: [98, 121, 128] });
     for (let i = 0; i < count; i++) {
       const next = (i + 1) % count;
-      const material = highlighted && i === active ? lightFace : highlighted && i === 0 ? faceB : palette.steel;
+      const material = highlighted && i === active ? lightFace : highlighted && i === 7 ? faceTwo : palette.steel;
       faces.push({ vertices: [top[i], bottom[i], bottom[next], top[next]], material });
     }
   }
 
   function rayToFace(radius, phase) {
-    const residual = phase - Math.round(phase / faceAngle) * faceAngle;
-    const normal = planePoint(baseline + residual, 1);
-    const z = radius / Math.sqrt(2);
-    const x = (radius - z * normal.z) / normal.x;
-    const hit = point(x, 0, z);
-    const reflected = point(-1 + 2 * normal.x ** 2, 0, 2 * normal.x * normal.z);
-    return { hit, reflected };
+    const trace = optics.michelsonReturn(phase, radius);
+    return { hit:point(trace.x,0,trace.z), reflected:point(trace.reflectedX,0,trace.reflectedZ), face:trace.face };
   }
 
   function polyline(ctx, project, vertices, color, thickness) {
@@ -413,20 +449,20 @@ function createMichelsonScene() {
       beam(ctx, project(a), project(point(-190, 0, -offset)));
       return;
     }
-    const reference = point(offset, 0, offset);
+    const reference = point(-offset, 0, offset);
     ctx.setLineDash([5, 5]);
-    stroke(ctx, project(reference), project(point(offset, 0, 150)), palette.line, 1.4);
+    stroke(ctx, project(reference), project(point(-offset, 0, 105)), palette.line, 1.4);
     ctx.setLineDash([]);
     if (!returned) return;
     const { hit, reflected } = rayToFace(radius, phase);
     const extension = (113 - hit.z) / reflected.z;
-    beam(ctx, project(point(185, 0, hit.z)), project(hit));
+    beam(ctx, project(point(-185, 0, hit.z)), project(hit));
     beam(ctx, project(hit), project(move(hit, reflected.x * extension, 0, reflected.z * extension)));
     disc(ctx, project(hit).x, project(hit).y, 3.1, palette.core);
   }
 
   function drawSweep(ctx, project, phase, y) {
-    const mark = theta => project(planePoint(baseline + theta, 79, y));
+    const mark = theta => project(planePoint(baseline - faceAngle + theta, 87, y));
     const center = project(point(0, y, 0));
     const start = mark(0);
     let previous = start;
@@ -440,17 +476,14 @@ function createMichelsonScene() {
     }
     stroke(ctx, center, previous, palette.slot, 1.2);
     const mid = mark(phase / 2);
-    words(ctx, 'Δθ', mid.x + 24, mid.y + 9, palette.slot, 21);
+    words(ctx, 'Δθ', mid.x - 18, mid.y + 16, palette.slot, 21);
   }
 
-  function faceMark(ctx, project, phase, radius, y, text, color, align, labelOffset = -14) {
-    const p = project(planePoint(baseline + phase, radius * .83, y));
-    disc(ctx, p.x, p.y, 3.4, color);
-    const side = align === 'right' ? -1 : 1;
-    const end = { x: p.x + side * 60, y: p.y + labelOffset };
-    stroke(ctx, p, { x: end.x, y: p.y }, color, 1.0);
-    stroke(ctx, { x: end.x, y: p.y }, end, color, 1.0);
-    words(ctx, text, end.x + side * 5, end.y - 4, color, 19, align);
+  function faceMarks(ctx, project, phase, radius, y, size) {
+    for (const {index,number,color} of faceNumbers) {
+      const p = project(planePoint(baseline + phase + index * faceAngle, radius * .79, y));
+      words(ctx, String(number), p.x, p.y, color, size);
+    }
   }
 
   function compare(canvas, phase, isDeparture, returned) {
@@ -459,69 +492,95 @@ function createMichelsonScene() {
     const project = projectFrom(view.yaw, view.elevation, 310, 93);
     const radius = 56;
     const height = 24;
-    const active = isDeparture ? count / 2 : returned ? faceIndex(phase) : -1;
+    const active = isDeparture ? 6 : returned ? rayToFace(radius, phase).face : -1;
     const faces = [];
     prism(faces, { phase, active, radius, height });
     paintFaces(ctx, project, faces);
     lineOfSight(ctx, project, radius, phase, returned, isDeparture);
-    if (isDeparture) {
-      faceMark(ctx, project, Math.PI, radius, height, 'A 出射面', palette.path, 'right', 20);
-      faceMark(ctx, project, 0, radius, height, 'B', palette.slot, 'left');
-    } else {
-      const activeDirection = phase - Math.round(phase / faceAngle) * faceAngle;
-      if (returned && phase > 0) drawSweep(ctx, project, phase, height);
-      faceMark(ctx, project, phase, radius, height, 'B', palette.slot, 'left');
-      if (returned && active !== 0) faceMark(ctx, project, activeDirection, radius, height, '接到回光', palette.path, 'right');
-    }
+    if (!isDeparture && returned && phase > 0) drawSweep(ctx, project, phase, height);
+    faceMarks(ctx, project, phase, radius, height, 22);
   }
 
-  function drawOverview(state, phase, observation) {
-    const ctx = canvasFrame(overview, 650, 134);
+  const launchAt = .095;
+  const returnAt = .91;
+
+  function drawOverview(state, phase, finalPhase) {
+    const ctx = canvasFrame(overview, 650, 188);
     if (!ctx) return;
-    const project = projectFrom(-.24, .47, 333, 69);
-    const x = -109;
-    const y = 13;
-    const radius = 23;
+    const project = projectFrom(-.045, .88, 321, 93);
+    const x = 209;
+    const y = 0;
+    const radius = 31;
     const edge = radius / Math.sqrt(2);
-    const source = point(x - edge, y, -105);
-    const a = point(x - edge, y, -edge);
-    const leftFold = point(-219, y, -edge);
-    const nearFold = point(-219, y, -66);
-    const farA = point(236, y, -66);
-    const farB = point(236, y, edge);
-    const { hit, reflected } = rayToFace(radius, phase);
-    const b = move(hit, x, y, 0);
-    const eye = point(x + edge, y, 103);
+    const mirrorVertex = -244;
+    const mirrorRadius = 110;
+    const remote = optics.michelsonRemote(mirrorVertex,mirrorRadius,edge);
+    const source = point(x-edge,y,-98);
+    const slit = point(x-edge,y,-69);
+    const outgoing = point(x-edge,y,-edge);
+    const farUpper = point(remote.x,y,-edge);
+    const plane = point(remote.focusX,y,0);
+    const farLower = point(remote.x,y,edge);
+    const reference = point(x-edge,y,edge);
+    const scope = point(x-edge,y,94);
+    const trace = rayToFace(radius,finalPhase);
+    const hit = move(trace.hit,x,y,0);
+    const direction = trace.reflected;
+    const length = Math.min(105,(scope.z-hit.z)/direction.z);
+    const endpoint = move(hit,direction.x*length,0,direction.z*length);
     const faces = [];
-    box(faces, point(-256,-18,-112), point(256,-13,114), palette.bench);
-    box(faces, point(source.x-10,-13,-112), point(source.x+10,25,-103), palette.bench);
-    box(faces, point(231,-13,-78), point(247,37,29), palette.mirror);
-    box(faces, point(eye.x-17,-13,98), point(eye.x+17,31,110), palette.bench);
-    prism(faces, { phase, active: faceIndex(phase), radius, height: 18, x, y });
-    paintFaces(ctx, project, faces);
-    polyline(ctx, project, [source, a, leftFold, nearFold, farA, farB, point(x + edge,y,edge), eye], palette.line, 1.2);
-    for (const fixed of [leftFold, nearFold]) disc(ctx, project(fixed).x, project(fixed).y, 2.8, '#9cb4b5');
-    const p = state.progress;
-    const lerp = (a, b, t) => point(a.x + (b.x - a.x) * t, a.y, a.z + (b.z - a.z) * t);
-    if (state.playing || p === 1) {
-      for (const [from, to] of [[source,a],[a,leftFold],[leftFold,nearFold]]) beam(ctx, project(from), project(to), .68);
-      const moving = p < .47 ? lerp(nearFold, farA, p / .47)
-        : p < .53 ? lerp(farA, farB, (p - .47) / .06) : lerp(farB, b, (p - .53) / .47);
-      if (p >= .47) {
-        beam(ctx, project(nearFold), project(farA), .72);
-        beam(ctx, project(farA), project(p < .53 ? moving : farB), .72);
-        if (p >= .53) beam(ctx, project(farB), project(moving), .94);
-      } else beam(ctx, project(nearFold), project(moving), .92);
-      if (p === 1) {
-        const length = Math.abs(observation.angularOffset) <= halfField ? (eye.z - b.z) / reflected.z : 76;
-        const endpoint = move(b, reflected.x * length, 0, reflected.z * length);
-        beam(ctx, project(b), project(endpoint), .92);
-      } else disc(ctx, project(moving).x, project(moving).y, 3.5, palette.core);
+    const mirror = z => mirrorVertex + mirrorRadius - Math.sqrt(mirrorRadius ** 2 - z ** 2);
+    for (let z=-40;z<40;z+=4) {
+      const a = mirror(z);
+      const b = mirror(z+4);
+      faces.push({ vertices:[point(a,-18,z),point(a,18,z),point(b,18,z+4),point(b,-18,z+4)],material:palette.mirror });
     }
-    words(ctx, '光源狭缝', 133, 16, palette.text, 17);
-    words(ctx, '八面镜', 258, 26, palette.text, 17);
-    words(ctx, '远端反射装置', 524, 67, palette.text, 17);
-    words(ctx, '观察端', 407, 117, palette.text, 17);
+    box(faces,point(plane.x-2,-14,-8),point(plane.x+2,14,8),palette.mirror);
+    for (const sign of [-1,1]) {
+      const edgeX = slit.x+sign*7;
+      box(faces,point(edgeX-5,-11,slit.z-2),point(edgeX+5,11,slit.z+2),palette.steel);
+    }
+    box(faces,point(scope.x-14,-10,scope.z-9),point(scope.x+14,10,scope.z+16),palette.bench);
+    box(faces,point(scope.x-10,-8,scope.z-12),point(scope.x+10,8,scope.z-9),palette.mirror);
+    const active = state.progress < launchAt ? 6 : state.progress >= returnAt ? trace.face : -1;
+    prism(faces,{phase,active,radius,height:16,x,y});
+    paintFaces(ctx,project,faces);
+    const sourcePoint = project(source);
+    disc(ctx,sourcePoint.x,sourcePoint.y,5.1,palette.path);
+    polyline(ctx,project,[source,slit,outgoing,farUpper,plane,farLower,reference,scope],palette.line,1.05);
+
+    const route = [source,slit,outgoing,farUpper,plane,farLower,hit,endpoint];
+    const breaks = [0,.043,launchAt,.46,.5,.54,returnAt,1];
+    if (state.playing || state.progress === 1) {
+      let moving;
+      for (let index=1;index<route.length;index++) {
+        const start = route[index-1];
+        const end = route[index];
+        const ratio = clamp((state.progress-breaks[index-1])/(breaks[index]-breaks[index-1]),0,1);
+        if (!ratio) break;
+        moving = point(start.x+(end.x-start.x)*ratio,y,start.z+(end.z-start.z)*ratio);
+        beam(ctx,project(start),project(moving),ratio===1 ? .71 : .94);
+        if (ratio<1) break;
+      }
+      if (moving && state.playing) {
+        const pulse = project(moving);
+        disc(ctx,pulse.x,pulse.y,3.6,palette.core);
+      }
+    }
+    faceMarks(ctx,projectFrom(-.045,.88,321+x,93),phase,radius,16,15);
+    for (const [side,z] of [[-1,-edge],[1,edge]]) {
+      const tip=project(point(side*30,y,z));
+      const color=state.progress===1 ? palette.path : palette.muted;
+      stroke(ctx,tip,{x:tip.x-side*7,y:tip.y-3.5},color,1.3);
+      stroke(ctx,tip,{x:tip.x-side*7,y:tip.y+3.5},color,1.3);
+    }
+    for (const [text,position,dx,dy] of [
+      ['光源 S',source,21,-1],['狭缝 O',slit,24,-1],['八面镜 A',point(x+radius,y,0),9,-5],
+      ['凹镜 B',point(mirrorVertex,y,0),-15,58],['平面镜 M',plane,17,-8],['望远镜 C',scope,26,-4]
+    ]) {
+      const p = project(position);
+      words(ctx,text,p.x+dx,p.y+dy,palette.text,17,'left');
+    }
   }
 
   function drawDetector(returned, offset) {
@@ -550,17 +609,23 @@ function createMichelsonScene() {
     snapshot = { state, observation };
     const returned = state.progress === 1;
     const measuring = state.step >= 2;
-    const physicalPhase = observation.revolutions * 2 * Math.PI * state.progress;
+    const fullPhase = observation.revolutions * 2 * Math.PI;
+    const physicalPhase = fullPhase * clamp((state.progress-launchAt)/(returnAt-launchAt),0,1);
     const phase = measuring ? faceAngle : physicalPhase;
     const offset = observation.angularOffset;
-    pathStage.textContent = state.playing ? (state.progress < .5 ? '去程' : '回程') : returned ? '已回到近端' : '待发射';
+    pathStage.textContent = state.playing ? state.progress < launchAt ? 'S → O → 面 1'
+      : state.progress < .46 ? '去程 · 面 1 → B' : state.progress < .54 ? '远端 · B → M → B'
+        : state.progress < returnAt ? '回程 · B → A' : '八面镜反射回光' : returned ? '已回到近端' : '待发射';
     returnTitle.textContent = state.playing ? '往返途中' : returned ? '回到近端时' : '等待回光';
     angleLabel.textContent = measuring ? '首次重新对准时的转角' : '八面镜转过的角度';
     angleReading.textContent = returned ? 'Δθ = ' + optics.degrees(phase).toFixed(measuring ? 0 : 2) + '°' : '—';
-    lightState.textContent = !returned ? '等待回光' : Math.abs(offset) < .004 ? '像对准基准刻线'
-      : (offset < 0 ? '像偏左' : '像偏右') + (Math.abs(offset) > halfField ? '，移出视场' : '');
+    const receivingFace = numberFace(rayToFace(1,phase).face);
+    returnDetail.textContent = !returned ? '与上图同视角' : measuring ? '面 2 到达面 3 原位' : '面 ' + receivingFace + ' 接到回光';
+    lightState.textContent = !returned ? '等待回光' : Math.abs(offset) < .004 ? 'S 的像在基准刻线'
+      : Math.abs(offset)>halfField ? '光偏离 C，看不到像' : offset < 0 ? 'S 的像偏左' : 'S 的像偏右';
     arrival.dataset.phase = String(phase);
-    drawOverview(state, physicalPhase, observation);
+    arrival.dataset.face = String(receivingFace);
+    drawOverview(state, physicalPhase, fullPhase);
     compare(departure, 0, true, false);
     compare(arrival, phase, false, returned);
     drawDetector(returned, offset);
@@ -578,14 +643,14 @@ function createMichelsonScene() {
     });
     canvas.addEventListener('pointermove', event => {
       if (drag?.pointer !== event.pointerId) return;
-      view.yaw = clamp(drag.yaw + (event.clientX - drag.x) * .008, -.15, .7);
+      view.yaw = clamp(drag.yaw + (event.clientX - drag.x) * .008, -.70, .30);
       redraw();
     });
     canvas.addEventListener('lostpointercapture', () => { drag = null; });
     canvas.addEventListener('keydown', event => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       event.preventDefault();
-      view.yaw = clamp(view.yaw + (event.key === 'ArrowRight' ? .09 : -.09), -.15, .7);
+      view.yaw = clamp(view.yaw + (event.key === 'ArrowRight' ? .09 : -.09), -.70, .30);
       redraw();
     });
   }
@@ -619,9 +684,9 @@ function createMichelsonScene() {
   const fineAdjustment = fizeau ? .10 : 1;
   const steps = [
     ['看光怎样往返', fizeau ? '点击「发射一束光」，看光从齿轮出发，经远端反射镜回到近端。'
-      : '点击「发射一束光」，看八面镜静止时，回光像落在观察端的哪里。'],
+      : '点击「发射一束光」，看八面镜静止时，光怎样经面 3 进入望远镜 C。'],
     fizeau ? ['调速，找第一次最暗', '向右拖动转速滑块，每次调速都会播放往返。观察光斑，接近最暗时可用下方按钮微调。']
-      : ['调速，让回光像重新对准', '向右拖动转速滑块，观察狭缝像如何移动。接近基准刻线时，可以用下方按钮微调。'],
+      : ['调速，让光源 S 的像重现', '观察面 3 转离后光落在哪里。调速让面 2 接替面 3，再看望远镜 C。'],
     fizeau ? ['用轮缘弧长求往返时间', '「回到近端时」图中的青线标出轮缘移过的距离。用半径和角速度求轮缘线速度，再用弧长除以线速度。']
       : ['用转角求往返时间', '读出「回到近端时」图中的转角。把角度化成弧度，再用转角除以角速度。'],
     ['用往返路程求光速', '光在这段时间内走了两段长度为 L 的路程。用往返路程除以往返时间。']
@@ -647,15 +712,15 @@ function createMichelsonScene() {
     if (step === 0) {
       primary.textContent = returned ? '开始调速' : playing ? '光束正在往返…' : '发射一束光';
       primary.disabled = playing;
-      status(returned ? (fizeau ? '回光穿过原来的齿缝，观察端有亮斑。' : '静止时，亮的狭缝像落在基准刻线上。') : '', returned);
+      status(returned ? (fizeau ? '回光穿过原来的齿缝，观察端有亮斑。' : '静止时，面 3 把光反射进望远镜 C。') : '', returned);
     } else if (step === 1) {
       primary.textContent = '记录转速';
       primary.disabled = !ready;
       if (playing) status('光束正在往返。');
-      else if (ready) status(fizeau ? '已到第一次最暗附近。点击「记录转速」。' : '狭缝像已重新对准，点击「记录转速」。', true);
+      else if (ready) status(fizeau ? '已到第一次最暗附近。点击「记录转速」。' : '面 2 已接替面 3，点击「记录转速」。', true);
       else if (fizeau) {
         status(observation.pitchTravel > .5 ? '已越过第一次最暗的位置，降低转速。' : '向右调速，找光斑第一次最暗的位置。');
-      } else status(observation.pitchTravel > 1 ? '狭缝像偏右，降低转速。' : '狭缝像偏左，提高转速。');
+      } else status(observation.pitchTravel > 1 ? '面 2 已转过目标位置，降低转速。' : '继续提高转速，等面 2 转到面 3 原位。');
     } else if (step === 2) {
       primary.textContent = '核对往返时间';
       status('');
@@ -696,7 +761,8 @@ function createMichelsonScene() {
       row('往返时间', fizeau ? 'Δt = s / (Rω)' : 'Δt = Δθ / ω', true);
     } else if (step === 3) {
       row('往返时间 Δt', (result.time * 1e6).toFixed(2) + ' μs');
-      row('往返路程 2L', (result.length / 1000).toFixed(2) + ' km');
+      row('往返路程 2L', fizeau ? (result.length / 1000).toFixed(2) + ' km'
+        : result.length.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' m');
       if (complete) {
         const speed = document.createElement('strong');
         speed.id = 'measured-speed';
@@ -771,7 +837,7 @@ function createMichelsonScene() {
       state.step++;
       if (state.step === 2) result = fizeau ? optics.fizeauFromArc(state.frequency) : optics.michelsonFromAngle(state.frequency);
       renderStep();
-      if (!fizeau && state.step === 1) setFrequency(apparatus.min);
+      if (!fizeau && state.step === 1) setFrequency(apparatus.initial);
     }
   });
   replay.addEventListener('click', play);
@@ -789,7 +855,20 @@ function createMichelsonScene() {
   more.addEventListener('click', () => setFrequency(state.frequency + fineAdjustment));
   const equipment = fizeau ? '轮齿 ' + apparatus.count + ' 个 · 半径 ' + (apparatus.radius * 100).toFixed(1) + ' cm'
     : '旋转镜 ' + apparatus.count + ' 个镜面';
-  byId('setup').textContent = equipment + ' · 单程距离 ' + (apparatus.distance / 1000).toFixed(2) + ' km';
+  byId('setup').textContent = equipment + (fizeau ? ' · 单程距离 ' + (apparatus.distance / 1000).toFixed(2) + ' km'
+    : ' · 两山距离 ' + apparatus.distance.toLocaleString('zh-CN',{minimumFractionDigits:2}) + ' m');
+  if (!fizeau) {
+    const shortcut = document.createElement('button');
+    shortcut.type = 'button';
+    shortcut.id = 'textbook-speed';
+    shortcut.textContent = '教材转速 ' + apparatus.reference;
+    shortcut.setAttribute('aria-label', '设为教材转速 ' + apparatus.reference + ' 圈每秒');
+    shortcut.addEventListener('click', () => {
+      if (state.frequency === apparatus.reference) play();
+      else setFrequency(apparatus.reference);
+    });
+    byId('speed-panel').querySelector('.adjust p').replaceWith(shortcut);
+  }
   title.tabIndex = -1;
   window.__CORE = optics;
   reset(false);
