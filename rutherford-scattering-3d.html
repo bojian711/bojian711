@@ -270,7 +270,7 @@ function apparatusScene() {
   const screenLeft = project(end)[0] < project(origin)[0];
   const above = screenLeft ? -13 : -12;
   note(shifted(end,0,0,.36),'荧光屏',T.teal,screenLeft?5:-5,above,screenLeft?'left':'right');
-  note(shifted(rear,0,0,-.34),'显微镜',T.ink,screenLeft?-8:8,14,screenLeft?'right':'left');
+  note(shifted(rear,0,0,-.34),'显微镜',T.ink,screenLeft?1:8,screenLeft?23:14);
 }
 function draw() {
   if(!width || !height || !shown) return;
