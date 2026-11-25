@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang='zh-CN' data-revision='guided-wheel' data-kind='fizeau'>
+<html lang='zh-CN' data-revision='stable-fizeau' data-kind='fizeau'>
 <head>
 <meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
@@ -53,9 +53,10 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
 #calculation strong{display:block;color:var(--accent);font-size:clamp(18px,3vw,25px)}
 [hidden]{display:none!important}
 @media(max-width:600px){main{padding-top:9px}.controls{padding:7px 8px}figcaption{font-size:11px}}
-.lab-shell{display:grid;grid-template-columns:minmax(0,1.85fr) minmax(220px,1fr);grid-template-areas:'apparatus controls' 'apparatus detector' 'apparatus .';gap:8px 10px;align-items:start;grid-template-rows:auto auto 1fr}
+.intro{min-block-size:6.5em}
+.lab-shell{--operation-height:212px;display:grid;grid-template-columns:minmax(0,1.85fr) minmax(220px,1fr);grid-template-areas:'apparatus controls' 'apparatus detector' 'apparatus .';gap:8px 10px;align-items:start;grid-template-rows:var(--operation-height) auto 1fr}
 .apparatus{grid-area:apparatus;min-width:0}
-.controls{grid-area:controls;margin-top:0;overflow:visible}
+.controls{grid-area:controls;align-self:stretch;margin-top:0;overflow:visible}
 .detector{grid-area:detector}
 .scene-card{background:#10191d;border-color:#324147;color:#e6efed}
 .scene-card figcaption{background:#182428;border-color:#324147;color:#edf6f2;padding:4px 8px}
@@ -85,21 +86,24 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
 #calculation{margin-top:0;margin-bottom:8px}
 #calculation div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:3px 7px}
 #calculation dd{margin:0;font-variant-numeric:tabular-nums;color:var(--accent)}
-#calculation .formula{display:block;margin-top:6px}
-#calculation .formula dd{margin-top:2px}
+#calculation .formula{margin-top:5px}
 #calculation strong{display:inline}
 @media(max-width:640px){
   main{padding-bottom:8px}
   header{margin-bottom:5px}
   .intro{margin-bottom:6px}
-  .lab-shell{grid-template-columns:minmax(0,1fr);grid-template-areas:'controls' 'detector' 'apparatus';grid-template-rows:auto;gap:5px}
-  #detector{aspect-ratio:300/47}
+  .lab-shell{--operation-height:174px;grid-template-columns:minmax(0,1fr);grid-template-areas:'controls' 'detector' 'apparatus';grid-template-rows:var(--operation-height) auto auto;gap:5px}
+  #detector{aspect-ratio:300/43}
   #scene{aspect-ratio:650/125}
   .detail-key{padding-block:3px}
   .scene-card figcaption{font-size:11px;padding-block:3px}
   #calculation div{margin:0}
   #calculation .formula{display:grid;margin-top:4px}
   #calculation .formula dd{margin-top:0}
+}
+@media(max-width:360px){
+  .intro{min-block-size:8em}
+  .lab-shell{--operation-height:186px}
 }
 
 </style>
@@ -118,9 +122,9 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
       <div class='frequency-row'><label for='speed'>转速 <em class='math'>f</em></label><output id='frequency' for='speed'></output></div>
       <input id='speed' type='range' aria-describedby='instructions'>
       <div class='adjust'>
-        <button type='button' id='less' aria-label='转速降低 0.10 圈每秒'>−0.10</button>
+        <button type='button' id='less'></button>
         <p>微调（圈/s）</p>
-        <button type='button' id='more' aria-label='转速提高 0.10 圈每秒'>+0.10</button>
+        <button type='button' id='more'></button>
       </div>
     </div>
     <dl id='calculation' hidden></dl>
@@ -199,40 +203,25 @@ const optics = (() => {
     return { arc, angularSpeed, rimSpeed, time, length, speed: length / time };
   }
 
-  return { experiments, observe, measure, degrees, fizeauFromArc };
+  function michelsonFromAngle(frequency) {
+    const { count, distance } = experiments.michelson;
+    const turnAngle = 2 * Math.PI / count;
+    const angularSpeed = 2 * Math.PI * frequency;
+    const time = turnAngle / angularSpeed;
+    const length = 2 * distance;
+    return { turnAngle, angularSpeed, time, length, speed: length / time };
+  }
+
+  return { experiments, observe, measure, degrees, fizeauFromArc, michelsonFromAngle };
 })();
 
 
-function createFizeauScene() {
-  const byId = id => document.getElementById(id);
-  const overview = byId('scene');
-  const departure = byId('departure');
-  const arrival = byId('arrival');
-  const detector = byId('detector');
-  const label = byId('light-state');
-  const returnTitle = byId('return-title');
-  const pathStage = byId('path-stage');
-  const arcLabel = byId('arc-label');
-  const arcDistance = byId('arc-distance');
-  const apparatus = optics.experiments.fizeau;
-  const view = { yaw: -.29, elevation: .36 };
-  const defaultYaw = view.yaw;
-  const defaultElevation = view.elevation;
+const spatialGraphics = (() => {
   const palette = {
     background: '#10191d', text: '#e7efec', muted: '#a9bfba', line: '#617c80',
     slot: '#7be2d4', path: '#ffca77', core: '#fff5d4',
     steel: [170, 190, 192], bench: [67, 91, 97], mirror: [124, 190, 198]
   };
-  const turnAngle = 2 * Math.PI / apparatus.count;
-  const pitch = 58;
-  const radius = pitch / turnAngle;
-  const toothRoot = radius - 26;
-  const rimInner = radius - 53;
-  const thickness = 27;
-  const beamY = -12;
-  let snapshot;
-  let drag;
-
   const point = (x, y, z) => ({ x, y, z });
   const minus = (a, b) => point(a.x - b.x, a.y - b.y, a.z - b.z);
   const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
@@ -311,16 +300,6 @@ function createFizeauScene() {
     ctx.restore();
   }
 
-  function atRim(angle, r, z) {
-    return point(r * Math.sin(angle), r * Math.cos(angle) - radius, z);
-  }
-
-  function prism(faces, profile, depth, material) {
-    const back = profile.map(p => point(p.x, p.y, -depth / 2));
-    const front = profile.map(p => point(p.x, p.y, depth / 2));
-    depthFaces(faces, back, front, material);
-  }
-
   function depthFaces(faces, back, front, material) {
     faces.push({ vertices: back.slice().reverse(), material }, { vertices: front, material });
     for (let i = 0; i < front.length; i++) {
@@ -367,6 +346,45 @@ function createFizeauScene() {
       ctx.lineWidth = .67;
       ctx.stroke();
     }
+  }
+
+  return { palette, point, clamp, projectFrom, canvasFrame, stroke, disc, words, beam, depthFaces, box, paintFaces };
+})();
+
+function createFizeauScene() {
+  const byId = id => document.getElementById(id);
+  const overview = byId('scene');
+  const departure = byId('departure');
+  const arrival = byId('arrival');
+  const detector = byId('detector');
+  const label = byId('light-state');
+  const returnTitle = byId('return-title');
+  const pathStage = byId('path-stage');
+  const arcLabel = byId('arc-label');
+  const arcDistance = byId('arc-distance');
+  const apparatus = optics.experiments.fizeau;
+  const view = { yaw: -.29, elevation: .36 };
+  const defaultYaw = view.yaw;
+  const defaultElevation = view.elevation;
+  const { palette, point, clamp, projectFrom, canvasFrame, stroke, disc, words, beam, depthFaces, box, paintFaces } = spatialGraphics;
+  const turnAngle = 2 * Math.PI / apparatus.count;
+  const pitch = 58;
+  const radius = pitch / turnAngle;
+  const toothRoot = radius - 26;
+  const rimInner = radius - 53;
+  const thickness = 27;
+  const beamY = -12;
+  let snapshot;
+  let drag;
+
+  function atRim(angle, r, z) {
+    return point(r * Math.sin(angle), r * Math.cos(angle) - radius, z);
+  }
+
+  function prism(faces, profile, depth, material) {
+    const back = profile.map(p => point(p.x, p.y, -depth / 2));
+    const front = profile.map(p => point(p.x, p.y, depth / 2));
+    depthFaces(faces, back, front, material);
   }
 
   function rimPhase(phase) {
@@ -629,8 +647,10 @@ function createFizeauScene() {
 (() => {
   'use strict';
   const byId = id => document.getElementById(id);
-  const apparatus = optics.experiments.fizeau;
-  const scene = createFizeauScene();
+  const kind = document.documentElement.dataset.kind;
+  const fizeau = kind === 'fizeau';
+  const apparatus = optics.experiments[kind];
+  const scene = fizeau ? createFizeauScene() : createMichelsonScene();
   const slider = byId('speed');
   const title = byId('step-title');
   const instructions = byId('instructions');
@@ -638,11 +658,18 @@ function createFizeauScene() {
   const replay = byId('replay');
   const feedback = byId('feedback');
   const calculation = byId('calculation');
+  const less = byId('less');
+  const more = byId('more');
   const duration = 500;
+  const decimals = fizeau ? 2 : 1;
+  const fineAdjustment = fizeau ? .10 : 1;
   const steps = [
-    ['看光怎样往返', '点击「发射一束光」，看光从齿轮出发，经远端反射镜回到近端。'],
-    ['调速，找第一次最暗', '向右拖动转速滑块，每次调速都会播放往返。观察光斑，接近最暗时可用下方按钮微调。'],
-    ['用轮缘弧长求往返时间', '「回到近端时」图中的青线标出轮缘移过的距离。用半径和角速度求轮缘线速度，再用弧长除以线速度。'],
+    ['看光怎样往返', fizeau ? '点击「发射一束光」，看光从齿轮出发，经远端反射镜回到近端。'
+      : '点击「发射一束光」，看八面镜静止时，回光像落在观察端的哪里。'],
+    fizeau ? ['调速，找第一次最暗', '向右拖动转速滑块，每次调速都会播放往返。观察光斑，接近最暗时可用下方按钮微调。']
+      : ['调速，让回光像重新对准', '向右拖动转速滑块，观察狭缝像如何移动。接近基准刻线时，可以用下方按钮微调。'],
+    fizeau ? ['用轮缘弧长求往返时间', '「回到近端时」图中的青线标出轮缘移过的距离。用半径和角速度求轮缘线速度，再用弧长除以线速度。']
+      : ['用转角求往返时间', '读出「回到近端时」图中的转角。把角度化成弧度，再用转角除以角速度。'],
     ['用往返路程求光速', '光在这段时间内走了两段长度为 L 的路程。用往返路程除以往返时间。']
   ];
   const draw = () => scene.draw(state, observation);
@@ -666,14 +693,15 @@ function createFizeauScene() {
     if (step === 0) {
       primary.textContent = returned ? '开始调速' : playing ? '光束正在往返…' : '发射一束光';
       primary.disabled = playing;
-      status(returned ? '回来的光穿过原来的齿缝，观察端有亮斑。接下来提高转速。' : '', returned);
+      status(returned ? (fizeau ? '回光穿过原来的齿缝，观察端有亮斑。' : '静止时，亮的狭缝像落在基准刻线上。') : '', returned);
     } else if (step === 1) {
       primary.textContent = '记录转速';
       primary.disabled = !ready;
-      if (playing) status('光束正在往返。回到近端后，观察端会显示亮度。');
-      else if (ready) status('已到第一次最暗附近。点击「记录转速」。', true);
-      else if (observation.pitchTravel > .5) status('已经越过第一次最暗的位置。把转速往回调。');
-      else status(returned ? '继续提高转速，直到光斑第一次最暗。' : '先向右拖动滑块，看光斑怎样变化。');
+      if (playing) status('光束正在往返。');
+      else if (ready) status(fizeau ? '已到第一次最暗附近。点击「记录转速」。' : '狭缝像已重新对准，点击「记录转速」。', true);
+      else if (fizeau) {
+        status(observation.pitchTravel > .5 ? '已越过第一次最暗的位置，降低转速。' : '向右调速，找光斑第一次最暗的位置。');
+      } else status(observation.pitchTravel > 1 ? '狭缝像偏右，降低转速。' : '狭缝像偏左，提高转速。');
     } else if (step === 2) {
       primary.textContent = '核对往返时间';
       status('');
@@ -705,11 +733,13 @@ function createFizeauScene() {
     calculation.hidden = step < 2;
     calculation.replaceChildren();
     if (step === 2) {
-      row('轮缘弧长 s', (result.arc * 1000).toFixed(4) + ' mm');
-      row('齿轮半径 R', (apparatus.radius * 100).toFixed(1) + ' cm');
-      row('记录的转速 f', frequency.toFixed(2) + ' 圈/s');
+      if (fizeau) {
+        row('轮缘弧长 s', (result.arc * 1000).toFixed(4) + ' mm');
+        row('齿轮半径 R', (apparatus.radius * 100).toFixed(1) + ' cm');
+      } else row('转角 Δθ', optics.degrees(result.turnAngle).toFixed(0) + '° = π/4 rad');
+      row('记录的转速 f', frequency.toFixed(decimals) + ' 圈/s');
       row('角速度 ω = 2πf', result.angularSpeed.toFixed(2) + ' rad/s');
-      row('往返时间', 'Δt = s / (Rω)', true);
+      row('往返时间', fizeau ? 'Δt = s / (Rω)' : 'Δt = Δθ / ω', true);
     } else if (step === 3) {
       row('往返时间 Δt', (result.time * 1e6).toFixed(2) + ' μs');
       row('往返路程 2L', (result.length / 1000).toFixed(2) + ' km');
@@ -752,17 +782,17 @@ function createFizeauScene() {
   }
 
   function refreshFrequency() {
-    const value = state.frequency.toFixed(2) + ' 圈/s';
-    slider.value = state.frequency;
+    const value = state.frequency.toFixed(decimals) + ' 圈/s';
+    slider.value = Math.max(state.frequency, apparatus.min);
     slider.setAttribute('aria-valuetext', value);
     byId('frequency').textContent = value;
-    byId('less').disabled = state.frequency === apparatus.min;
-    byId('more').disabled = state.frequency === apparatus.max;
-    observation = optics.observe('fizeau', state.frequency);
+    less.disabled = state.frequency <= apparatus.min;
+    more.disabled = state.frequency >= apparatus.max;
+    observation = optics.observe(kind, state.frequency);
   }
 
   function setFrequency(frequency) {
-    const next = Math.max(apparatus.min, Math.min(apparatus.max, Number(frequency.toFixed(2))));
+    const next = Math.max(apparatus.min, Math.min(apparatus.max, Number(frequency.toFixed(decimals))));
     if (next === state.frequency) return;
     state.frequency = next;
     refreshFrequency();
@@ -785,8 +815,9 @@ function createFizeauScene() {
       renderStep();
     } else {
       state.step++;
-      if (state.step === 2) result = optics.fizeauFromArc(state.frequency);
+      if (state.step === 2) result = fizeau ? optics.fizeauFromArc(state.frequency) : optics.michelsonFromAngle(state.frequency);
       renderStep();
+      if (!fizeau && state.step === 1) setFrequency(apparatus.min);
     }
   });
   replay.addEventListener('click', play);
@@ -795,10 +826,16 @@ function createFizeauScene() {
   slider.max = apparatus.max;
   slider.step = apparatus.step;
   slider.addEventListener('input', () => setFrequency(+slider.value));
-  byId('less').addEventListener('click', () => setFrequency(state.frequency - .10));
-  byId('more').addEventListener('click', () => setFrequency(state.frequency + .10));
-  byId('setup').textContent = '轮齿 ' + apparatus.count + ' 个 · 半径 ' + (apparatus.radius * 100).toFixed(1)
-    + ' cm · 单程距离 ' + (apparatus.distance / 1000).toFixed(2) + ' km';
+  const adjustmentLabel = fineAdjustment.toFixed(fizeau ? 2 : 0);
+  less.textContent = '−' + adjustmentLabel;
+  more.textContent = '+' + adjustmentLabel;
+  less.setAttribute('aria-label', '转速降低 ' + adjustmentLabel + ' 圈每秒');
+  more.setAttribute('aria-label', '转速提高 ' + adjustmentLabel + ' 圈每秒');
+  less.addEventListener('click', () => setFrequency(state.frequency - fineAdjustment));
+  more.addEventListener('click', () => setFrequency(state.frequency + fineAdjustment));
+  const equipment = fizeau ? '轮齿 ' + apparatus.count + ' 个 · 半径 ' + (apparatus.radius * 100).toFixed(1) + ' cm'
+    : '旋转镜 ' + apparatus.count + ' 个镜面';
+  byId('setup').textContent = equipment + ' · 单程距离 ' + (apparatus.distance / 1000).toFixed(2) + ' km';
   title.tabIndex = -1;
   window.__CORE = optics;
   reset(false);
