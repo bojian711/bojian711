@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang='zh-CN' data-kind='fizeau'>
+<html lang='zh-CN' data-revision='spatial-wheel' data-kind='fizeau'>
 <head>
 <meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
@@ -53,6 +53,32 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
 #calculation strong{display:block;color:var(--accent);font-size:clamp(18px,3vw,25px)}
 [hidden]{display:none!important}
 @media(max-width:600px){main{padding-top:9px}.controls{padding:7px 8px}figcaption{font-size:11px}}
+.lab-shell{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(225px,1fr);gap:10px;align-items:start}
+.apparatus,.side{min-width:0}
+.scene-card{background:#10191d;border-color:#324147;color:#e6efed}
+.scene-card figcaption{background:#182428;border-color:#324147;color:#edf6f2;padding:4px 8px}
+.scene-card figcaption span{color:#b8c9c6}
+#scene{aspect-ratio:650/134}
+.compare canvas{aspect-ratio:650/153;touch-action:pan-y;cursor:grab}
+.compare canvas:active{cursor:grabbing}
+.compare canvas:focus-visible{outline:2px solid #72e5d0;outline-offset:-2px}
+.compare+.compare{margin-top:6px}
+#detector{aspect-ratio:300/138}
+.detail-key{display:flex;align-items:center;gap:11px;padding:5px 2px;font-size:12px;color:var(--muted)}
+.detail-key span{display:inline-flex;align-items:center;gap:5px}
+.detail-key span::before{content:'';display:inline-block;width:12px;height:3px;border-radius:2px}
+.slot-key::before{background:#258b7e}
+.axis-key::before{background:#be8c38}
+#reset-camera{margin-left:auto;padding:3px 6px;font-size:12px}
+.controls .actions{display:inline-flex;vertical-align:top;margin-right:3px}
+.controls .actions:empty{display:none}
+@media(max-width:640px){
+  .lab-shell{grid-template-columns:minmax(0,1fr);gap:7px}
+  #detector{aspect-ratio:300/72}
+  #scene{aspect-ratio:650/130}
+  .scene-card figcaption{font-size:11px}
+}
+
 </style>
 </head>
 <body>
@@ -63,10 +89,31 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
   <section class='intro' aria-labelledby='step-title'>
     <div id='step-count'></div><h2 id='step-title' aria-live='polite'></h2><p id='instructions'></p>
   </section>
-  <figure>
-    <figcaption><strong>光路与旋转装置</strong><span class='muted' id='caption'>往返过程慢放示意</span></figcaption>
-    <canvas id='scene' role='img' aria-label='光束在近端和反射镜之间往返，比较出射与返回的装置位置'>光路与旋转装置</canvas>
-  </figure>
+<div class='lab-shell'>
+  <section class='apparatus' aria-label='三维光路和齿轮'>
+    <figure class='scene-card'>
+      <figcaption><strong>光路总览</strong><span>往返过程慢放</span></figcaption>
+      <canvas id='scene' role='img' aria-label='光源、分光片、齿轮和远端反射镜组成的三维光路'></canvas>
+    </figure>
+    <div class='detail-key'>
+      <span class='slot-key'>出射齿缝</span><span class='axis-key'>固定光轴</span>
+      <button type='button' id='reset-camera'>恢复视角</button>
+    </div>
+    <figure class='scene-card compare'>
+      <figcaption><strong>出射时</strong><span>拖动齿轮图可转动视角</span></figcaption>
+      <canvas id='departure' tabindex='0' role='img' aria-label='出射时的三维齿轮。青框标出出射齿缝。可用左右键旋转视角。'></canvas>
+    </figure>
+    <figure class='scene-card compare'>
+      <figcaption><strong id='return-title'>回到近端时</strong><span>与上图采用同一光轴</span></figcaption>
+      <canvas id='arrival' tabindex='0' role='img' aria-label='回到近端时的三维齿轮。青框跟随同一个出射齿缝。可用左右键旋转视角。'></canvas>
+    </figure>
+  </section>
+  <aside class='side' aria-label='观察与测量'>
+    <figure class='scene-card detector'>
+      <figcaption><strong>观察端</strong><span id='light-state'>等待回光</span></figcaption>
+      <canvas id='detector' role='img' aria-label='观察端的回光光斑'></canvas>
+    </figure>
+
   <section class='controls' aria-label='实验操作'>
     <div id='speed-panel' hidden>
       <div class='frequency-row'><label for='speed'>转速 <em class='math'>f</em></label><output id='frequency' for='speed'></output></div>
@@ -82,6 +129,8 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
     <div class='actions' id='actions'></div>
     <div class='actions' id='playback'></div>
   </section>
+  </aside>
+  </div>
 </main>
 <script>
 'use strict';
@@ -120,6 +169,389 @@ const optics = (() => {
 })();
 
 
+function createFizeauScene() {
+  const byId = id => document.getElementById(id);
+  const overview = byId('scene');
+  const departure = byId('departure');
+  const arrival = byId('arrival');
+  const detector = byId('detector');
+  const label = byId('light-state');
+  const returnTitle = byId('return-title');
+  const view = { yaw: -.29, elevation: .36 };
+  const defaultYaw = view.yaw;
+  const defaultElevation = view.elevation;
+  const palette = {
+    background: '#10191d', text: '#e7efec', muted: '#a9bfba', line: '#617c80',
+    slot: '#7be2d4', path: '#ffca77', core: '#fff5d4',
+    steel: [170, 190, 192], bench: [67, 91, 97], mirror: [124, 190, 198]
+  };
+  const turnAngle = 2 * Math.PI / 720;
+  const pitch = 58;
+  const radius = pitch / turnAngle;
+  const toothRoot = radius - 26;
+  const rimInner = radius - 53;
+  const thickness = 27;
+  const beamY = -12;
+  let snapshot;
+  let drag;
+
+  const point = (x, y, z) => ({ x, y, z });
+  const minus = (a, b) => point(a.x - b.x, a.y - b.y, a.z - b.z);
+  const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+  const cross = (a, b) => point(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+  const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+
+  function projectFrom(yaw, elevation, centerX, centerY) {
+    const cx = Math.cos(yaw);
+    const sx = Math.sin(yaw);
+    const cy = Math.cos(elevation);
+    const sy = Math.sin(elevation);
+    const right = point(cx, 0, -sx);
+    const up = point(-sx * sy, cy, -cx * sy);
+    const toward = point(sx * cy, sy, cx * cy);
+    return world => ({
+      x: centerX + dot(world, right),
+      y: centerY - dot(world, up),
+      z: dot(world, toward)
+    });
+  }
+
+  function canvasFrame(canvas, width, height) {
+    const rect = canvas.getBoundingClientRect();
+    const sample = Math.max(window.devicePixelRatio || 1, 2);
+    const w = Math.round(rect.width * sample);
+    const h = Math.round(rect.height * sample);
+    if (!w || !h) return null;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = palette.background;
+    ctx.fillRect(0, 0, w, h);
+    const scale = Math.min(w / width, h / height);
+    ctx.setTransform(scale, 0, 0, scale, (w - width * scale) / 2, (h - height * scale) / 2);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    return ctx;
+  }
+
+  function stroke(ctx, a, b, color, width) {
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+
+  function disc(ctx, x, y, r, fill) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+
+  function words(ctx, text, x, y, color = palette.text, size = 15, align = 'center') {
+    ctx.font = size + 'px Microsoft YaHei, system-ui, sans-serif';
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+  }
+
+  function beam(ctx, a, b, strength = 1) {
+    if (strength <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = strength * .24;
+    stroke(ctx, a, b, palette.path, 9.0);
+    ctx.globalAlpha = strength * .7;
+    stroke(ctx, a, b, palette.path, 3.6);
+    ctx.globalAlpha = strength;
+    stroke(ctx, a, b, palette.core, 1.35);
+    ctx.restore();
+  }
+
+  function atRim(angle, r, z) {
+    return point(r * Math.sin(angle), r * Math.cos(angle) - radius, z);
+  }
+
+  function prism(faces, profile, depth, material) {
+    const back = profile.map(p => point(p.x, p.y, -depth / 2));
+    const front = profile.map(p => point(p.x, p.y, depth / 2));
+    depthFaces(faces, back, front, material);
+  }
+
+  function depthFaces(faces, back, front, material) {
+    faces.push({ vertices: back.slice().reverse(), material }, { vertices: front, material });
+    for (let i = 0; i < front.length; i++) {
+      const j = (i + 1) % front.length;
+      faces.push({ vertices: [back[i], back[j], front[j], front[i]], material });
+    }
+  }
+
+  function box(faces, min, max, material) {
+    const profile = [point(min.x, min.y, 0), point(max.x, min.y, 0),
+      point(max.x, max.y, 0), point(min.x, max.y, 0)];
+    depthFaces(faces, profile.map(p => point(p.x, p.y, min.z)),
+      profile.map(p => point(p.x, p.y, max.z)), material);
+  }
+
+  function paintFaces(ctx, project, faces) {
+    const sorted = faces.map(({ vertices, material }) => {
+      const projected = vertices.map(project);
+      const n = cross(minus(vertices[1], vertices[0]), minus(vertices[2], vertices[0]));
+      const length = Math.hypot(n.x, n.y, n.z);
+      const light = length ? (.24 * n.x + .72 * n.y + .65 * n.z) / length : 0;
+      const depth = projected.reduce((sum, p) => sum + p.z, 0) / projected.length;
+      return { projected, depth, light, material };
+    }).sort((a, b) => a.depth - b.depth);
+
+    for (const { projected, light, material } of sorted) {
+      const [first, ...rest] = projected;
+      ctx.beginPath();
+      ctx.moveTo(first.x, first.y);
+      for (const p of rest) ctx.lineTo(p.x, p.y);
+      ctx.closePath();
+
+      const yRange = projected.map(p => p.y);
+      const lo = Math.min(...yRange);
+      const hi = Math.max(...yRange);
+      const brightness = .57 + .34 * Math.max(0, light);
+      const tint = value => 'rgb(' + material.map(v => Math.round(v * value)).join(',') + ')';
+      const fill = ctx.createLinearGradient(0, lo, 0, Math.max(lo + 1, hi));
+      fill.addColorStop(0, tint(brightness + .10));
+      fill.addColorStop(1, tint(brightness - .04));
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(18,31,34,.87)';
+      ctx.lineWidth = .67;
+      ctx.stroke();
+    }
+  }
+
+  function rimPhase(phase) {
+    const faces = [];
+    for (let tooth = -8; tooth < 8; tooth++) {
+      const base = tooth + phase;
+      const a = base * turnAngle;
+      const b = (base + 1) * turnAngle;
+      prism(faces, [atRim(a, toothRoot, 0), atRim(a, rimInner, 0),
+        atRim(b, rimInner, 0), atRim(b, toothRoot, 0)], thickness, palette.bench);
+      const left = (base + .25) * turnAngle;
+      const right = (base + .75) * turnAngle;
+      prism(faces, [atRim(left, radius, 0), atRim(left, toothRoot, 0),
+        atRim(right, toothRoot, 0), atRim(right, radius, 0)], thickness, palette.steel);
+    }
+    return faces;
+  }
+
+  function fixedAxis(ctx, project) {
+    const back = project(point(0, beamY, -113));
+    const front = project(point(0, beamY, 128));
+    ctx.setLineDash([3, 4]);
+    stroke(ctx, back, front, '#7c8f90', 1);
+    ctx.setLineDash([]);
+    for (const p of [back, front]) {
+      stroke(ctx, { x: p.x, y: p.y - 4 }, { x: p.x, y: p.y + 4 }, '#7c8f90', 1);
+    }
+  }
+
+  function markSlot(ctx, project, phase, isReturn) {
+    const half = .223;
+    const z = thickness / 2 + 1.3;
+    const bounds = [
+      [(phase - half) * turnAngle, radius + 4], [(phase + half) * turnAngle, radius + 4],
+      [(phase + half) * turnAngle, toothRoot + 2], [(phase - half) * turnAngle, toothRoot + 2]
+    ].map(([a, r]) => project(atRim(a, r, z)));
+    for (let i = 0; i < bounds.length; i++) stroke(ctx, bounds[i], bounds[(i + 1) % bounds.length], palette.slot, 1.7);
+    const slot = project(atRim(phase * turnAngle, radius + 4, z));
+    const sectionY = 34;
+    const textX = slot.x + 29;
+    stroke(ctx, slot, { x: slot.x, y: sectionY }, palette.slot, 1.0);
+    stroke(ctx, { x: slot.x, y: sectionY }, { x: textX - 8, y: sectionY }, palette.slot, 1.0);
+    words(ctx, isReturn ? '同一齿缝' : '出射齿缝', textX, sectionY, palette.slot, 18, 'left');
+  }
+
+  function drawRim(canvas, phase, isReturn) {
+    const ctx = canvasFrame(canvas, 650, 153);
+    if (!ctx) return;
+    const project = projectFrom(view.yaw, view.elevation, 315, 76);
+    const back = project(point(0, beamY, -105));
+    const backFace = project(point(0, beamY, -thickness / 2));
+    const frontFace = project(point(0, beamY, thickness / 2));
+    const front = project(point(0, beamY, 120));
+    const through = Math.abs(phase - Math.round(phase)) < .25;
+
+    fixedAxis(ctx, project);
+    if (!isReturn || through) beam(ctx, back, through ? frontFace : backFace);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(26, 43, 598, 106);
+    ctx.clip();
+    paintFaces(ctx, project, rimPhase(phase));
+    ctx.restore();
+    if (isReturn || through) beam(ctx, frontFace, front);
+    if (isReturn && !through) disc(ctx, frontFace.x, frontFace.y, 3.4, palette.core);
+    markSlot(ctx, project, phase, isReturn);
+  }
+
+  function wholeWheel(faces, wheelTurn) {
+    const x = -127;
+    const y = -11;
+    const front = [];
+    const back = [];
+    for (let j = 0; j < 64; j++) {
+      const a = wheelTurn + (2 * Math.PI * j) / 64;
+      const r = j % 2 ? 37.6 : 38.1;
+      front.push(point(x + 5, y + r * Math.cos(a), r * Math.sin(a)));
+      back.push(point(x - 5, y + r * Math.cos(a), r * Math.sin(a)));
+    }
+    depthFaces(faces, back, front, palette.steel);
+  }
+
+  function drawOverview(state, observation, pending) {
+    const ctx = canvasFrame(overview, 650, 134);
+    if (!ctx) return;
+    const project = projectFrom(-.22, .48, 335, 70);
+    const faces = [];
+    box(faces, point(-294,-43,-48), point(275,-37,48), palette.bench);
+    box(faces, point(-227,-36,-10), point(-201,-15,10), palette.steel);
+    box(faces, point(250,-37,-21), point(259,34,21), palette.mirror);
+    box(faces, point(-287,-27,-16), point(-273,28,16), palette.bench);
+    wholeWheel(faces, 2 * Math.PI * observation.revolutions * (pending ? state.progress : Number(state.progress > 0 || state.step > 0)));
+    paintFaces(ctx, project, faces);
+    const at = x => project(point(x, 22, 0));
+    const source = project(point(-214, -15, 0));
+    const splitter = at(-214);
+    const wheel = at(-127);
+    const far = at(250);
+    const viewer = at(-274);
+    const s = project(point(-225,11,-12));
+    const e = project(point(-203,33,12));
+    stroke(ctx, s, e, '#8db1b6', 4);
+    beam(ctx, source, splitter, .75);
+    beam(ctx, splitter, wheel, .83);
+    stroke(ctx, wheel, far, '#718886', 1.3);
+
+    if (pending) {
+      const p = state.progress;
+      const fraction = 1 - Math.abs(1 - 2 * p);
+      const photon = at(-127 + 377 * fraction);
+      beam(ctx, p <= .5 ? wheel : far, photon, .83);
+      disc(ctx, photon.x, photon.y, 3.6, palette.core);
+    } else if (state.step > 0 || state.progress === 1) {
+      beam(ctx, wheel, far, .82);
+      beam(ctx, wheel, viewer, observation.relativeLight ** .6);
+    } else {
+      disc(ctx, wheel.x, wheel.y, 3.2, palette.path);
+    }
+
+    words(ctx, '观察端', 44, 18, palette.text, 18);
+    words(ctx, '齿轮', 197, 18, palette.text, 18);
+    words(ctx, '远端反射镜', 556, 18, palette.text, 18, 'right');
+    words(ctx, '光源', 153, 113, palette.muted, 16, 'left');
+  }
+
+  function drawDetector(intensity) {
+    const rect = detector.getBoundingClientRect();
+    const height = rect.width ? 300 * rect.height / rect.width : 138;
+    const ctx = canvasFrame(detector, 300, height);
+    if (!ctx) return;
+    const x = 150;
+    const y = height / 2;
+    const bezel = Math.min(height * .44, 51);
+    const background = ctx.createRadialGradient(x, y, 0, x, y, 142);
+    background.addColorStop(0, '#3b5259');
+    background.addColorStop(1, '#10191d');
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, 300, height);
+    const rim = ctx.createLinearGradient(0, y - bezel, 0, y + bezel);
+    rim.addColorStop(0, '#b1c4c4');
+    rim.addColorStop(.23, '#58717a');
+    rim.addColorStop(.56, '#243941');
+    rim.addColorStop(1, '#718b90');
+    disc(ctx, x, y, bezel, rim);
+    disc(ctx, x, y, bezel - 3, '#151f25');
+    const glass = ctx.createRadialGradient(x - 10, y - 11, 0, x, y, bezel - 6);
+    glass.addColorStop(0, '#17282c');
+    glass.addColorStop(1, '#090e12');
+    disc(ctx, x, y, bezel - 6, glass);
+    stroke(ctx, {x:x-9,y}, {x:x+9,y}, '#3d5257', .65);
+    stroke(ctx, {x,y:y-9}, {x,y:y+9}, '#3d5257', .65);
+    if (intensity > .0001) {
+      const gamma = intensity ** .53;
+      const halo = 8 + bezel * .82 * gamma;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, bezel - 6, 0, 2 * Math.PI);
+      ctx.clip();
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, halo);
+      glow.addColorStop(0, 'rgba(255,250,215,' + gamma + ')');
+      glow.addColorStop(.16, 'rgba(255,218,122,' + (.78 * gamma) + ')');
+      glow.addColorStop(.42, 'rgba(237,139,48,' + (.31 * gamma) + ')');
+      glow.addColorStop(1, 'rgba(162,94,31,0)');
+      disc(ctx, x, y, halo, glow);
+      const core = ctx.createRadialGradient(x, y, 0, x, y, 3 + 4.8 * gamma);
+      core.addColorStop(0, 'rgba(255,255,242,' + gamma + ')');
+      core.addColorStop(1, 'rgba(255,242,188,0)');
+      disc(ctx, x, y, 3 + 4.8 * gamma, core);
+      ctx.restore();
+    }
+  }
+
+  function draw(state, observation) {
+    snapshot = { state, observation };
+    const pending = state.playing || (state.progress > 0 && state.progress < 1);
+    const preview = state.progress === 1 || state.step > 0;
+    const phase = observation.pitchTravel * (pending ? state.progress : Number(preview));
+    const intensity = pending || !preview ? 0 : observation.relativeLight;
+    returnTitle.textContent = pending ? '往返途中' : '回到近端时';
+    label.textContent = pending || !preview ? '等待回光' : intensity < .012 ? '回光最暗'
+      : intensity > .68 ? '回光明亮' : '回光减弱';
+    detector.dataset.intensity = String(intensity);
+    drawOverview(state, observation, pending);
+    drawRim(departure, 0, false);
+    arrival.dataset.phase = String(phase);
+    drawRim(arrival, phase, true);
+    drawDetector(intensity);
+  }
+
+  function redraw() {
+    if (snapshot) draw(snapshot.state, snapshot.observation);
+  }
+
+  for (const canvas of [departure, arrival]) {
+    canvas.addEventListener('pointerdown', event => {
+      if (!event.isPrimary || event.button !== 0) return;
+      drag = { pointer: event.pointerId, x: event.clientX, yaw: view.yaw };
+      canvas.setPointerCapture(event.pointerId);
+    });
+    canvas.addEventListener('pointermove', event => {
+      if (drag?.pointer !== event.pointerId) return;
+      view.yaw = clamp(drag.yaw + (event.clientX - drag.x) * .009, -.69, .69);
+      redraw();
+    });
+    canvas.addEventListener('lostpointercapture', () => { drag = null; });
+    canvas.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      view.yaw = clamp(view.yaw + (event.key === 'ArrowRight' ? .09 : -.09), -.69, .69);
+      redraw();
+    });
+  }
+
+  byId('reset-camera').addEventListener('click', () => {
+    view.yaw = defaultYaw;
+    view.elevation = defaultElevation;
+    redraw();
+  });
+  const resize = new ResizeObserver(redraw);
+  [departure, arrival, detector].forEach(canvas => resize.observe(canvas));
+  return { draw };
+}
+
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -128,6 +560,7 @@ const optics = (() => {
   const { experiments, observe, measure, degrees } = optics;
   const apparatus = experiments[kind];
   const canvas = $('scene');
+  const spatialScene = fizeau && typeof createFizeauScene === 'function' ? createFizeauScene() : null;
   const slider = $('speed');
   const width = 650;
   const height = 285;
@@ -491,6 +924,10 @@ const optics = (() => {
   }
 
   function draw() {
+    if (spatialScene) {
+      spatialScene.draw(state, observation);
+      return;
+    }
     const t = colors();
     const ctx = openCanvas(t);
     if (!ctx) return;
