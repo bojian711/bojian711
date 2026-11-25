@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang='zh-CN' data-kind='michelson'>
+<html lang='zh-CN' data-revision='stable-michelson' data-kind='michelson'>
 <head>
 <meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
@@ -53,6 +53,59 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
 #calculation strong{display:block;color:var(--accent);font-size:clamp(18px,3vw,25px)}
 [hidden]{display:none!important}
 @media(max-width:600px){main{padding-top:9px}.controls{padding:7px 8px}figcaption{font-size:11px}}
+.intro{min-block-size:6.5em}
+.lab-shell{--operation-height:212px;display:grid;grid-template-columns:minmax(0,1.85fr) minmax(220px,1fr);grid-template-areas:'apparatus controls' 'apparatus detector' 'apparatus .';gap:8px 10px;align-items:start;grid-template-rows:var(--operation-height) auto 1fr}
+.apparatus{grid-area:apparatus;min-width:0}
+.controls{grid-area:controls;align-self:stretch;margin-top:0;overflow:visible}
+.detector{grid-area:detector}
+.scene-card{background:#10191d;border-color:#324147;color:#e6efed}
+.scene-card figcaption{background:#182428;border-color:#324147;color:#edf6f2;padding:4px 8px}
+.scene-card figcaption span{color:#b8c9c6}
+#scene{aspect-ratio:650/134}
+.compare canvas{aspect-ratio:650/153;touch-action:pan-y;cursor:grab}
+.compare canvas:active{cursor:grabbing}
+.compare canvas:focus-visible{outline:2px solid #72e5d0;outline-offset:-2px}
+#arrival{aspect-ratio:650/178}
+.arc-caption{padding:4px 8px;display:flex;gap:8px;align-items:center;justify-content:space-between;color:#b8c9c6;font-size:12px;border-top:1px solid #324147}
+.arc-caption output{color:#7be2d4;font-variant-numeric:tabular-nums;font-size:1.1em}
+.compare+.compare{margin-top:6px}
+#detector{aspect-ratio:300/138}
+.detail-key{display:flex;align-items:center;gap:11px;padding:5px 2px;font-size:12px;color:var(--muted)}
+.detail-key span{display:inline-flex;align-items:center;gap:5px}
+.detail-key span::before{content:'';display:inline-block;width:12px;height:3px;border-radius:2px}
+.slot-key::before{background:#258b7e}
+.axis-key::before{background:#be8c38}
+#reset-camera{margin-left:auto;padding:3px 6px;font-size:12px}
+.controls .actions{margin-top:0}
+.controls button{min-height:34px}
+.controls .primary{padding-inline:12px}
+#feedback:empty{display:none}
+#speed-panel{padding-bottom:7px}
+.adjust{display:flex;align-items:center;justify-content:space-between;gap:6px;color:var(--muted);font-size:12px}
+.adjust button{font-variant-numeric:tabular-nums;min-height:29px}
+#calculation{margin-top:0;margin-bottom:8px}
+#calculation div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:3px 7px}
+#calculation dd{margin:0;font-variant-numeric:tabular-nums;color:var(--accent)}
+#calculation .formula{margin-top:5px}
+#calculation strong{display:inline}
+@media(max-width:640px){
+  main{padding-bottom:8px}
+  header{margin-bottom:5px}
+  .intro{margin-bottom:6px}
+  .lab-shell{--operation-height:174px;grid-template-columns:minmax(0,1fr);grid-template-areas:'controls' 'detector' 'apparatus';grid-template-rows:var(--operation-height) auto auto;gap:5px}
+  #detector{aspect-ratio:300/43}
+  #scene{aspect-ratio:650/125}
+  .detail-key{padding-block:3px}
+  .scene-card figcaption{font-size:11px;padding-block:3px}
+  #calculation div{margin:0}
+  #calculation .formula{display:grid;margin-top:4px}
+  #calculation .formula dd{margin-top:0}
+}
+@media(max-width:360px){
+  .intro{min-block-size:8em}
+  .lab-shell{--operation-height:186px}
+}
+
 </style>
 </head>
 <body>
@@ -63,25 +116,49 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
   <section class='intro' aria-labelledby='step-title'>
     <div id='step-count'></div><h2 id='step-title' aria-live='polite'></h2><p id='instructions'></p>
   </section>
-  <figure>
-    <figcaption><strong>光路与旋转装置</strong><span class='muted' id='caption'>往返过程慢放示意</span></figcaption>
-    <canvas id='scene' role='img' aria-label='光束在近端和反射镜之间往返，比较出射与返回的装置位置'>光路与旋转装置</canvas>
-  </figure>
-  <section class='controls' aria-label='实验操作'>
+<div class='lab-shell'>
+  <section class='controls' aria-labelledby='step-title'>
     <div id='speed-panel' hidden>
       <div class='frequency-row'><label for='speed'>转速 <em class='math'>f</em></label><output id='frequency' for='speed'></output></div>
-      <input id='speed' type='range' aria-describedby='feedback'>
+      <input id='speed' type='range' aria-describedby='instructions'>
+      <div class='adjust'>
+        <button type='button' id='less'></button>
+        <p>微调（圈/s）</p>
+        <button type='button' id='more'></button>
+      </div>
     </div>
-    <div id='signal-panel' hidden>
-      <div class='signal-row'><span id='signal-label'></span><output id='signal'></output></div>
-      <meter id='meter' min='0' max='1' value='1' aria-label='回光相对亮度' hidden></meter>
-      <div id='scope' class='scope' aria-hidden='true' hidden><span id='spot'></span></div>
+    <dl id='calculation' hidden></dl>
+    <div class='actions' id='actions'>
+      <button type='button' id='main-action' class='primary'>发射一束光</button>
+      <button type='button' id='replay' hidden>再看一次往返</button>
     </div>
-    <div id='calculation' hidden></div>
     <p id='feedback' role='status' aria-live='polite'></p>
-    <div class='actions' id='actions'></div>
-    <div class='actions' id='playback'></div>
   </section>
+  <section class='apparatus' aria-label='三维光路和八面镜'>
+    <figure class='scene-card'>
+      <figcaption><strong>光路总览</strong><span id='path-stage'>待发射</span></figcaption>
+      <canvas id='scene' role='img' aria-label='狭缝光经八面镜和近端折转光路去往远端，返回后由八面镜反射向观察端'></canvas>
+    </figure>
+    <div class='detail-key'>
+      <span class='slot-key'>标记面 B</span><span class='axis-key'>参与反射的镜面</span>
+      <button type='button' id='reset-camera'>恢复视角</button>
+    </div>
+    <figure class='scene-card compare'>
+      <figcaption><strong>出射时</strong><span>拖动两图可转动视角</span></figcaption>
+      <canvas id='departure' tabindex='0' role='img' aria-label='出射时的八面镜。A 为出射镜面，B 为静止时的回光镜面。左右键转动视角。'></canvas>
+    </figure>
+    <figure class='scene-card compare'>
+      <figcaption><strong id='return-title'>等待回光</strong><span>与上图采用同一观察方向</span></figcaption>
+      <canvas id='arrival' tabindex='0' role='img' aria-label='回光时的八面镜。青色标记面 B，金色标记接到回光的镜面。左右键转动视角。'></canvas>
+      <div class='arc-caption'><span id='arc-label'>八面镜转过的角度</span><output id='arc-distance' aria-labelledby='arc-label'>—</output></div>
+    </figure>
+  </section>
+  <figure class='scene-card detector'>
+    <figcaption><strong>观察端</strong><span id='light-state'>等待回光</span></figcaption>
+    <canvas id='detector' role='img' aria-label='狭缝回光像与固定基准刻线'></canvas>
+  </figure>
+</div>
+
 </main>
 <script>
 'use strict';
@@ -89,7 +166,7 @@ input[type=range]{width:100%;min-height:27px;margin:0;accent-color:var(--accent)
 const optics = (() => {
   const airSpeed = 299792458 / 1.00027;
   const experiments = Object.freeze({
-    fizeau: Object.freeze({ distance: 8630, count: 720, scale: 2, min: 0, max: 26, step: 0.01, initial: 5 }),
+    fizeau: Object.freeze({ distance: 8630, count: 720, radius: 0.10, scale: 2, min: 0, max: 26, step: 0.01, initial: 5 }),
     michelson: Object.freeze({ distance: 35400, count: 8, scale: 1, min: 320, max: 650, step: 0.1, initial: 430 })
   });
   const degrees = value => value * 180 / Math.PI;
@@ -116,423 +193,608 @@ const optics = (() => {
     return { turns, time, length: 2 * distance, speed: 2 * distance / time };
   }
 
-  return { experiments, observe, measure, degrees };
+  function fizeauFromArc(frequency) {
+    const { radius, distance, count } = experiments.fizeau;
+    const arc = Math.PI * radius / count;
+    const angularSpeed = 2 * Math.PI * frequency;
+    const rimSpeed = radius * angularSpeed;
+    const time = arc / rimSpeed;
+    const length = 2 * distance;
+    return { arc, angularSpeed, rimSpeed, time, length, speed: length / time };
+  }
+
+  function michelsonFromAngle(frequency) {
+    const { count, distance } = experiments.michelson;
+    const turnAngle = 2 * Math.PI / count;
+    const angularSpeed = 2 * Math.PI * frequency;
+    const time = turnAngle / angularSpeed;
+    const length = 2 * distance;
+    return { turnAngle, angularSpeed, time, length, speed: length / time };
+  }
+
+  return { experiments, observe, measure, degrees, fizeauFromArc, michelsonFromAngle };
 })();
 
 
-(() => {
-  'use strict';
-  const $ = id => document.getElementById(id);
-  const kind = document.documentElement.dataset.kind;
-  const fizeau = kind === 'fizeau';
-  const { experiments, observe, measure, degrees } = optics;
-  const apparatus = experiments[kind];
-  const canvas = $('scene');
-  const slider = $('speed');
-  const width = 650;
-  const height = 285;
-  const duration = 12000;
-  const places = fizeau ? 2 : 1;
-  const chart = { near: 83, far: 566, y: 72 };
-  const texts = [
-    ['观察光的往返', '旋转装置先保持静止。看光从近端出发、到远端反射，再返回近端。'],
-    fizeau ? ['找到第一次最暗', '从低速开始增大转速，观察回光亮度。找到第一次最暗的位置，再记录转速。']
-      : ['让回光像重新对准', '移动滑块，让回光像第一次重新落在静止时的基准刻线上，再记录转速。'],
-    ['判断往返期间转过的角度', fizeau ? '比较出射时的齿缝和回光时挡光的轮齿。齿轮转过了多少？'
-      : '比较出射和返回时对准基准方向的镜面。棱镜转过了多少？'],
-    ['用路程和时间计算', '这里的时间是光从近端到远端再返回近端的时间。计算光速时，分子应取哪一段路程？'],
-    ['测量完成', '这是用你记录的转速求出的空气光速。']
-  ];
+const spatialGraphics = (() => {
+  const palette = {
+    background: '#10191d', text: '#e7efec', muted: '#a9bfba', line: '#617c80',
+    slot: '#7be2d4', path: '#ffca77', core: '#fff5d4',
+    steel: [170, 190, 192], bench: [67, 91, 97], mirror: [124, 190, 198]
+  };
+  const point = (x, y, z) => ({ x, y, z });
+  const minus = (a, b) => point(a.x - b.x, a.y - b.y, a.z - b.z);
+  const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+  const cross = (a, b) => point(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+  const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 
-  let state;
-  let request;
-  let lastTimestamp;
-  let observation;
-  let recordButton;
-  let advanceButton;
-  let playButton;
-  let result;
-
-  function fixed(number, digits) { return number.toFixed(digits); }
-  function refreshOptics() { observation = observe(kind, state.frequency); }
-  function announce(text, ready = false) {
-    const feedback = $('feedback');
-    if (feedback.textContent !== text) feedback.textContent = text;
-    feedback.toggleAttribute('data-ready', ready);
+  function projectFrom(yaw, elevation, centerX, centerY) {
+    const cx = Math.cos(yaw);
+    const sx = Math.sin(yaw);
+    const cy = Math.cos(elevation);
+    const sy = Math.sin(elevation);
+    const right = point(cx, 0, -sx);
+    const up = point(-sx * sy, cy, -cx * sy);
+    const toward = point(sx * cy, sy, cx * cy);
+    return world => ({
+      x: centerX + dot(world, right),
+      y: centerY - dot(world, up),
+      z: dot(world, toward)
+    });
   }
 
-  function stopMotion() {
-    if (request !== undefined) cancelAnimationFrame(request);
-    request = undefined;
-    lastTimestamp = undefined;
-    state.playing = false;
-  }
-
-  function reset() {
-    if (state) stopMotion();
-    state = { step: 0, frequency: 0, progress: 0, playing: false };
-    result = null;
-    refreshOptics();
-    renderStep();
-  }
-
-  function updatePlayback() {
-    if (playButton) playButton.textContent = state.playing ? '暂停'
-      : state.progress === 1 ? '重新播放' : state.progress > 0 ? '继续' : '播放往返';
-  }
-
-  function frame(timestamp) {
-    if (!state.playing) return;
-    if (lastTimestamp !== undefined) {
-      state.progress = Math.min(1, state.progress + Math.min(timestamp - lastTimestamp, 45) / duration);
-    }
-    lastTimestamp = timestamp;
-    draw();
-    if (state.progress < 1) request = requestAnimationFrame(frame);
-    else finishMotion();
-  }
-
-  function finishMotion() {
-    stopMotion();
-    state.progress = 1;
-    updatePlayback();
-    updateReadouts();
-    draw();
-  }
-
-  function togglePlayback() {
-    if (state.playing) {
-      stopMotion();
-      updatePlayback();
-      return;
-    }
-    if (state.progress === 1) state.progress = 0;
-    state.playing = true;
-    lastTimestamp = undefined;
-    updatePlayback();
-    request = requestAnimationFrame(frame);
-    draw();
-  }
-
-  function button(parent, label, handler, { id, value, primary } = {}) {
-    const element = document.createElement('button');
-    element.type = 'button';
-    element.textContent = label;
-    if (id) element.id = id;
-    if (value) element.dataset.answer = value;
-    if (primary) element.classList.add('primary');
-    element.addEventListener('click', handler);
-    parent.append(element);
-    return element;
-  }
-
-  function next() {
-    stopMotion();
-    state.step++;
-    state.progress = state.step === 1 ? 0 : 1;
-    if (state.step === 1) state.frequency = apparatus.initial;
-    refreshOptics();
-    renderStep();
-    $('step-title').focus({ preventScroll: true });
-  }
-
-  function chooseAngle(answer) {
-    if (answer !== 'correct') {
-      announce(fizeau ? '再比较齿缝中心和紧挨着它的轮齿中心。'
-        : '相邻两个镜面依次转到同一方向，所隔的是一个面的间隔。');
-      return;
-    }
-    result = measure(kind, state.frequency);
-    next();
-  }
-
-  function chooseLength(answer) {
-    if (answer !== 'round') {
-      announce('计时从光离开近端开始，到光返回近端结束。再数一数这段时间内光走过的路程。');
-      return;
-    }
-    next();
-  }
-
-  function renderStep() {
-    const step = state.step;
-    const actions = $('actions');
-    const playback = $('playback');
-    actions.replaceChildren();
-    playback.replaceChildren();
-    advanceButton = undefined;
-    recordButton = undefined;
-    playButton = undefined;
-    $('step-title').textContent = texts[step][0];
-    $('step-title').tabIndex = -1;
-    $('instructions').textContent = texts[step][1];
-    $('step-count').textContent = step === 4 ? '已完成 4 步' : '第 ' + (step + 1) + ' 步 / 共 4 步';
-    $('progress').value = step;
-    $('speed-panel').hidden = step !== 1;
-
-    if (step <= 1) {
-      playButton = button(playback, '播放往返', togglePlayback, { id: 'play' });
-      if (step === 0) button(playback, '定格到返回时', finishMotion, { id: 'freeze' });
-    }
-    if (step === 0) {
-      advanceButton = button(actions, '开始调速', next, { id: 'advance', primary: true });
-    } else if (step === 1) {
-      slider.min = apparatus.min;
-      slider.max = apparatus.max;
-      slider.step = apparatus.step;
-      slider.value = state.frequency;
-      recordButton = button(actions, '记录此转速', () => { if (observation.aligned) next(); },
-        { id: 'record', primary: true });
-    } else if (step === 2) {
-      const choices = fizeau ? ['半个齿距', '一个齿距', '一整圈'] : ['一个面的间隔', '半个面的间隔', '一整圈'];
-      choices.forEach((choice, i) => {
-        const value = i === 0 ? 'correct' : 'angle-' + i;
-        button(actions, choice, () => chooseAngle(value), { value });
-      });
-    } else if (step === 3) {
-      button(actions, '单程距离 L', () => chooseLength('single'), { value: 'single' });
-      button(actions, '往返路程 2L', () => chooseLength('round'), { value: 'round' });
-    } else {
-      button(actions, '再测一次', reset, { primary: true });
-    }
-
-    renderCalculation();
-    updatePlayback();
-    updateReadouts();
-    draw();
-  }
-
-  function renderCalculation() {
-    const box = $('calculation');
-    box.replaceChildren();
-    box.hidden = state.step < 2;
-    if (box.hidden) return;
-    const line = value => {
-      const item = document.createElement('div');
-      item.textContent = value;
-      box.append(item);
-    };
-    line('记录的转速　' + fixed(state.frequency, places) + ' 圈/s');
-    if (!result) return;
-    line('往返期间转过　1/' + (apparatus.count * apparatus.scale) + ' 圈');
-    line('算出的往返时间　' + fixed(result.time * 1e6, 2) + ' μs');
-    if (state.step === 4) {
-      line('光的往返路程　' + fixed(result.length / 1000, 2) + ' km');
-      const speed = document.createElement('strong');
-      speed.className = 'math';
-      speed.id = 'measured-speed';
-      speed.textContent = fixed(result.speed / 1e8, 2) + ' × 10⁸ m/s';
-      box.append(speed);
-    }
-  }
-
-  function updateReadouts() {
-    const step = state.step;
-    const baseline = step === 0;
-    const visible = step === 1 || (baseline && state.progress === 1);
-    $('signal-panel').hidden = !visible;
-    $('frequency').textContent = fixed(state.frequency, places) + ' 圈/s';
-    slider.setAttribute('aria-valuetext', $('frequency').textContent);
-    if (visible) {
-      if (fizeau) {
-        $('signal-label').textContent = '回光相对亮度';
-        $('signal').textContent = (observation.relativeLight * 100).toFixed(1) + '%';
-        $('meter').hidden = false;
-        $('meter').value = observation.relativeLight;
-      } else {
-        const offset = degrees(observation.angularOffset);
-        const distant = Math.abs(offset) > 18;
-        $('signal-label').textContent = '回光像相对基准';
-        $('scope').hidden = false;
-        $('spot').style.left = (50 + Math.max(-18, Math.min(18, offset)) * 2.54) + '%';
-        $('signal').textContent = baseline ? '基准位置' : distant ? (offset < 0 ? '左侧视场外' : '右侧视场外')
-          : Math.abs(offset) < .05 ? '对准基准' : (offset < 0 ? '偏左 ' : '偏右 ') + fixed(Math.abs(offset), 1) + '°';
-      }
-    }
-    if (advanceButton) advanceButton.disabled = state.progress !== 1;
-    if (baseline) {
-      announce(state.progress === 1 ? (fizeau ? '静止时，回光仍穿过原来的齿缝。' : '静止时的回光像给出了对准的基准。')
-        : '先观察一次往返。', state.progress === 1);
-    } else if (step === 1) {
-      recordButton.disabled = !observation.aligned;
-      if (observation.aligned) announce(fizeau ? '已接近第一次最暗的位置，可以记录转速。'
-        : '回光像已接近基准，可以记录转速。', true);
-      else if (fizeau) announce(observation.pitchTravel < .5 ? '增大转速，追踪亮度下降。'
-        : '已经越过第一次最暗的位置，试着把转速往回调。');
-      else announce(observation.pitchTravel < 1 ? '回光像在基准左侧，试着提高转速。'
-        : '回光像在基准右侧，试着降低转速。');
-    } else if (step === 2) announce(fizeau ? '看光束位置下方的齿缝和轮齿。' : '看哪一个镜面接到了原来的方向。');
-    else if (step === 3) announce('用上面算出的时间和装置的距离读数。');
-    else announce('光的往返时间由所记录的转速反推。', true);
-  }
-
-  function colors() {
-    const css = getComputedStyle(document.documentElement);
-    const names = ['paper', 'fg', 'axis', 'accent', 'warm', 'metal', 'border'];
-    return Object.fromEntries(names.map(name => [name, css.getPropertyValue('--' + name).trim()]));
-  }
-
-  function openCanvas(t) {
-    const bounds = canvas.getBoundingClientRect();
-    const ss = Math.max(devicePixelRatio || 1, 2);
-    const w = Math.round(bounds.width * ss);
-    const h = Math.round(bounds.height * ss);
+  function canvasFrame(canvas, width, height) {
+    const rect = canvas.getBoundingClientRect();
+    const sample = Math.max(window.devicePixelRatio || 1, 2);
+    const w = Math.round(rect.width * sample);
+    const h = Math.round(rect.height * sample);
     if (!w || !h) return null;
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
     }
     const ctx = canvas.getContext('2d');
-    ctx.setTransform(w / width, 0, 0, h / height, 0, 0);
-    ctx.fillStyle = t.paper;
-    ctx.fillRect(0, 0, width, height);
-    ctx.lineCap = 'round';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = palette.background;
+    ctx.fillRect(0, 0, w, h);
+    const scale = Math.min(w / width, h / height);
+    ctx.setTransform(scale, 0, 0, scale, (w - width * scale) / 2, (h - height * scale) / 2);
     ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
     return ctx;
   }
 
-  function line(ctx, x1, y1, x2, y2, color, weight = 1.4, dash = []) {
+  function stroke(ctx, a, b, color, width) {
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
     ctx.strokeStyle = color;
-    ctx.lineWidth = weight;
-    ctx.setLineDash(dash);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
+    ctx.lineWidth = width;
     ctx.stroke();
-    ctx.setLineDash([]);
   }
 
-  function circle(ctx, x, y, radius, color) {
+  function disc(ctx, x, y, r, fill) {
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, 2 * Math.PI);
-    ctx.fillStyle = color;
+    ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = fill;
     ctx.fill();
   }
 
-  function label(ctx, words, x, y, color, size = 18) {
-    ctx.fillStyle = color;
+  function words(ctx, text, x, y, color = palette.text, size = 15, align = 'center') {
     ctx.font = size + 'px Microsoft YaHei, system-ui, sans-serif';
-    ctx.textAlign = 'center';
+    ctx.textAlign = align;
     ctx.textBaseline = 'middle';
-    ctx.fillText(words, x, y);
-  }
-
-  function pointer(ctx, x, y, direction, color) {
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - 10 * direction, y - 4.4);
-    ctx.lineTo(x - 10 * direction, y + 4.4);
-    ctx.closePath();
     ctx.fillStyle = color;
-    ctx.fill();
+    ctx.fillText(text, x, y);
   }
 
-  function drawPath(ctx, t) {
-    const { near, far, y } = chart;
-    line(ctx, near, y, far, y, t.axis);
-    line(ctx, near, y - 13, near, y + 13, t.accent, 3.1);
-    line(ctx, far, y - 15, far, y + 15, t.fg, 3.1);
-    pointer(ctx, 244, y, 1, t.warm);
-    pointer(ctx, 409, y, -1, t.accent);
-    const x = near + (far - near) * (1 - Math.abs(1 - 2 * state.progress));
-    circle(ctx, x, y, 5.8, t.warm);
-    label(ctx, '近端', near, 35, t.fg);
-    label(ctx, '远端反射装置', far, 35, t.fg);
-    label(ctx, '去程', 244, 50, t.warm, 16);
-    label(ctx, '回程', 409, 98, t.accent, 16);
-    line(ctx, 28, 118, 622, 118, t.border);
-  }
-
-  function wheel(ctx, x, y, turns, t) {
-    const pitch = 40;
-    const displacement = turns - Math.floor(turns);
-    const offset = displacement * pitch;
+  function beam(ctx, a, b, strength = 1) {
+    if (strength <= 0) return;
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(x - 116, y - 26, 232, 52);
-    ctx.clip();
-    ctx.fillStyle = t.metal;
-    ctx.strokeStyle = t.axis;
-    ctx.lineWidth = 1.3;
-    for (let k = -4; k <= 3; k++) {
-      const left = x + (k + .25) * pitch + offset;
-      ctx.fillRect(left, y - 17, pitch / 2, 34);
-      ctx.strokeRect(left, y - 17, pitch / 2, 34);
-    }
+    ctx.globalAlpha = strength * .24;
+    stroke(ctx, a, b, palette.path, 9.0);
+    ctx.globalAlpha = strength * .7;
+    stroke(ctx, a, b, palette.path, 3.6);
+    ctx.globalAlpha = strength;
+    stroke(ctx, a, b, palette.core, 1.35);
     ctx.restore();
-    line(ctx, x, y - 35, x, y - 24, t.axis, 1.2);
-    line(ctx, x, y + 24, x, y + 35, t.axis, 1.2);
-    circle(ctx, x, y, 4.7, Math.abs(turns - Math.round(turns)) < .25 ? t.accent : t.warm);
   }
 
-  function mirror(ctx, x, y, theta, t, returning) {
-    const side = Math.PI / 4;
-    const radius = 47;
-    const vertices = Array.from({ length: 8 }, (_, index) => {
-      const beta = theta + (index + .5) * side;
-      return [x + radius * Math.cos(beta), y + radius * Math.sin(beta)];
-    });
-    ctx.fillStyle = t.metal;
-    ctx.strokeStyle = t.axis;
-    ctx.lineWidth = 1.55;
-    ctx.beginPath();
-    vertices.forEach(([px, py], i) => i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py));
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    function facet(angle, color) {
-      line(ctx, x + radius * Math.cos(angle - side / 2), y + radius * Math.sin(angle - side / 2),
-        x + radius * Math.cos(angle + side / 2), y + radius * Math.sin(angle + side / 2), color, 3.2);
+  function depthFaces(faces, back, front, material) {
+    faces.push({ vertices: back.slice().reverse(), material }, { vertices: front, material });
+    for (let i = 0; i < front.length; i++) {
+      const j = (i + 1) % front.length;
+      faces.push({ vertices: [back[i], back[j], front[j], front[i]], material });
     }
-    facet(theta, t.accent);
-    if (returning) facet(theta - Math.round(theta / side) * side, t.warm);
-    circle(ctx, x, y, 2.4, t.axis);
-    line(ctx, x + 56, y, x + 91, y, t.axis, 1.15, [4, 4]);
   }
 
-  function draw() {
-    const t = colors();
-    const ctx = openCanvas(t);
+  function box(faces, min, max, material) {
+    const profile = [point(min.x, min.y, 0), point(max.x, min.y, 0),
+      point(max.x, max.y, 0), point(min.x, max.y, 0)];
+    depthFaces(faces, profile.map(p => point(p.x, p.y, min.z)),
+      profile.map(p => point(p.x, p.y, max.z)), material);
+  }
+
+  function paintFaces(ctx, project, faces) {
+    const sorted = faces.map(({ vertices, material }) => {
+      const projected = vertices.map(project);
+      const n = cross(minus(vertices[1], vertices[0]), minus(vertices[2], vertices[0]));
+      const length = Math.hypot(n.x, n.y, n.z);
+      const light = length ? (.24 * n.x + .72 * n.y + .65 * n.z) / length : 0;
+      const depth = projected.reduce((sum, p) => sum + p.z, 0) / projected.length;
+      return { projected, depth, light, material };
+    }).sort((a, b) => a.depth - b.depth);
+
+    for (const { projected, light, material } of sorted) {
+      const [first, ...rest] = projected;
+      ctx.beginPath();
+      ctx.moveTo(first.x, first.y);
+      for (const p of rest) ctx.lineTo(p.x, p.y);
+      ctx.closePath();
+
+      const yRange = projected.map(p => p.y);
+      const lo = Math.min(...yRange);
+      const hi = Math.max(...yRange);
+      const brightness = .57 + .34 * Math.max(0, light);
+      const tint = value => 'rgb(' + material.map(v => Math.round(v * value)).join(',') + ')';
+      const fill = ctx.createLinearGradient(0, lo, 0, Math.max(lo + 1, hi));
+      fill.addColorStop(0, tint(brightness + .10));
+      fill.addColorStop(1, tint(brightness - .04));
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(18,31,34,.87)';
+      ctx.lineWidth = .67;
+      ctx.stroke();
+    }
+  }
+
+  return { palette, point, clamp, projectFrom, canvasFrame, stroke, disc, words, beam, depthFaces, box, paintFaces };
+})();
+
+function createMichelsonScene() {
+  const byId = id => document.getElementById(id);
+  const overview = byId('scene');
+  const departure = byId('departure');
+  const arrival = byId('arrival');
+  const detector = byId('detector');
+  const pathStage = byId('path-stage');
+  const returnTitle = byId('return-title');
+  const angleLabel = byId('arc-label');
+  const angleReading = byId('arc-distance');
+  const lightState = byId('light-state');
+  const { palette, point, clamp, projectFrom, canvasFrame, stroke, disc, words, beam, box, paintFaces } = spatialGraphics;
+  const { count } = optics.experiments.michelson;
+  const faceAngle = 2 * Math.PI / count;
+  const baseline = -Math.PI / 4;
+  const halfField = 16 * Math.PI / 180;
+  const faceB = [74, 170, 157];
+  const lightFace = [220, 171, 100];
+  const view = { yaw: .36, elevation: .82 };
+  const initialYaw = view.yaw;
+  let snapshot;
+  let drag;
+
+  const planePoint = (angle, radius, y = 0) => point(radius * Math.cos(angle), y, -radius * Math.sin(angle));
+  const move = (p, x, y, z) => point(p.x + x, p.y + y, p.z + z);
+  const faceIndex = phase => (count - Math.round(phase / faceAngle)) % count;
+
+  function prism(faces, { phase, active, radius, height, x = 0, y = 0, z = 0, highlighted = true }) {
+    const vertexRadius = radius / Math.cos(faceAngle / 2);
+    const edge = Array.from({ length: count }, (_, i) => planePoint(baseline + phase + (i - .5) * faceAngle, vertexRadius));
+    const top = edge.map(p => move(p, x, y + height, z));
+    const bottom = edge.map(p => move(p, x, y - height, z));
+    faces.push({ vertices: top, material: [98, 121, 128] });
+    for (let i = 0; i < count; i++) {
+      const next = (i + 1) % count;
+      const material = highlighted && i === active ? lightFace : highlighted && i === 0 ? faceB : palette.steel;
+      faces.push({ vertices: [top[i], bottom[i], bottom[next], top[next]], material });
+    }
+  }
+
+  function rayToFace(radius, phase) {
+    const residual = phase - Math.round(phase / faceAngle) * faceAngle;
+    const normal = planePoint(baseline + residual, 1);
+    const z = radius / Math.sqrt(2);
+    const x = (radius - z * normal.z) / normal.x;
+    const hit = point(x, 0, z);
+    const reflected = point(-1 + 2 * normal.x ** 2, 0, 2 * normal.x * normal.z);
+    return { hit, reflected };
+  }
+
+  function polyline(ctx, project, vertices, color, thickness) {
+    for (let i = 1; i < vertices.length; i++) stroke(ctx, project(vertices[i - 1]), project(vertices[i]), color, thickness);
+  }
+
+  function lineOfSight(ctx, project, radius, phase, returned, isDeparture) {
+    const offset = radius / Math.sqrt(2);
+    if (isDeparture) {
+      const a = point(-offset, 0, -offset);
+      beam(ctx, project(point(-offset, 0, -100)), project(a));
+      beam(ctx, project(a), project(point(-190, 0, -offset)));
+      return;
+    }
+    const reference = point(offset, 0, offset);
+    ctx.setLineDash([5, 5]);
+    stroke(ctx, project(reference), project(point(offset, 0, 150)), palette.line, 1.4);
+    ctx.setLineDash([]);
+    if (!returned) return;
+    const { hit, reflected } = rayToFace(radius, phase);
+    const extension = (113 - hit.z) / reflected.z;
+    beam(ctx, project(point(185, 0, hit.z)), project(hit));
+    beam(ctx, project(hit), project(move(hit, reflected.x * extension, 0, reflected.z * extension)));
+    disc(ctx, project(hit).x, project(hit).y, 3.1, palette.core);
+  }
+
+  function drawSweep(ctx, project, phase, y) {
+    const mark = theta => project(planePoint(baseline + theta, 79, y));
+    const center = project(point(0, y, 0));
+    const start = mark(0);
+    let previous = start;
+    ctx.setLineDash([3, 4]);
+    stroke(ctx, center, start, palette.line, 1.1);
+    ctx.setLineDash([]);
+    for (let i = 1; i <= 16; i++) {
+      const p = mark(phase * i / 16);
+      stroke(ctx, previous, p, palette.slot, 2.0);
+      previous = p;
+    }
+    stroke(ctx, center, previous, palette.slot, 1.2);
+    const mid = mark(phase / 2);
+    words(ctx, 'Δθ', mid.x + 24, mid.y + 9, palette.slot, 21);
+  }
+
+  function faceMark(ctx, project, phase, radius, y, text, color, align, labelOffset = -14) {
+    const p = project(planePoint(baseline + phase, radius * .83, y));
+    disc(ctx, p.x, p.y, 3.4, color);
+    const side = align === 'right' ? -1 : 1;
+    const end = { x: p.x + side * 60, y: p.y + labelOffset };
+    stroke(ctx, p, { x: end.x, y: p.y }, color, 1.0);
+    stroke(ctx, { x: end.x, y: p.y }, end, color, 1.0);
+    words(ctx, text, end.x + side * 5, end.y - 4, color, 19, align);
+  }
+
+  function compare(canvas, phase, isDeparture, returned) {
+    const ctx = canvasFrame(canvas, 650, isDeparture ? 153 : 178);
     if (!ctx) return;
-    drawPath(ctx, t);
-    const watching = state.playing || (state.progress > 0 && state.progress < 1);
-    const frameFraction = watching ? state.progress : state.step > 0 || state.progress === 1 ? 1 : 0;
-    const angle = 2 * Math.PI * observation.revolutions * frameFraction;
-    const travel = observation.pitchTravel * frameFraction;
-    const centerA = 168;
-    const centerB = 482;
-    label(ctx, '出射时', centerA, 144, t.fg);
-    label(ctx, watching ? '往返途中' : '回到近端时', centerB, 144, t.fg);
-    if (fizeau) {
-      wheel(ctx, centerA, 207, 0, t);
-      wheel(ctx, centerB, 207, travel, t);
-      label(ctx, '光束对准齿缝', centerA, 261, t.axis, 16);
-      label(ctx, '沿原位置观察回光', centerB, 261, t.axis, 16);
+    const project = projectFrom(view.yaw, view.elevation, 310, 93);
+    const radius = 56;
+    const height = 24;
+    const active = isDeparture ? count / 2 : returned ? faceIndex(phase) : -1;
+    const faces = [];
+    prism(faces, { phase, active, radius, height });
+    paintFaces(ctx, project, faces);
+    lineOfSight(ctx, project, radius, phase, returned, isDeparture);
+    if (isDeparture) {
+      faceMark(ctx, project, Math.PI, radius, height, 'A 出射面', palette.path, 'right', 20);
+      faceMark(ctx, project, 0, radius, height, 'B', palette.slot, 'left');
     } else {
-      mirror(ctx, centerA, 209, 0, t, false);
-      mirror(ctx, centerB, 209, angle, t, true);
-      label(ctx, '出射镜面', centerA, 269, t.accent, 16);
-      label(ctx, '朝向基准的镜面', centerB, 269, t.warm, 16);
+      const activeDirection = phase - Math.round(phase / faceAngle) * faceAngle;
+      if (returned && phase > 0) drawSweep(ctx, project, phase, height);
+      faceMark(ctx, project, phase, radius, height, 'B', palette.slot, 'left');
+      if (returned && active !== 0) faceMark(ctx, project, activeDirection, radius, height, '接到回光', palette.path, 'right');
     }
   }
 
-  $('setup').textContent = (fizeau ? '轮齿 ' : '镜面 ') + apparatus.count + ' 个　·　单程距离 ' +
-    fixed(apparatus.distance / 1000, 2) + ' km';
-  $('reset').addEventListener('click', reset);
-  slider.addEventListener('input', () => {
-    stopMotion();
-    state.progress = 0;
-    state.frequency = +slider.value;
-    refreshOptics();
-    updatePlayback();
-    updateReadouts();
-    draw();
+  function drawOverview(state, phase, observation) {
+    const ctx = canvasFrame(overview, 650, 134);
+    if (!ctx) return;
+    const project = projectFrom(-.24, .47, 333, 69);
+    const x = -109;
+    const y = 13;
+    const radius = 23;
+    const edge = radius / Math.sqrt(2);
+    const source = point(x - edge, y, -105);
+    const a = point(x - edge, y, -edge);
+    const leftFold = point(-219, y, -edge);
+    const nearFold = point(-219, y, -66);
+    const farA = point(236, y, -66);
+    const farB = point(236, y, edge);
+    const { hit, reflected } = rayToFace(radius, phase);
+    const b = move(hit, x, y, 0);
+    const eye = point(x + edge, y, 103);
+    const faces = [];
+    box(faces, point(-256,-18,-112), point(256,-13,114), palette.bench);
+    box(faces, point(source.x-10,-13,-112), point(source.x+10,25,-103), palette.bench);
+    box(faces, point(231,-13,-78), point(247,37,29), palette.mirror);
+    box(faces, point(eye.x-17,-13,98), point(eye.x+17,31,110), palette.bench);
+    prism(faces, { phase, active: faceIndex(phase), radius, height: 18, x, y });
+    paintFaces(ctx, project, faces);
+    polyline(ctx, project, [source, a, leftFold, nearFold, farA, farB, point(x + edge,y,edge), eye], palette.line, 1.2);
+    for (const fixed of [leftFold, nearFold]) disc(ctx, project(fixed).x, project(fixed).y, 2.8, '#9cb4b5');
+    const p = state.progress;
+    const lerp = (a, b, t) => point(a.x + (b.x - a.x) * t, a.y, a.z + (b.z - a.z) * t);
+    if (state.playing || p === 1) {
+      for (const [from, to] of [[source,a],[a,leftFold],[leftFold,nearFold]]) beam(ctx, project(from), project(to), .68);
+      const moving = p < .47 ? lerp(nearFold, farA, p / .47)
+        : p < .53 ? lerp(farA, farB, (p - .47) / .06) : lerp(farB, b, (p - .53) / .47);
+      if (p >= .47) {
+        beam(ctx, project(nearFold), project(farA), .72);
+        beam(ctx, project(farA), project(p < .53 ? moving : farB), .72);
+        if (p >= .53) beam(ctx, project(farB), project(moving), .94);
+      } else beam(ctx, project(nearFold), project(moving), .92);
+      if (p === 1) {
+        const length = Math.abs(observation.angularOffset) <= halfField ? (eye.z - b.z) / reflected.z : 76;
+        const endpoint = move(b, reflected.x * length, 0, reflected.z * length);
+        beam(ctx, project(b), project(endpoint), .92);
+      } else disc(ctx, project(moving).x, project(moving).y, 3.5, palette.core);
+    }
+    words(ctx, '光源狭缝', 133, 16, palette.text, 17);
+    words(ctx, '八面镜', 258, 26, palette.text, 17);
+    words(ctx, '远端反射装置', 524, 67, palette.text, 17);
+    words(ctx, '观察端', 407, 117, palette.text, 17);
+  }
+
+  function drawDetector(returned, offset) {
+    const bounds = detector.getBoundingClientRect();
+    if (!bounds.width) return;
+    const height = 300 * bounds.height / bounds.width;
+    const ctx = canvasFrame(detector, 300, height);
+    if (!ctx) return;
+    const y = height / 2;
+    const lens = ctx.createRadialGradient(150, y, 3, 150, y, 155);
+    lens.addColorStop(0, '#22343c');
+    lens.addColorStop(1, '#0b1419');
+    ctx.fillStyle = lens;
+    ctx.fillRect(0, 0, 300, height);
+    const spread = Math.min(height * .32, 29);
+    ctx.setLineDash([3, 3]);
+    stroke(ctx, {x:150,y:y-spread-3}, {x:150,y:y+spread+3}, palette.slot, 1.05);
+    ctx.setLineDash([]);
+    const inView = returned && Math.abs(offset) <= halfField;
+    const x = inView ? 150 + 118 * Math.tan(offset) / Math.tan(halfField) : null;
+    if (inView) beam(ctx, {x,y:y-spread}, {x,y:y+spread});
+    detector.dataset.slit = inView ? String(x) : '';
+  }
+
+  function draw(state, observation) {
+    snapshot = { state, observation };
+    const returned = state.progress === 1;
+    const measuring = state.step >= 2;
+    const physicalPhase = observation.revolutions * 2 * Math.PI * state.progress;
+    const phase = measuring ? faceAngle : physicalPhase;
+    const offset = observation.angularOffset;
+    pathStage.textContent = state.playing ? (state.progress < .5 ? '去程' : '回程') : returned ? '已回到近端' : '待发射';
+    returnTitle.textContent = state.playing ? '往返途中' : returned ? '回到近端时' : '等待回光';
+    angleLabel.textContent = measuring ? '首次重新对准时的转角' : '八面镜转过的角度';
+    angleReading.textContent = returned ? 'Δθ = ' + optics.degrees(phase).toFixed(measuring ? 0 : 2) + '°' : '—';
+    lightState.textContent = !returned ? '等待回光' : Math.abs(offset) < .004 ? '像对准基准刻线'
+      : (offset < 0 ? '像偏左' : '像偏右') + (Math.abs(offset) > halfField ? '，移出视场' : '');
+    arrival.dataset.phase = String(phase);
+    drawOverview(state, physicalPhase, observation);
+    compare(departure, 0, true, false);
+    compare(arrival, phase, false, returned);
+    drawDetector(returned, offset);
+  }
+
+  function redraw() {
+    if (snapshot) draw(snapshot.state, snapshot.observation);
+  }
+
+  for (const canvas of [departure, arrival]) {
+    canvas.addEventListener('pointerdown', event => {
+      if (!event.isPrimary || event.button !== 0) return;
+      drag = { pointer: event.pointerId, x: event.clientX, yaw: view.yaw };
+      canvas.setPointerCapture(event.pointerId);
+    });
+    canvas.addEventListener('pointermove', event => {
+      if (drag?.pointer !== event.pointerId) return;
+      view.yaw = clamp(drag.yaw + (event.clientX - drag.x) * .008, -.15, .7);
+      redraw();
+    });
+    canvas.addEventListener('lostpointercapture', () => { drag = null; });
+    canvas.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      view.yaw = clamp(view.yaw + (event.key === 'ArrowRight' ? .09 : -.09), -.15, .7);
+      redraw();
+    });
+  }
+  byId('reset-camera').addEventListener('click', () => {
+    view.yaw = initialYaw;
+    redraw();
   });
-  new ResizeObserver(draw).observe(canvas);
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
-  document.fonts.ready.then(draw);
+  const resize = new ResizeObserver(redraw);
+  [departure, arrival, detector].forEach(canvas => resize.observe(canvas));
+  return { draw };
+}
+
+(() => {
+  'use strict';
+  const byId = id => document.getElementById(id);
+  const kind = document.documentElement.dataset.kind;
+  const fizeau = kind === 'fizeau';
+  const apparatus = optics.experiments[kind];
+  const scene = fizeau ? createFizeauScene() : createMichelsonScene();
+  const slider = byId('speed');
+  const title = byId('step-title');
+  const instructions = byId('instructions');
+  const primary = byId('main-action');
+  const replay = byId('replay');
+  const feedback = byId('feedback');
+  const calculation = byId('calculation');
+  const less = byId('less');
+  const more = byId('more');
+  const duration = 500;
+  const decimals = fizeau ? 2 : 1;
+  const fineAdjustment = fizeau ? .10 : 1;
+  const steps = [
+    ['看光怎样往返', fizeau ? '点击「发射一束光」，看光从齿轮出发，经远端反射镜回到近端。'
+      : '点击「发射一束光」，看八面镜静止时，回光像落在观察端的哪里。'],
+    fizeau ? ['调速，找第一次最暗', '向右拖动转速滑块，每次调速都会播放往返。观察光斑，接近最暗时可用下方按钮微调。']
+      : ['调速，让回光像重新对准', '向右拖动转速滑块，观察狭缝像如何移动。接近基准刻线时，可以用下方按钮微调。'],
+    fizeau ? ['用轮缘弧长求往返时间', '「回到近端时」图中的青线标出轮缘移过的距离。用半径和角速度求轮缘线速度，再用弧长除以线速度。']
+      : ['用转角求往返时间', '读出「回到近端时」图中的转角。把角度化成弧度，再用转角除以角速度。'],
+    ['用往返路程求光速', '光在这段时间内走了两段长度为 L 的路程。用往返路程除以往返时间。']
+  ];
+  const draw = () => scene.draw(state, observation);
+  let state;
+  let observation;
+  let result;
+  let frame;
+
+  function status(message, ready = false) {
+    feedback.textContent = message;
+    feedback.toggleAttribute('data-ready', ready);
+  }
+
+  function updateControls() {
+    const { step, playing, progress } = state;
+    const returned = progress === 1;
+    const ready = returned && observation.aligned;
+    primary.disabled = false;
+    replay.hidden = step > 1 || (step === 0 && !returned);
+    replay.disabled = playing;
+    if (step === 0) {
+      primary.textContent = returned ? '开始调速' : playing ? '光束正在往返…' : '发射一束光';
+      primary.disabled = playing;
+      status(returned ? (fizeau ? '回光穿过原来的齿缝，观察端有亮斑。' : '静止时，亮的狭缝像落在基准刻线上。') : '', returned);
+    } else if (step === 1) {
+      primary.textContent = '记录转速';
+      primary.disabled = !ready;
+      if (playing) status('光束正在往返。');
+      else if (ready) status(fizeau ? '已到第一次最暗附近。点击「记录转速」。' : '狭缝像已重新对准，点击「记录转速」。', true);
+      else if (fizeau) {
+        status(observation.pitchTravel > .5 ? '已越过第一次最暗的位置，降低转速。' : '向右调速，找光斑第一次最暗的位置。');
+      } else status(observation.pitchTravel > 1 ? '狭缝像偏右，降低转速。' : '狭缝像偏左，提高转速。');
+    } else if (step === 2) {
+      primary.textContent = '核对往返时间';
+      status('');
+    } else {
+      primary.textContent = state.complete ? '再测一次' : '核对光速';
+      status('');
+    }
+  }
+
+  function row(label, value, formula = false) {
+    const line = document.createElement('div');
+    const name = document.createElement('dt');
+    const reading = document.createElement('dd');
+    name.textContent = label;
+    if (formula) line.className = 'formula';
+    if (typeof value === 'string') reading.textContent = value;
+    else reading.append(value);
+    line.append(name, reading);
+    calculation.append(line);
+  }
+
+  function renderStep(focus = true) {
+    const { step, complete, frequency } = state;
+    title.textContent = complete ? '测量完成' : steps[step][0];
+    instructions.textContent = complete ? '用记录的转速求出了空气中的光速。' : steps[step][1];
+    byId('step-count').textContent = complete ? '已完成 4 步' : '第 ' + (step + 1) + ' 步 / 共 4 步';
+    byId('progress').value = complete ? 4 : step;
+    byId('speed-panel').hidden = step !== 1;
+    calculation.hidden = step < 2;
+    calculation.replaceChildren();
+    if (step === 2) {
+      if (fizeau) {
+        row('轮缘弧长 s', (result.arc * 1000).toFixed(4) + ' mm');
+        row('齿轮半径 R', (apparatus.radius * 100).toFixed(1) + ' cm');
+      } else row('转角 Δθ', optics.degrees(result.turnAngle).toFixed(0) + '° = π/4 rad');
+      row('记录的转速 f', frequency.toFixed(decimals) + ' 圈/s');
+      row('角速度 ω = 2πf', result.angularSpeed.toFixed(2) + ' rad/s');
+      row('往返时间', fizeau ? 'Δt = s / (Rω)' : 'Δt = Δθ / ω', true);
+    } else if (step === 3) {
+      row('往返时间 Δt', (result.time * 1e6).toFixed(2) + ' μs');
+      row('往返路程 2L', (result.length / 1000).toFixed(2) + ' km');
+      if (complete) {
+        const speed = document.createElement('strong');
+        speed.id = 'measured-speed';
+        speed.textContent = (result.speed / 1e8).toFixed(2) + ' × 10⁸ m/s';
+        row('空气中的光速', speed, true);
+      } else row('光速', 'v = 2L / Δt', true);
+    }
+    updateControls();
+    draw();
+    if (focus) {
+      if (step === 1) slider.focus({ preventScroll: true });
+      else if (complete) title.focus({ preventScroll: true });
+      else primary.focus({ preventScroll: true });
+    }
+  }
+
+  function play() {
+    cancelAnimationFrame(frame);
+    const fromPrimary = document.activeElement === primary;
+    state.progress = 0;
+    state.playing = true;
+    updateControls();
+    draw();
+    const start = performance.now();
+    function tick(timestamp) {
+      state.progress = Math.max(0, Math.min(1, (timestamp - start) / duration));
+      if (state.progress === 1) {
+        state.playing = false;
+        updateControls();
+        if (fromPrimary && state.step === 0 && document.activeElement === document.body) {
+          primary.focus({ preventScroll: true });
+        }
+      } else frame = requestAnimationFrame(tick);
+      draw();
+    }
+    frame = requestAnimationFrame(tick);
+  }
+
+  function refreshFrequency() {
+    const value = state.frequency.toFixed(decimals) + ' 圈/s';
+    slider.value = Math.max(state.frequency, apparatus.min);
+    slider.setAttribute('aria-valuetext', value);
+    byId('frequency').textContent = value;
+    less.disabled = state.frequency <= apparatus.min;
+    more.disabled = state.frequency >= apparatus.max;
+    observation = optics.observe(kind, state.frequency);
+  }
+
+  function setFrequency(frequency) {
+    const next = Math.max(apparatus.min, Math.min(apparatus.max, Number(frequency.toFixed(decimals))));
+    if (next === state.frequency) return;
+    state.frequency = next;
+    refreshFrequency();
+    play();
+  }
+
+  function reset(focus) {
+    cancelAnimationFrame(frame);
+    state = { step: 0, frequency: 0, progress: 0, playing: false, complete: false };
+    result = null;
+    refreshFrequency();
+    renderStep(focus);
+  }
+
+  primary.addEventListener('click', () => {
+    if (state.step === 0 && state.progress === 0) play();
+    else if (state.complete) reset(true);
+    else if (state.step === 3) {
+      state.complete = true;
+      renderStep();
+    } else {
+      state.step++;
+      if (state.step === 2) result = fizeau ? optics.fizeauFromArc(state.frequency) : optics.michelsonFromAngle(state.frequency);
+      renderStep();
+      if (!fizeau && state.step === 1) setFrequency(apparatus.min);
+    }
+  });
+  replay.addEventListener('click', play);
+  byId('reset').addEventListener('click', () => reset(true));
+  slider.min = apparatus.min;
+  slider.max = apparatus.max;
+  slider.step = apparatus.step;
+  slider.addEventListener('input', () => setFrequency(+slider.value));
+  const adjustmentLabel = fineAdjustment.toFixed(fizeau ? 2 : 0);
+  less.textContent = '−' + adjustmentLabel;
+  more.textContent = '+' + adjustmentLabel;
+  less.setAttribute('aria-label', '转速降低 ' + adjustmentLabel + ' 圈每秒');
+  more.setAttribute('aria-label', '转速提高 ' + adjustmentLabel + ' 圈每秒');
+  less.addEventListener('click', () => setFrequency(state.frequency - fineAdjustment));
+  more.addEventListener('click', () => setFrequency(state.frequency + fineAdjustment));
+  const equipment = fizeau ? '轮齿 ' + apparatus.count + ' 个 · 半径 ' + (apparatus.radius * 100).toFixed(1) + ' cm'
+    : '旋转镜 ' + apparatus.count + ' 个镜面';
+  byId('setup').textContent = equipment + ' · 单程距离 ' + (apparatus.distance / 1000).toFixed(2) + ' km';
+  title.tabIndex = -1;
   window.__CORE = optics;
-  reset();
+  reset(false);
+  new ResizeObserver(draw).observe(byId('scene'));
+  document.fonts.ready.then(draw);
 })();
 
 </script>
