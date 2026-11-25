@@ -23,9 +23,12 @@ canvas{display:block;width:100%;aspect-ratio:820/300}
 figcaption{border-top:1px solid var(--line);padding:7px 10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:2px 12px}
 figcaption strong{color:var(--ink)}
 .legend{display:flex;gap:12px;flex-wrap:wrap}
+.reception{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.reception::before{content:'';width:8px;height:8px;border-radius:50%;border:1px solid currentColor;flex:none}
+.reception[data-arrived='true']::before{background:var(--ochre);border-color:var(--ochre);box-shadow:0 0 6px var(--ochre)}
 .first{color:var(--blue)}
 .second{color:var(--ochre)}
-.controls{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:9px 0 4px}
+.controls{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:0 0 8px}
 fieldset{border:none;display:flex;gap:4px;padding:0;min-width:0}
 button,output,input{font:inherit}
 button,label.choice{min-height:34px;padding:5px 9px;border:1px solid var(--line);border-radius:7px;color:var(--ink);background:var(--paper);cursor:pointer}
@@ -38,9 +41,9 @@ button:focus-visible,input:focus-visible,.choice:focus-within{outline:2px solid 
 input[type='range']{accent-color:var(--blue);min-width:0}
 .period input{flex:1;width:90px}
 #orbit-count{min-width:2ch;text-align:right}
-.scrub{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:4px 10px;margin:2px 0 7px}
+.scrub{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:4px 10px;margin:8px 0 7px}
 .scrub input{width:100%;margin:0}
-.stops{grid-column:1/-1;display:grid;gap:3px;grid-template-columns:repeat(4,minmax(0,1fr))}
+.stops{grid-column:1/-1;display:grid;gap:3px;grid-template-columns:repeat(5,minmax(0,1fr))}
 .stops button{min-height:32px;padding:3px;font-size:clamp(11px,1.65vw,14px)}
 .stops button[aria-current='step']{background:var(--soft);color:var(--blue);border-color:var(--blue);font-weight:700}
 .clock{border:1px solid var(--line);background:var(--paper);border-radius:10px;display:grid;grid-template-columns:1fr 1fr 1fr}
@@ -53,6 +56,7 @@ input[type='range']{accent-color:var(--blue);min-width:0}
 .math{font:italic 1.14em KaTeX_Math,Georgia,serif}
 @media(max-width:540px){
   canvas{aspect-ratio:400/224}
+  figcaption{display:grid;grid-template-columns:minmax(0,1fr);min-height:56px;align-content:center}
   .clock div{padding:5px}
   .controls{column-gap:7px}
   label.choice{padding-inline:6px}
@@ -63,17 +67,9 @@ input[type='range']{accent-color:var(--blue);min-width:0}
 <main>
 <header>
 <h1>罗默观测木卫一食</h1>
-<p>地球从 C 走到 D，比较图 18.4 中两次食毕的光怎样到达地球。</p>
 </header>
-<figure>
-<canvas id='sky' role='img' aria-label='左侧是地球轨道，右侧是放大的木卫一轨道和木星本影。两条单程光路分别从食毕处通向地球在 C、D 的接收位置。'></canvas>
-<figcaption>
-  <strong id='state' role='status'>木卫一在木星的影子里</strong>
-  <span class='legend'><span class='first'>━ 第一次光路</span><span class='second'>━ 后一次光路</span></span>
-</figcaption>
-</figure>
 <div class='controls'>
-  <button type='button' class='primary' id='play'>开始</button>
+  <button type='button' class='primary' id='play'>播放</button>
   <fieldset aria-label='地球相对木星的运动'>
     <label class='choice'><input type='radio' name='direction' value='1' checked>远离木星</label>
     <label class='choice'><input type='radio' name='direction' value='-1'>靠近木星</label>
@@ -81,19 +77,27 @@ input[type='range']{accent-color:var(--blue);min-width:0}
   </fieldset>
   <div class='period'><label for='orbits'>相隔圈数</label><input id='orbits' type='range' min='1' max='40' value='1'><output id='orbit-count' for='orbits'>1</output></div>
 </div>
+<figure>
+<canvas id='sky' role='img' aria-label='左侧是地球轨道，右侧是放大的木卫一轨道和木星本影。两条单程光路分别从出影处通向地球在 C、D 的接收位置。'></canvas>
+<figcaption>
+  <strong id='state' role='status'>木卫一在木星的影子里</strong>
+  <span class='legend'><span class='first'>━ 第一次光路</span><span class='second'>━ 后一次光路</span><span class='reception' id='reception' role='img' aria-label='D 处仍在等待'>D 处接收</span></span>
+</figcaption>
+</figure>
 <div class='scrub'>
   <label for='progress'>播放进度</label><input id='progress' type='range' min='0' max='14200' step='1' value='0'>
   <nav class='stops' aria-label='跳到关键时刻'>
-    <button type='button' data-stop='0'>第一次食毕</button>
-    <button type='button' data-stop='1'>地球在 C 接收</button>
-    <button type='button' data-stop='2'>后一次食毕</button>
-    <button type='button' data-stop='3'>地球在 D 接收</button>
+    <button type='button' data-stop='0'>首次出影</button>
+    <button type='button' data-stop='1'>首次看到</button>
+    <button type='button' data-stop='2'>后次出影</button>
+    <button type='button' data-stop='3'>预计到达</button>
+    <button type='button' data-stop='4'>实际到达</button>
   </nav>
 </div>
 <dl class='clock' aria-label='两次光传播的读数'>
   <div><dt>第一次传播</dt><dd class='first' id='first-flight'>—</dd><small id='first-distance'>地球在 C 接收</small></div>
   <div><dt>后一次传播</dt><dd class='second' id='second-flight'>—</dd><small id='second-distance'>地球在 D 接收</small></div>
-  <div><dt>观测间隔与 <i class='math'>mT</i> 比较</dt><dd id='lag'>—</dd><small id='difference'>比较两次光程</small></div>
+  <div><dt>到达时差 Δ<i class='math'>t</i><sub>余</sub></dt><dd id='lag'>—</dd><small id='difference'>比较两次光程</small></div>
 </dl>
 <p class='meta'>轨道、天体大小和播放快慢均为示意。读数用圆轨道近似，木星视为静止，忽略木星对视线的遮挡。</p>
 </main>
@@ -175,6 +179,7 @@ let cursor = 0;
 let lastFrame = null;
 let frameRequest = null;
 let model, schedule, direction, count;
+let selectedStop = null;
 
 function stopPlayback() {
   running = false;
@@ -187,6 +192,7 @@ function selectScenario() {
   stopPlayback();
   started = false;
   cursor = 0;
+  selectedStop = null;
   direction = Number(radios.find(input => input.checked).value);
   count = Number($('orbits').value);
   model = io.observe(count, direction);
@@ -306,7 +312,7 @@ function differenceBracket(source, cPoint, dPoint, palette) {
       { x: p.x + offset.x * 5, y: p.y + offset.y * 5 }, palette.ink, 1.2);
   }
   const middle = pointBetween(a, b, 0.5);
-  label('l', middle.x + 10 * offset.x, middle.y + 10 * offset.y, palette.ink, { math: true, size: 16 });
+  label('|Δd|', middle.x + 11 * offset.x, middle.y + 11 * offset.y, palette.ink, { math: true, size: 16 });
 }
 
 function drawSky(time) {
@@ -394,7 +400,7 @@ function drawSky(time) {
 
   const moon = io.moonAt(time);
   disc(source, 3.5, HALO, T.b);
-  label('食毕处', source.x + 1, source.y - 28, T.b, { size:compact ? 13 : 15 });
+  label('出影处', source.x + 1, source.y - 28, T.b, { size:compact ? 13 : 15 });
   if (!(count > 2 && cursor >= 6100 && cursor < 7600)) {
     const moonPoint = { x: j.x + moon.x * moonScale, y: j.y - moon.y * moonScale };
     disc(moonPoint, compact ? 4.5 : 5.5, moon.inShadow ? T.ink : T.moon, moon.inShadow ? T.line : T.ink);
@@ -434,25 +440,33 @@ function draw() {
   const moon = io.moonAt(time);
   drawSky(time);
   let state = '木卫一在木星的影子里';
-  if (time >= first.emission) state = '第一次食毕，光正传向 C';
-  if (arrivedFirst) state = '地球已在 C 看到第一次食毕，木卫一继续绕行';
+  if (time >= first.emission) state = '第一次出影，光正传向 C';
+  if (arrivedFirst) state = '地球在 C 看到第一次出影';
   if (arrivedFirst && moon.inShadow) state = '木卫一再次进入木星的影子';
-  if (count > 2 && cursor >= 6100 && cursor < 7600) state = '快进中间的绕行，地球继续沿轨道运动';
-  if (time >= second.emission) state = '后一次食毕，光正传向 D';
+  if (count > 2 && cursor >= 6100 && cursor < 7600) state = '快进中间的绕行';
+  if (time >= second.emission) state = '后一次出影，光正传向 D';
   if (expectedReached && !arrivedSecond) state = '已到预计时刻，光还在路上';
-  if (arrivedSecond) state = '地球在 D 看到后一次食毕';
-  if (arrivedSecond && lag < 0 && !expectedReached) state = '地球在 D 已看到食毕，预计时刻还没到';
+  if (arrivedSecond) state = '地球在 D 看到后一次出影';
+  if (arrivedSecond && lag === 0) state = '在预计时刻看到后一次出影';
+  if (arrivedSecond && lag < 0) state = expectedReached ? '预计时刻到了，地球已先看到出影' : '地球已看到出影，预计时刻还没到';
   show('state', state);
+  const reception = $('reception');
+  if (reception.dataset.arrived !== String(arrivedSecond)) {
+    reception.dataset.arrived = String(arrivedSecond);
+    reception.setAttribute('aria-label',arrivedSecond ? 'D 处已接收' : 'D 处仍在等待');
+  }
   show('first-flight', arrivedFirst ? flight(first.flight) : '—');
   show('second-flight', arrivedSecond ? flight(second.flight) : '—');
   show('first-distance', arrivedFirst ? distance(first.distance) : '地球在 C 接收');
   show('second-distance', arrivedSecond ? distance(second.distance) : '地球在 D 接收');
-  show('lag', arrivedSecond ? lag === 0 ? '相同' : `${lag > 0 ? '长' : '短'} ${Math.abs(lag).toFixed(2)} 秒` : '—');
+  show('lag', arrivedSecond ? lag === 0 ? '0 秒'
+    : (lag > 0 ? '晚 ' : '早 ') + Math.abs(lag).toFixed(2) + ' 秒' : '—');
   show('difference', arrivedSecond ? lag === 0 ? '两次光程相同' :
     `光程${lag > 0 ? '增加' : '减少'} ${distance(Math.abs(extraDistance))}` : '比较两次光程');
-  show('play', running ? '暂停' : cursor >= total ? '重新播放' : started || cursor > 0 ? '继续' : '开始');
+  show('play', running ? '暂停' : cursor >= total ? '重新播放' : started || cursor > 0 ? '继续' : '播放');
   $('progress').value = Math.round(cursor);
-  const step = time < 0 ? -1 : !arrivedFirst ? 0 : time < second.emission ? 1 : !arrivedSecond ? 2 : 3;
+  const step = selectedStop ?? (time < 0 ? -1 : !arrivedFirst ? 0 : time < second.emission ? 1
+    : lag < 0 && expectedReached ? 3 : arrivedSecond ? 4 : expectedReached ? 3 : 2);
   stops.forEach((button, index) => {
     if (index === step) button.setAttribute('aria-current', 'step');
     else button.removeAttribute('aria-current');
@@ -468,9 +482,10 @@ function tick(now) {
   if (running) frameRequest = requestAnimationFrame(tick);
 }
 
-function seek(position) {
+function seek(position, stop = null) {
   stopPlayback();
   cursor = position;
+  selectedStop = stop;
   draw();
 }
 
@@ -480,6 +495,7 @@ $('play').addEventListener('click', () => {
     return;
   }
   if (cursor >= total) cursor = 0;
+  selectedStop = null;
   started = true;
   running = true;
   lastFrame = null;
@@ -490,7 +506,9 @@ $('progress').addEventListener('input', () => seek(Number($('progress').value)))
 $('orbits').addEventListener('input', selectScenario);
 radios.forEach(input => input.addEventListener('change', selectScenario));
 stops.forEach((button, index) => button.addEventListener('click', () => {
-  seek([1450, 4000, 10000, model.lag > 0 ? 13600 : 12550][index]);
+  const expected = model.lag < 0 ? 13600 : 12550;
+  const actual = model.lag > 0 ? 13600 : 12550;
+  seek([1450, 4000, 10000, expected, actual][index], index);
 }));
 new ResizeObserver(draw).observe(sky);
 media.addEventListener('change', draw);
