@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang='zh-CN'>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>钢尺伸出多少，声音有多高</title>
+<style>
+  :root{color-scheme:light dark;--paper:#f7f7f0;--card:#fffefa;--ink:#263435;--muted:#56676a;--line:#c4cfca;--accent:#356b70;--steel:#6f9b9e;--wood:#c1a17d;--steady:#7b8d8d}
+  @media(prefers-color-scheme:dark){:root{--paper:#1a2425;--card:#202d2e;--ink:#f1f4ed;--muted:#aebfbb;--line:#425758;--accent:#a3cdca;--steel:#9bc4c5;--wood:#bea180;--steady:#7c9b9b}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:clamp(.96rem,2.1vw,1.08rem)/1.55 'Microsoft YaHei',sans-serif}
+  main{max-width:53rem;margin:auto;padding:clamp(.85rem,3vw,1.5rem)}
+  h1{font-size:clamp(1.25rem,4vw,1.7rem);line-height:1.25;margin:0 0 .65rem}
+  canvas{display:block;width:100%;aspect-ratio:3.35;background:var(--card);border:1px solid var(--line);border-radius:.65rem}
+  .controls{display:grid;gap:.65rem;margin-top:.9rem}
+  .range-label,.buttons,.reading{display:flex;align-items:center;justify-content:space-between;gap:.55rem;flex-wrap:wrap}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  button{font:inherit;padding:.33rem .6rem;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:.4rem;cursor:pointer}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button[aria-pressed=true],#play{border-color:var(--accent)}
+  #play{color:var(--card);background:var(--accent)}
+  .presets{display:flex;flex-wrap:wrap;gap:.35rem}
+  p{margin:.65rem 0 0;color:var(--muted)}
+  output{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:650}
+</style>
+<main>
+  <h1>钢尺伸出多少，声音有多高</h1>
+  <canvas id='ruler' role='img' aria-label='桌边压紧的钢尺，悬空部分可上下振动'></canvas>
+  <div class='controls'>
+    <label class='range-label' for='length'>钢尺伸出桌边的长度 <output id='length-out' for='length'></output></label>
+    <input id='length' type='range' min='5' max='24' value='6' step='1'>
+    <div class='buttons'>
+      <div class='presets' aria-label='对比长度'>
+        <button type='button' data-length='6'>6 cm</button>
+        <button type='button' data-length='10'>10 cm</button>
+        <button type='button' data-length='23'>23 cm</button>
+      </div>
+      <button id='play' type='button'>拨一下</button>
+    </div>
+    <div class='reading'>主要振动频率 <output id='frequency' for='length'></output></div>
+  </div>
+  <p id='hint' role='status'></p>
+  <p>图中把振动放慢了。声音是按模型频率合成的，低音能否听清也取决于扬声器。</p>
+</main>
+<script>
+'use strict';
+// First bending mode of a uniform, clamped-free rectangular steel strip.
+// E=200 GPa, rho=7850 kg/m^3, thickness=0.8 mm. Root of cos(k)cosh(k)=-1.
+const modeRoot = 1.875104068711961;
+const modeFactor = (Math.cosh(modeRoot) + Math.cos(modeRoot)) / (Math.sinh(modeRoot) + Math.sin(modeRoot));
+const modeShape = x => Math.cosh(modeRoot*x)-Math.cos(modeRoot*x)-modeFactor*(Math.sinh(modeRoot*x)-Math.sin(modeRoot*x));
+const frequencyHz = cm => modeRoot**2 / (2*Math.PI*(cm/100)**2) * Math.sqrt(200e9/7850/12) * .0008;
+
+// Web Audio oscillator and gain envelope follow the MDN webaudio-examples pattern (CC0-1.0).
+function pluckTone(audio, hz) {
+  const oscillator=audio.createOscillator();
+  const gain=audio.createGain();
+  oscillator.frequency.value=hz;
+  oscillator.type='sine';
+  const now=audio.currentTime;
+  gain.gain.setValueAtTime(.0001,now);
+  gain.gain.exponentialRampToValueAtTime(.21,now+.014);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+1.15);
+  oscillator.connect(gain).connect(audio.destination);
+  oscillator.start(now);
+  oscillator.stop(now+1.16);
+  oscillator.onended=()=>{oscillator.disconnect();gain.disconnect()};
+  return {oscillator, gain};
+}
+window.__CORE={frequencyHz, modeShape, pluckTone};
+
+const canvas=document.querySelector('#ruler');
+const pen=canvas.getContext('2d');
+const length=document.querySelector('#length');
+const hint=document.querySelector('#hint');
+const play=document.querySelector('#play');
+const presets=[...document.querySelectorAll('[data-length]')];
+const theme=matchMedia('(prefers-color-scheme:dark)');
+const reduce=matchMedia('(prefers-reduced-motion:reduce)');
+let audio, voice, request=0, started=0, revision=0, displacement=0;
+
+function render() {
+  const bounds=canvas.getBoundingClientRect();
+  const scale=Math.max(devicePixelRatio,2);
+  const w=Math.round(bounds.width*scale),h=Math.round(bounds.height*scale);
+  if(!w||!h)return;
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+  pen.setTransform(w/800,0,0,h/238,0,0);
+  pen.clearRect(0,0,800,238);
+  const style=getComputedStyle(document.documentElement);
+  const ink=style.getPropertyValue('--ink'), steady=style.getPropertyValue('--steady');
+  const center=118, edge=350, end=edge+Number(length.value)*15.9;
+  pen.fillStyle=style.getPropertyValue('--wood');
+  pen.fillRect(48,center+6,edge-48,53);
+  pen.fillRect(244,center-40,101,34);
+  pen.strokeStyle=ink;
+  pen.lineWidth=1.4;
+  pen.strokeRect(48,center+6,edge-48,53);
+  pen.strokeRect(244,center-40,101,34);
+  pen.lineWidth=1;
+  pen.strokeStyle=steady;
+  pen.setLineDash([6,5]);
+  pen.beginPath();pen.moveTo(edge,center);pen.lineTo(end,center);pen.stroke();
+  pen.setLineDash([]);
+  pen.strokeStyle=style.getPropertyValue('--steel');
+  pen.lineWidth=7;
+  pen.lineCap='round';
+  pen.beginPath();pen.moveTo(100,center);pen.lineTo(edge,center);
+  for(let i=1;i<=48;i++){
+    const u=i/48;
+    pen.lineTo(edge+(end-edge)*u,center+displacement*modeShape(u)/modeShape(1));
+  }
+  pen.stroke();
+  pen.fillStyle=ink;
+  pen.font=Math.max(22,13*800/bounds.width)+'px Microsoft YaHei, sans-serif';
+  pen.textAlign='center';
+  pen.fillText('压紧处',294,62);
+  pen.fillText('桌面',175,154);
+}
+
+function stopAnimation() {
+  cancelAnimationFrame(request);
+  request=0;
+  displacement=0;
+  play.textContent='拨一下';
+}
+
+function stopVoice() {
+  if(voice){try{voice.oscillator.stop()}catch{} voice=null}
+}
+
+function updateLength() {
+  revision++;
+  stopAnimation();stopVoice();
+  const cm=Number(length.value);
+  const hz=frequencyHz(cm);
+  document.querySelector('#length-out').textContent=cm+' cm';
+  document.querySelector('#frequency').textContent=Math.round(hz)+' Hz';
+  hint.textContent=hz<20?'这个长度的主要振动低于通常的听觉下限。':'换一个长度，比较尺端振动的快慢和声音的高低。';
+  for(const button of presets) button.setAttribute('aria-pressed',String(Number(button.dataset.length)===cm));
+  render();
+}
+
+const slowedBy=100;
+function animate(time) {
+  const elapsed=(time-started)/1000;
+  if(elapsed>=10){stopAnimation();render();return}
+  displacement=39*Math.exp(-elapsed/4)*Math.cos(2*Math.PI*frequencyHz(Number(length.value))*elapsed/slowedBy);
+  render();
+  request=requestAnimationFrame(animate);
+}
+
+play.addEventListener('click',async()=>{
+  if(request){revision++;stopAnimation();stopVoice();render();return}
+  const stamp=++revision;
+  const hz=frequencyHz(Number(length.value));
+  if(!reduce.matches){
+    started=performance.now();
+    play.textContent='停止';
+    request=requestAnimationFrame(animate);
+  }
+  if(hz<20)return;
+  try{
+    audio??=new (window.AudioContext||window.webkitAudioContext)();
+    await audio.resume();
+    if(stamp===revision){stopVoice();voice=pluckTone(audio,hz)}
+  }catch{hint.textContent='当前浏览器未能播放合成音，可以继续观察振动。'}
+});
+length.addEventListener('input',updateLength);
+for(const button of presets)button.addEventListener('click',()=>{length.value=button.dataset.length;updateLength()});
+new ResizeObserver(render).observe(canvas);
+theme.addEventListener('change',render);
+addEventListener('pagehide',()=>{revision++;stopAnimation();stopVoice();audio?.close().catch(()=>{})});
+updateLength();
+</script>
+</html>
