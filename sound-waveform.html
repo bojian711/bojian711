@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang='zh-CN'>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>看见你发出的声音</title>
+<style>
+  :root{color-scheme:light dark;--paper:#f7f7f0;--card:#fffefa;--ink:#263435;--muted:#56676a;--line:#c4cfca;--accent:#356b70;--trace:#387a7c;--grid:#dce6e1}
+  @media(prefers-color-scheme:dark){:root{--paper:#1a2425;--card:#202d2e;--ink:#f1f4ed;--muted:#aebfbb;--line:#425758;--accent:#a3cdca;--trace:#a3cdca;--grid:#385051}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:clamp(.96rem,2.1vw,1.08rem)/1.55 'Microsoft YaHei',sans-serif}
+  main{max-width:53rem;margin:auto;padding:clamp(.85rem,3vw,1.5rem)}
+  h1{font-size:clamp(1.25rem,4vw,1.7rem);line-height:1.25;margin:0 0 .65rem}
+  canvas{display:block;width:100%;aspect-ratio:3.3;min-height:7.7rem;background:var(--card);border:1px solid var(--line);border-radius:.65rem}
+  .axis,.controls{display:flex;align-items:center;justify-content:space-between;gap:.48rem;flex-wrap:wrap}
+  .axis{margin:.25rem 0 .7rem;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .controls{justify-content:flex-start}
+  button,select{font:inherit;padding:.34rem .55rem;border:1px solid var(--line);border-radius:.4rem;background:var(--card);color:var(--ink);cursor:pointer}
+  button:disabled{cursor:default;opacity:.46}
+  button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  #mic{background:var(--accent);color:var(--card);border-color:var(--accent)}
+  p{margin:.65rem 0 0;color:var(--muted)}
+  #status{min-height:3em}
+</style>
+<main>
+  <h1>看见你发出的声音</h1>
+  <canvas id='wave' role='img' aria-label='声音信号随时间变化的波形图，虚线为零信号'></canvas>
+  <div class='axis'><span>0</span><span>时间 <output id='duration' for='window'>20 ms</output></span></div>
+  <div class='controls'>
+    <button id='mic' type='button'>启用麦克风</button>
+    <button id='hold' type='button' disabled>定格</button>
+    <button id='sample' type='button'>示例波形</button>
+    <label for='window'>观察时长</label>
+    <select id='window'>
+      <option value='5'>5 ms</option><option value='10'>10 ms</option>
+      <option value='20' selected>20 ms</option><option value='40'>40 ms</option>
+    </select>
+  </div>
+  <p id='status' role='status'>当前显示 440 Hz 的示例波形。</p>
+  <p>允许麦克风后，试着哼高、低两个音，再用相近音高轻声、响声各哼一次。声音只在本机用于绘图。</p>
+</main>
+<script>
+'use strict';
+// Adapted Web Audio capture-and-plot pattern: MDN webaudio-examples,
+// voice-change-o-matic/scripts/app.js, CC0-1.0. The mic is never connected to speakers.
+const canvas=document.querySelector('#wave');
+const pen=canvas.getContext('2d');
+const mic=document.querySelector('#mic'), hold=document.querySelector('#hold');
+const sample=document.querySelector('#sample'), duration=document.querySelector('#window');
+const status=document.querySelector('#status');
+const theme=matchMedia('(prefers-color-scheme:dark)');
+let context=null, stream=null, source=null, analyser=null, buffer=null, frozen=null;
+let frame=0, sequence=0, phase='sample';
+
+function update(text){
+  mic.textContent=phase==='pending'?'取消启用':stream?'关闭麦克风':'启用麦克风';
+  hold.textContent=frozen?'继续':'定格';
+  hold.disabled=!stream;
+  if(text)status.textContent=text;
+}
+
+function traceSample(samples, rate, ms, synth, index){
+  if(synth)return .57*Math.sin(index*ms/1000*440*2*Math.PI);
+  if(!samples)return 0;
+  const count=Math.min(samples.length,Math.max(1,Math.round(rate*ms/1000)));
+  return samples[samples.length-count+Math.round(index*(count-1))];
+}
+window.__CORE={traceSample};
+
+function render(){
+  const size=canvas.getBoundingClientRect(), dpr=Math.max(devicePixelRatio,2);
+  const w=Math.round(size.width*dpr),h=Math.round(size.height*dpr);
+  if(!w||!h)return;
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+  pen.setTransform(dpr,0,0,dpr,0,0);
+  pen.clearRect(0,0,size.width,size.height);
+  const color=getComputedStyle(document.documentElement);
+  const style=name=>color.getPropertyValue(name);
+  const width=size.width-16,height=size.height-16;
+  const ms=Number(duration.value);
+  const synthesized=phase==='sample';
+  if(analyser&&!frozen)analyser.getFloatTimeDomainData(buffer);
+  pen.strokeStyle=style('--grid');pen.lineWidth=1;
+  for(let i=0;i<=10;i++){const x=8+i*width/10;pen.beginPath();pen.moveTo(x,8);pen.lineTo(x,8+height);pen.stroke()}
+  for(let i=0;i<=4;i++){const y=8+i*height/4;pen.beginPath();pen.moveTo(8,y);pen.lineTo(8+width,y);pen.stroke()}
+  const middle=8+height/2;
+  pen.strokeStyle=style('--line');pen.setLineDash([4,4]);
+  pen.beginPath();pen.moveTo(8,middle);pen.lineTo(8+width,middle);pen.stroke();
+  pen.setLineDash([]);
+  const active=frozen||buffer;
+  if(!active&&!synthesized)return;
+  const steps=Math.max(2,Math.floor(width*1.5));
+  pen.strokeStyle=style('--trace');pen.lineWidth=2;
+  pen.beginPath();
+  for(let i=0;i<=steps;i++){
+    const u=i/steps;
+    const value=traceSample(active,context?.sampleRate,ms,synthesized,u);
+    pen.lineTo(8+u*width,middle-Math.max(-1,Math.min(1,value))*height*.46);
+  }
+  pen.stroke();
+}
+
+function tick(){render();frame=requestAnimationFrame(tick)}
+function shutdown(){
+  sequence++;
+  cancelAnimationFrame(frame);
+  source?.disconnect();
+  analyser?.disconnect();
+  stream?.getTracks().forEach(track=>track.stop());
+  context?.close().catch(()=>{});
+  context=stream=source=analyser=buffer=frozen=null;
+}
+
+function stop(message){
+  shutdown();
+  phase='idle';
+  update(message);
+  render();
+}
+
+function failure(error){
+  if(error.name==='NotAllowedError'||error.name==='SecurityError')
+    return '麦克风未获允许。若你在讲义内嵌页，请从讲义链接在浏览器中单独打开，再检查麦克风权限。';
+  if(error.name==='NotFoundError')return '当前设备未找到麦克风。可以看示例波形。';
+  return '麦克风暂时无法使用。可以看示例波形。';
+}
+
+async function start(){
+  if(!isSecureContext||!navigator.mediaDevices?.getUserMedia){
+    stop('请在浏览器中打开 HTTPS 页面，再启用麦克风。');
+    return;
+  }
+  const permissions=document.permissionsPolicy||document.featurePolicy;
+  if(permissions&&!permissions.allowsFeature('microphone')){
+    stop('当前内嵌页没有麦克风权限。请用讲义里的链接单独打开。');
+    return;
+  }
+  const stamp=++sequence;
+  phase='pending';
+  update('请在浏览器弹窗中允许使用麦克风。');
+  try{
+    context=new (window.AudioContext||window.webkitAudioContext)();
+    const audio=context;
+    const resumed=audio.resume();
+    resumed.catch(()=>{});
+    const granted=await navigator.mediaDevices.getUserMedia({video:false,audio:{
+      channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false
+    }});
+    if(stamp!==sequence){granted.getTracks().forEach(track=>track.stop());return}
+    stream=granted;
+    await resumed;
+    if(stamp!==sequence)return;
+    source=audio.createMediaStreamSource(stream);
+    analyser=audio.createAnalyser();
+    analyser.fftSize=8192;
+    buffer=new Float32Array(analyser.fftSize);
+    source.connect(analyser);
+    for(const track of stream.getAudioTracks()) track.addEventListener('ended',()=>{
+      if(stamp===sequence)stop('麦克风已断开。');
+    });
+    phase='live';
+    update('正在显示麦克风波形。');
+    tick();
+  }catch(error){if(stamp===sequence)stop(failure(error))}
+}
+
+mic.addEventListener('click',()=>{
+  if(stream||phase==='pending'){stop('麦克风已关闭。');return}
+  void start();
+});
+hold.addEventListener('click',()=>{
+  if(!stream)return;
+  frozen=frozen?null:buffer.slice();
+  update(frozen?'已定格当前波形。麦克风仍开启，可以继续观察或关闭。':'正在显示麦克风波形。');
+  render();
+});
+sample.addEventListener('click',()=>{
+  shutdown();
+  phase='sample';
+  update('当前显示 440 Hz 的示例波形。');
+  render();
+});
+duration.addEventListener('change',()=>{
+  document.querySelector('#duration').textContent=duration.value+' ms';
+  render();
+});
+theme.addEventListener('change',render);
+new ResizeObserver(render).observe(canvas);
+addEventListener('pagehide',()=>{stop('麦克风已关闭。')});
+render();
+</script>
+</html>
