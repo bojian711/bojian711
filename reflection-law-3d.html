@@ -432,7 +432,7 @@ function project(point) {
   const v = Math.cos(pitch)*yc - Math.sin(pitch)*depth;
   const zoom = stage === 'measure'
     ? Math.min(size.w/.426, size.h/.245)
-    : Math.min(size.w/.535, size.h/.328);
+    : Math.min(size.w/.535, size.h/.352);
   return [size.w*.5+u*zoom,size.h*.495-v*zoom,Math.cos(pitch)*depth+Math.sin(pitch)*yc];
 }
 
@@ -614,16 +614,18 @@ function drawLabels(model, wings) {
     const left = project([-.105,0,0]);
     const right = project(multiply(model.foldedWing,.11));
     textAt('左半纸板',[left[0],left[1]+13]);
-    const foldedForward = model.foldedWing[2] > 0;
-    textAt('右半纸板',[right[0]+(foldedForward ? 9 : -8),right[1]-13]);
+    const deltaX=right[0]-o[0];
+    const deltaY=right[1]-o[1];
+    const offset=(model.foldedWing[2]<0 ? -17 : 17) / Math.hypot(deltaX,deltaY);
+    textAt('右半纸板',[right[0]+deltaY*offset,right[1]-deltaX*offset]);
   }
   if (viewMode === 'iso' && size.w > 410) {
     const anchor = project([-.13,.001,.101]);
     textAt('平面镜',[anchor[0]-1,anchor[1]]);
-    const support = project(add(multiply(model.foldedWing,.106),[0,.167,0]));
+    const support = project(add(multiply(model.foldedWing,.142),[0,.178,0]));
     if (!blocked(support,wings)) textAt('右半纸板',[support[0],support[1]]);
-    const other = project([-.113,.160,0]);
-    if (!blocked(other,wings)) textAt('左半纸板',[other[0]-5,other[1]+4]);
+    const other = project([-.146,.182,0]);
+    if (!blocked(other,wings)) textAt('左半纸板',[other[0],other[1]]);
     const laser = project(multiply(model.source,BEAM_LENGTH+.038));
     const offset = model.source[0] > .08 ? 19 : -18;
     if (!blocked(laser,wings)) {
@@ -653,9 +655,9 @@ function drawProtractor() {
     const major = angle%15===0;
     line([degreePoint(.158,angle),degreePoint(major ? .145 : .150,angle)],palette.rule,major ? 1.25 : .8);
     if (major) {
-      const degree = Math.abs(angle) === 90 ? angle : angle + (angle < 0 ? 4.5 : -4.5);
-      const point=degreePoint(.133,degree);
-      textAt(String(Math.abs(angle)),[point[0],point[1]+(Math.abs(angle)===90?-8:0)],{numbers:true,font:size.w<400 ? 10 : 13});
+      const degree = Math.abs(angle) === 90 || angle === 0 ? angle : angle + (angle < 0 ? 3.5 : -3.5);
+      const point=degreePoint(angle === 0 ? .169 : .133,degree);
+      textAt(String(Math.abs(angle)),[point[0]+(angle===0?8:0),point[1]+(Math.abs(angle)===90?-8:0)],{numbers:true,font:size.w<400 ? 10 : 13});
     }
   }
   line([o,project([0,PAPER_HEIGHT,0])],palette.rule,1,[3,4]);
