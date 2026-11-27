@@ -36,9 +36,9 @@ button { cursor:pointer }
 button:disabled { opacity:.53; cursor:default }
 :focus-visible { outline:2px solid var(--accent); outline-offset:3px }
 .shell { width:min(1180px,100%); margin:auto; padding:18px clamp(10px,2vw,24px) 14px }
-h1 { margin:0; font-size:clamp(22px,3vw,34px); font-weight:750; letter-spacing:.035em }
+h1 { margin:0 0 9px; font-size:clamp(22px,3vw,34px); font-weight:750; letter-spacing:.035em }
 header p { margin:4px 0 15px; color:var(--muted); font-size:clamp(12px,1.5vw,14px) }
-.steps { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; margin:0 0 10px; padding:4px; border:1px solid var(--line); background:var(--section); border-radius:12px }
+.steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin:0 0 10px; padding:4px; border:1px solid var(--line); background:var(--section); border-radius:12px }
 .steps button { min-height:36px; padding:3px 2px; border:none; border-radius:8px; background:transparent; color:var(--muted); font-weight:600 }
 .steps button[aria-selected='true'] { color:var(--accent); background:var(--panel); box-shadow:0 1px 5px var(--shade); font-weight:700 }
 .workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(232px,0.45fr); align-items:start; gap:10px }
@@ -77,15 +77,25 @@ output { color:var(--accent); font-weight:700; white-space:nowrap }
 .buttons { display:flex; flex-wrap:wrap; gap:7px }
 .primary { color:var(--panel); background:var(--accent); border:none; border-radius:7px; min-height:34px; padding:5px 11px; font-weight:700 }
 @media(prefers-color-scheme:dark) { .primary { color:#162622 } }
-.empty-rows { color:var(--muted) }
-.readings { width:100%; border-collapse:collapse; margin-top:9px; text-align:center; font-size:13px; white-space:nowrap }
-.readings th { font-weight:600; color:var(--muted); background:var(--section) }
-.readings td, .readings th { padding:4px 1px; border-bottom:1px solid var(--line) }
-.readings tr.selected td { background:var(--accent-fill) }
-.group { max-width:100%; margin-bottom:8px }
-.result { border-top:1px solid var(--line); margin:11px 0 0; padding-top:7px; min-height:47px; color:var(--ink); font-size:13px }
-.attempts { margin-top:6px; color:var(--muted); font-size:13px }
-#trace-count { color:var(--accent) }
+
+.readouts { display:grid; grid-template-columns:1fr 1fr; padding:7px 10px; gap:8px }
+.angle { border-radius:7px; padding:4px 8px; background:var(--section); display:flex; align-items:center; justify-content:space-between; gap:5px; font-size:clamp(11px,1.45vw,14px); white-space:nowrap }
+.angle output { font-size:1.2em }
+.angle.in, .angle.in output { color:var(--in) }
+.angle.out, .angle.out output { color:var(--out) }
+.guide { border:2px solid var(--accent); border-radius:8px; padding:8px; background:var(--accent-fill) }
+.guide-tag { display:block; font-weight:750; margin-bottom:4px; color:var(--accent); font-size:12px }
+.guide .control-label { margin-top:0 }
+.guide input[type='range'] { margin-bottom:2px }
+.guide .spectrum { margin:0 }
+.fold-buttons { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px }
+.fold-buttons button { min-height:36px; padding:3px 1px; font-size:13px }
+.fold-buttons button[aria-pressed='true'] { border-color:var(--accent); color:var(--accent); font-weight:750; box-shadow:inset 0 -3px var(--accent) }
+#reverse { width:100% }
+.result { margin:9px 0; font-size:13px }
+[data-next] { width:100% }
+.actions { min-height:0 }
+@media(max-width:640px) { .actions p { margin-bottom:7px } }
 @media(max-width:640px) {
   .shell { padding-top:9px }
   header p { margin-bottom:8px }
@@ -107,13 +117,11 @@ output { color:var(--accent); font-weight:700; white-space:nowrap }
 <main class='shell'>
   <header>
     <h1>探究光的反射定律</h1>
-    <p>让激光贴着竖直纸板射向镜面上的 <i class='v'>O</i> 点，观察纸板上的光迹。</p>
   </header>
   <nav class='steps' aria-label='实验步骤' role='tablist'>
-    <button type='button' role='tab' id='tab-trace' aria-controls='panel-trace' data-step='trace'>描光路</button>
-    <button type='button' role='tab' id='tab-measure' aria-controls='panel-measure' data-step='measure'>量角记录</button>
-    <button type='button' role='tab' id='tab-fold' aria-controls='panel-fold' data-step='fold'>折转纸板</button>
-    <button type='button' role='tab' id='tab-reverse' aria-controls='panel-reverse' data-step='reverse'>反向入射</button>
+    <button type='button' role='tab' id='tab-trace' aria-controls='panel-trace' data-step='trace'>1 调入射方向</button>
+    <button type='button' role='tab' id='tab-fold' aria-controls='panel-fold' data-step='fold'>2 折转纸板</button>
+    <button type='button' role='tab' id='tab-reverse' aria-controls='panel-reverse' data-step='reverse'>3 反向照射</button>
   </nav>
   <div class='workspace'>
     <section class='figure' aria-label='实验装置'>
@@ -127,51 +135,48 @@ output { color:var(--accent); font-weight:700; white-space:nowrap }
           <span class='key incident'>入射光</span><span class='key reflected'>反射光</span><span class='key normal'>法线</span>
         </div>
       </div>
+      <div class='readouts' aria-label='实时角度'>
+        <div class='angle in'><span>入射角 <i class='v'>i</i></span><output id='angle-in' class='n'></output></div>
+        <div class='angle out'><span>反射角 <i class='v'>r</i></span><output id='angle-out' class='n'></output></div>
+      </div>
       <canvas id='apparatus' tabindex='0' aria-label='三维实验装置，可拖动或按方向键旋转。'></canvas>
       <div class='figure-foot' id='figure-foot'></div>
     </section>
     <section class='actions' aria-label='实验操作'>
-      <div data-panel='trace' id='panel-trace' role='tabpanel' aria-labelledby='tab-trace'>
-        <h2>描下光的径迹</h2>
-        <p>保持镜面和纸板的位置不变，改变激光笔的朝向。每次用同一种颜色描下入射光和反射光。</p>
-        <label class='control-label' for='incidence'>入射角 <output id='incidence-value' for='incidence' class='n'>35°</output></label>
-        <input id='incidence' type='range' min='0' max='75' step='1' value='35'>
-        <div class='spectrum' aria-hidden='true'><span class='n'>0°</span><span class='n'>75°</span></div>
-        <div class='buttons'>
-          <button type='button' class='primary' id='record-trace'>描下这一组光路</button>
-          <button type='button' class='secondary' id='clear' disabled>清除描迹</button>
+      <div id='panel-trace' data-panel role='tabpanel' aria-labelledby='tab-trace'>
+        <h2>比较两角</h2>
+        <p>看橙、蓝光线怎样随入射方向改变，再比较上方的两角。</p>
+        <div class='guide'>
+          <span class='guide-tag'>↓ 拖动滑块</span>
+          <label class='control-label' for='incidence'>入射方向</label>
+          <input id='incidence' type='range' min='0' max='75' step='1' value='35'>
+          <div class='spectrum'><span>垂直入射</span><span>更贴近镜面</span></div>
         </div>
-        <div class='attempts'>已描 <output id='trace-count' class='n'>0 / 3</output> 组</div>
-        <div class='result' id='trace-note' aria-live='polite'>可以选三个不同的入射角，比较反射光的方向。</div>
+        <p id='trace-note' class='result' aria-live='polite'></p>
+        <button type='button' class='primary' data-next='fold'>下一步：折转纸板 →</button>
       </div>
-      <div data-panel='measure' id='panel-measure' role='tabpanel' aria-labelledby='tab-measure' hidden>
-        <h2>用量角器比较</h2>
-        <p>取下纸板，把量角器中心对准 <i class='v'>O</i>，两侧都从法线方向的零刻度起读。</p>
-        <div class='buttons'>
-          <select id='group' class='group' aria-label='选择光迹' disabled></select>
-          <button type='button' class='primary' id='measure' disabled>读数并记录</button>
+      <div id='panel-fold' data-panel role='tabpanel' aria-labelledby='tab-fold' hidden>
+        <h2>看光迹在哪里</h2>
+        <p>只动右半纸板。比较折起和展开时，两侧光迹有什么变化。</p>
+        <div class='guide'>
+          <span class='guide-tag'>↓ 点击改变纸板位置</span>
+          <div class='fold-buttons'>
+            <button type='button' class='secondary' data-fold='55'>向前折</button>
+            <button type='button' class='secondary' data-fold='0'>展开</button>
+            <button type='button' class='secondary' data-fold='-55'>向后折</button>
+          </div>
         </div>
-        <table class='readings' aria-label='反射实验记录'>
-          <thead><tr><th scope='col'>次数</th><th scope='col'>入射角 <i class='v'>i</i></th><th scope='col'>反射角 <i class='v'>r</i></th></tr></thead>
-          <tbody id='rows'></tbody>
-        </table>
-        <div class='result' id='measure-note' aria-live='polite'>返回“描光路”，至少描一组入射和反射光的径迹。</div>
+        <p id='fold-note' class='result' aria-live='polite'></p>
+        <button type='button' class='primary' data-next='reverse'>下一步：反向照射 →</button>
       </div>
-      <div data-panel='fold' id='panel-fold' role='tabpanel' aria-labelledby='tab-fold' hidden>
-        <h2>绕 <i class='v'>ON</i> 折转纸板</h2>
-        <p>固定镜面、左半纸板和激光笔，只把右半纸板向前或向后折。比较折转前后的纸面光迹。</p>
-        <label class='control-label' for='fold-angle'>右半纸板 <output id='fold-value' for='fold-angle' class='n'>0°</output></label>
-        <input id='fold-angle' type='range' min='-90' max='90' step='1' value='0'>
-        <div class='spectrum' aria-hidden='true'><span>向后折</span><span>同一平面</span><span>向前折</span></div>
-        <button type='button' class='secondary' id='unfold'>纸板复位</button>
-        <label class='checkbox'><input id='air-ray' type='checkbox'>显示空中的反射光</label>
-        <div class='result' id='fold-note' aria-live='polite'></div>
-      </div>
-      <div data-panel='reverse' id='panel-reverse' role='tabpanel' aria-labelledby='tab-reverse' hidden>
-        <h2>沿原反射光路照射</h2>
-        <p>使两半纸板恢复到同一平面，把激光笔移到原来反射光所在的一侧，沿原来的反射光路射向 <i class='v'>O</i> 点。</p>
-        <button type='button' class='primary' id='reverse'>反向照射</button>
-        <div class='result' id='reverse-note' aria-live='polite'>观察反向照射后两条光线的位置和箭头。</div>
+      <div id='panel-reverse' data-panel role='tabpanel' aria-labelledby='tab-reverse' hidden>
+        <h2>对照箭头</h2>
+        <p>把纸板展平，沿原来的反射光路照射。看光路的箭头怎样变化。</p>
+        <div class='guide'>
+          <button type='button' class='primary' id='reverse'>反向照射</button>
+        </div>
+        <p id='reverse-note' class='result' aria-live='polite'></p>
+        <button type='button' class='secondary' data-next='trace'>返回比较两角</button>
       </div>
     </section>
   </div>
@@ -241,20 +246,16 @@ const canvas = $('apparatus');
 const ctx = canvas.getContext('2d');
 const tabs = [...document.querySelectorAll('[data-step]')];
 const viewButtons = [...document.querySelectorAll('[data-view]')];
-const panelIds = ['trace', 'measure', 'fold', 'reverse'];
+const panelIds = ['trace', 'fold', 'reverse'];
 const presets = {
   iso: { yaw: .46, pitch: .39, caption: '立体视角。拖动装置可从任意方向查看纸板与镜面。' },
   front: { yaw: 0, pitch: 0, caption: '正对左半纸板。光线与法线的夹角在这里显示为实际大小。' },
   top: { yaw: 0, pitch: Math.PI/2, caption: '沿法线从上向下看。这里能比较两半纸板的朝向。' },
 };
-const traceColors = ['trace-1','trace-2','trace-3'];
 let stage = 'trace';
 let viewMode = 'iso';
 let yaw = presets.iso.yaw;
 let pitch = presets.iso.pitch;
-let savedCamera = { yaw, pitch, viewMode };
-let traces = [];
-let selected = 0;
 let reversed = false;
 let pointer = null;
 let size = null;
@@ -263,15 +264,16 @@ let drawPending = false;
 
 const degrees = number => (number < 0 ? '−' : '') + Math.round(Math.abs(number)) + '°';
 const currentAngle = () => Number($('incidence').value);
-const foldAngle = () => stage === 'fold' ? Number($('fold-angle').value) : 0;
+let fold = 0;
+const foldButtons = [...document.querySelectorAll('[data-fold]')];
+const foldAngle = () => stage === 'fold' ? fold : 0;
 const currentModel = () => experiment(currentAngle(), foldAngle(), stage === 'reverse' && reversed);
-const traceName = index => '第 ' + (index+1) + ' 组（' + ['紫','青','赭'][index] + '）';
 
 function getPalette() {
   const colors = getComputedStyle(document.documentElement);
   const names = [
     'figure','figure-dot','table-top','table-low','glass','glass-edge','paper-left','paper-right',
-    'paper-fold','paper-stroke','device','device-tip','label','rule','in','out','tint', ...traceColors,
+    'paper-fold','paper-stroke','device','device-tip','label','rule','in','out','tint',
   ];
   return Object.fromEntries(names.map(name => [name, colors.getPropertyValue('--' + name).trim()]));
 }
@@ -304,135 +306,59 @@ function setView(mode) {
   requestDraw();
 }
 
+
 function syncView() {
   for (const button of viewButtons) {
-    button.setAttribute('aria-pressed', String(stage !== 'measure' && button.dataset.view === viewMode));
-    button.disabled = stage === 'measure';
+    button.setAttribute('aria-pressed', String(button.dataset.view === viewMode));
   }
-  canvas.style.cursor = stage === 'measure' ? 'default' : '';
-  $('legend').hidden = stage === 'measure';
-  $('figure-foot').textContent = stage === 'measure'
-    ? '纸板已取下。量角器的零刻度对准法线。'
-    : (presets[viewMode]?.caption || '自由旋转。也可以用方向键调整，点击“立体”恢复视角。');
+  $('figure-foot').textContent = presets[viewMode]?.caption || '可用方向键旋转装置，点击“立体”恢复视角。';
 }
 
 function selectStage(next) {
   if (next === stage) return;
-  if (next === 'measure') savedCamera = { yaw, pitch, viewMode };
-  const leavingMeasure = stage === 'measure';
   stage = next;
-  if (stage === 'measure') {
-    yaw = 0;
-    pitch = 0;
-  } else if (leavingMeasure) {
-    ({ yaw, pitch, viewMode } = savedCamera);
-  }
-  if (stage === 'fold') setView('iso');
+  fold = 0;
+  reversed = false;
+  setView(stage === 'fold' ? 'iso' : 'front');
   for (const tab of tabs) {
     const active = tab.dataset.step === stage;
     tab.setAttribute('aria-selected', String(active));
     tab.tabIndex = active ? 0 : -1;
     $('panel-' + tab.dataset.step).hidden = !active;
   }
-  syncView();
   updateControls();
-}
-
-function updateTable() {
-  const select = $('group');
-  select.replaceChildren();
-  if (!traces.length) {
-    select.append(new Option('暂未描下光路'));
-  }
-  traces.forEach((trace, i) => select.append(new Option(traceName(i), String(i))));
-  select.disabled = traces.length < 2;
-  if (traces.length) select.value = String(selected);
-  $('measure').disabled = !traces.length || traces[selected].measured;
-  const rows = $('rows');
-  rows.replaceChildren();
-  for (let i = 0; i < 3; i++) {
-    const row = rows.insertRow();
-    const trace = traces[i];
-    row.classList.toggle('selected', i === selected && !!trace);
-    if (trace) row.style.setProperty('color', 'var(--' + traceColors[i] + ')');
-    const model = trace?.model;
-    for (const value of [String(i+1), trace?.measured ? degrees(model.incidentAngle) : '—',
-      trace?.measured ? degrees(model.reflectedAngle) : '—']) {
-      const cell = row.insertCell();
-      cell.className = 'n';
-      cell.textContent = value;
-    }
-  }
-  $('measure-note').textContent = !traces.length
-    ? '返回“描光路”，至少描一组入射和反射光的径迹。'
-    : traces.every(trace => trace.measured) && traces.length === 3
-      ? '比较三组数据。改变入射角之后，反射角与入射角仍相等。'
-      : traces[selected].measured
-        ? '两侧读数已记入表格。可以换一组光迹，继续测量。'
-        : '找到这一组的两条彩色径迹，分别读出它们与法线的夹角。';
 }
 
 function updateControls() {
-  const angle = currentAngle();
-  $('incidence-value').textContent = degrees(angle);
-  $('fold-value').textContent = degrees(Number($('fold-angle').value));
-  $('trace-count').textContent = traces.length + ' / 3';
-  $('record-trace').disabled = traces.length >= 3;
-  $('clear').disabled = !traces.length;
-  if (stage === 'measure') updateTable();
-  if (stage === 'fold') {
-    const model = currentModel();
-    $('fold-note').textContent = angle === 0
-      ? '垂直入射时，光沿 ON 原路返回。纸板折转后，折缝仍与光路重合。'
-      : model.reflectedTrace
-        ? '两半纸板在同一平面，分别显示入射光和反射光的光迹。'
-        : $('air-ray').checked
-          ? '虚线标出空中的反射光。它仍沿原方向传播，与折起的纸板只在 O 点相交。'
-          : '左半纸板仍有入射光迹，折起的半面上看不到反射光迹。';
+  const model = currentModel();
+  $('angle-in').textContent = degrees(model.incidentAngle);
+  $('angle-out').textContent = degrees(model.reflectedAngle);
+  $('trace-note').textContent = model.incidentAngle < 1e-7
+    ? '两角都是 0°，光沿法线原路返回。'
+    : '反射光随入射光转动，两角始终相等。';
+  for (const button of foldButtons) {
+    button.setAttribute('aria-pressed', String(Number(button.dataset.fold) === fold));
   }
-  if (stage === 'reverse') {
-    $('reverse').textContent = reversed ? '恢复原照射' : '反向照射';
-    $('reverse').setAttribute('aria-pressed', String(reversed));
-    $('reverse-note').textContent = reversed
-      ? angle === 0
-        ? '入射光与反射光始终沿着法线，照射与返回共用一条直线。'
-        : '原来的反射方向成为入射方向，反射光逆着原入射光的方向返回。'
-      : '观察反向照射后两条光线的位置和箭头。';
-  }
+  $('fold-note').textContent = model.incidentAngle < 1e-7
+    ? '光沿折缝原路返回。返回上一步，试一个斜入射角。'
+    : model.reflectedTrace
+      ? '展开时，两条光迹都落在同一个纸面上。'
+      : '右纸板上的光迹消失。蓝色虚线标出空中的反射光，方向保持原样。';
+  $('reverse').textContent = reversed ? '恢复原照射' : '反向照射';
+  $('reverse').setAttribute('aria-pressed', String(reversed));
+  $('reverse-note').textContent = model.incidentAngle < 1e-7
+    ? '垂直入射时，照射和返回都沿法线。'
+    : reversed ? '光走过同样两段路径，箭头全部反向。' : '橙色箭头指向镜面，蓝色箭头离开镜面。';
   requestDraw();
-}
-
-function recordTrace() {
-  const degree = currentAngle();
-  if (traces.some(trace => trace.degree === degree)) {
-    $('trace-note').textContent = '这个角度已经描过。换一个入射角，再描下一组。';
-    return;
-  }
-  if (traces.length >= 3) return;
-  traces.push({ degree, model:experiment(degree), measured:false });
-  selected = traces.length - 1;
-  $('trace-note').textContent = traces.length === 3
-    ? '三组光迹已描好。到“量角记录”，逐组测量并填表。'
-    : traceName(selected) + '已描好。改变入射方向可以描下一组。';
-  updateControls();
-}
-
-function clearTraces() {
-  traces = [];
-  selected = 0;
-  $('trace-note').textContent = '描迹已清除。可以重新选择入射角。';
-  updateControls();
 }
 
 function project(point) {
   const [x,y,z] = point;
-  const yc = y - (stage === 'measure' ? .097 : .086);
+  const yc = y - .086;
   const u = Math.cos(yaw)*x - Math.sin(yaw)*z;
   const depth = Math.sin(yaw)*x + Math.cos(yaw)*z;
   const v = Math.cos(pitch)*yc - Math.sin(pitch)*depth;
-  const zoom = stage === 'measure'
-    ? Math.min(size.w/.426, size.h/.245)
-    : Math.min(size.w/.535, size.h/.352);
+  const zoom = Math.min(size.w/.535, size.h/.352);
   return [size.w*.5+u*zoom,size.h*.495-v*zoom,Math.cos(pitch)*depth+Math.sin(pitch)*yc];
 }
 
@@ -563,12 +489,12 @@ function drawRays(model, wings) {
   const onPaper = model.reflectedTrace;
   const inColor = palette.in;
   const outColor = palette.out;
-  if (onPaper || stage === 'fold' && $('air-ray').checked) {
+  if (onPaper || stage === 'fold') {
     strokeWorld(ORIGIN,model.reflectEnd,wings,outColor,onPaper ? 3 : 2,onPaper ? [] : [5,4]);
   }
   strokeWorld(model.sourceEnd,ORIGIN,wings,inColor,topNormal ? 1.45 : 2.8,[]);
   arrowWorld(model.sourceEnd,ORIGIN,topNormal ? .63 : .43,wings,inColor);
-  if (onPaper || stage === 'fold' && $('air-ray').checked) {
+  if (onPaper || stage === 'fold') {
     arrowWorld(ORIGIN,model.reflectEnd,topNormal ? .72 : .59,wings,outColor);
   }
 }
@@ -650,42 +576,11 @@ function arcPoints(radius, start, end) {
   return Array.from({length:n+1},(_,i) => degreePoint(radius,start+(end-start)*i/n));
 }
 
-function drawProtractor() {
-  const o = project(ORIGIN);
-  const paper = [paperFace([-1,0,0]),paperFace([1,0,0])];
-  paper.forEach(wing => face(wing,palette['paper-left'],palette['paper-stroke']));
-  face([o,...arcPoints(.158,-90,90)],palette.tint,palette.rule);
-  line(arcPoints(.151,-90,90),palette.rule,1);
-  for (let angle=-90; angle<=90; angle+=5) {
-    const major = angle%15===0;
-    line([degreePoint(.158,angle),degreePoint(major ? .145 : .150,angle)],palette.rule,major ? 1.25 : .8);
-    if (major) {
-      const degree = Math.abs(angle) === 90 || angle === 0 ? angle : angle + (angle < 0 ? 3.5 : -3.5);
-      const point=degreePoint(angle === 0 ? .169 : .133,degree);
-      textAt(String(Math.abs(angle)),[point[0]+(angle===0?8:0),point[1]+(Math.abs(angle)===90?-8:0)],{numbers:true,font:size.w<400 ? 10 : 13});
-    }
-  }
-  line([o,project([0,PAPER_HEIGHT,0])],palette.rule,1,[3,4]);
-  traces.forEach((trace,i) => {
-    ctx.globalAlpha = i === selected ? .95 : .25;
-    const color = palette[traceColors[i]];
-    const model = trace.model;
-    line([project(model.sourceEnd),o,project(model.reflectEnd)],color,i===selected?2.6:1.4);
-    ctx.globalAlpha = 1;
-  });
-  const trace=traces[selected];
-  if (trace?.measured && trace.degree > 0) {
-    line(arcPoints(.062,-trace.model.incidentAngle,0),palette.in,2);
-    line(arcPoints(.073,0,trace.model.reflectedAngle),palette.out,2);
-    if (trace.degree >= 15) {
-      textAt('i',degreePoint(.052,-trace.degree*.55),{math:true,color:palette.in,font:14});
-      textAt('r',degreePoint(.083,trace.degree*.55),{math:true,color:palette.out,font:14});
-    }
-  }
-  circle(o,3.1,palette.rule);
-  textAt('O',[o[0]-7,o[1]+13],{math:true,font:15});
-  const top=project([0,PAPER_HEIGHT+.007,0]);
-  textAt('N',[top[0]+2,top[1]-3],{math:true,font:14});
+function drawAngles(model) {
+  if (viewMode !== 'front' || model.incidentAngle < 1e-7) return;
+  const sign = Math.sign(model.source[0]);
+  line(arcPoints(.054, 0, sign * model.incidentAngle), palette.in, 2);
+  line(arcPoints(.054, 0, -sign * model.reflectedAngle), palette.out, 2);
 }
 
 function draw() {
@@ -699,21 +594,9 @@ function draw() {
   ctx.globalAlpha=.48;
   for (let x=9; x<size.w; x+=20) for (let y=8; y<size.h; y+=20) ctx.fillRect(x,y,1,1);
   ctx.globalAlpha=1;
-  if (stage==='measure') {
-    drawProtractor();
-    return;
-  }
   const model=currentModel();
   const wings=drawApparatus(model);
-  if (stage === 'trace') {
-    ctx.globalAlpha=.30;
-    traces.forEach((trace,i) => {
-      const color=palette[traceColors[i]];
-      strokeWorld(trace.model.sourceEnd,ORIGIN,wings,color,1.45,[4,4]);
-      strokeWorld(ORIGIN,trace.model.reflectEnd,wings,color,1.45,[4,4]);
-    });
-    ctx.globalAlpha=1;
-  }
+  if (stage !== 'fold') drawAngles(model);
   drawRays(model,wings);
   drawLaser(model,wings);
   drawLabels(model,wings);
@@ -726,34 +609,25 @@ for (const button of tabs) {
     if (!['ArrowLeft','ArrowRight','Home','End'].includes(key)) return;
     event.preventDefault();
     const i=panelIds.indexOf(stage);
-    const next=key==='Home'?0:key==='End'?3:(i+(key==='ArrowLeft'?3:1))%4;
+    const next=key==='Home'?0:key==='End'?panelIds.length-1:(i+(key==='ArrowLeft'?panelIds.length-1:1))%panelIds.length;
     selectStage(panelIds[next]);
     tabs[next].focus();
   });
 }
 for (const button of viewButtons) button.addEventListener('click', () => setView(button.dataset.view));
-$('incidence').addEventListener('input', () => {
-  reversed=false;
-  $('trace-note').textContent='观察改变入射角后反射光迹的位置。';
-  updateControls();
-});
-$('fold-angle').addEventListener('input',updateControls);
-$('air-ray').addEventListener('change',updateControls);
-$('record-trace').addEventListener('click',recordTrace);
-$('clear').addEventListener('click',clearTraces);
-$('group').addEventListener('change', () => {
-  selected=Number($('group').value);
-  updateControls();
-});
-$('measure').addEventListener('click', () => {
-  if (!traces[selected]) return;
-  traces[selected].measured=true;
-  updateControls();
-});
-$('unfold').addEventListener('click', () => {
-  $('fold-angle').value='0';
-  updateControls();
-});
+$('incidence').addEventListener('input', updateControls);
+for (const button of foldButtons) {
+  button.addEventListener('click', () => {
+    fold = Number(button.dataset.fold);
+    updateControls();
+  });
+}
+for (const button of document.querySelectorAll('[data-next]')) {
+  button.addEventListener('click', () => {
+    selectStage(button.dataset.next);
+    $('tab-' + stage).focus();
+  });
+}
 $('reverse').addEventListener('click', () => {
   reversed=!reversed;
   updateControls();
@@ -767,7 +641,7 @@ function rotate(deltaX, deltaY) {
   requestDraw();
 }
 canvas.addEventListener('pointerdown', event => {
-  if (stage==='measure' || !event.isPrimary || event.button!==0) return;
+  if (!event.isPrimary || event.button!==0) return;
   canvas.setPointerCapture(event.pointerId);
   pointer={id:event.pointerId,x:event.clientX,y:event.clientY};
 });
@@ -778,7 +652,7 @@ canvas.addEventListener('pointermove', event => {
 });
 canvas.addEventListener('lostpointercapture', () => { pointer=null; });
 canvas.addEventListener('keydown', event => {
-  if (!event.key.startsWith('Arrow') || stage==='measure') return;
+  if (!event.key.startsWith('Arrow')) return;
   event.preventDefault();
   const dx=event.key==='ArrowLeft'?-.13:event.key==='ArrowRight'?.13:0;
   const dy=event.key==='ArrowUp'?.13:event.key==='ArrowDown'?-.13:0;
@@ -797,7 +671,7 @@ matchMedia('(prefers-color-scheme:dark)').addEventListener('change',() => {
   requestDraw();
 });
 if (document.fonts) document.fonts.ready.then(requestDraw);
-syncView();
+setView('front');
 updateControls();
 resize();
 
@@ -805,7 +679,7 @@ window.__CORE = {
   experiment,
   read:() => ({
     stage, viewMode, yaw, pitch, fold:foldAngle(), ...currentModel(),
-    selected, reversed, traces:traces.map(trace => ({ ...trace })),
+    reversed,
   }),
 };
 
