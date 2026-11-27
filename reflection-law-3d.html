@@ -622,15 +622,20 @@ function drawLabels(model, wings) {
   if (viewMode === 'iso' && size.w > 410) {
     const anchor = project([-.13,.001,.101]);
     textAt('平面镜',[anchor[0]-1,anchor[1]]);
-    const support = project(add(multiply(model.foldedWing,.142),[0,.178,0]));
-    if (!blocked(support,wings)) textAt('右半纸板',[support[0],support[1]]);
-    const other = project([-.146,.182,0]);
-    if (!blocked(other,wings)) textAt('左半纸板',[other[0],other[1]]);
-    const laser = project(multiply(model.source,BEAM_LENGTH+.038));
-    const offset = model.source[0] > .08 ? 19 : -18;
-    if (!blocked(laser,wings)) {
-      textAt('激光笔',[laser[0]+offset,laser[1]-12],
-        {align:offset>0?'left':'right'});
+    if (stage === 'fold' || stage === 'trace') {
+      const support = project(add(multiply(model.foldedWing,.142),[0,.178,0]));
+      if (!blocked(support,wings)) textAt(stage === 'fold' ? '右半纸板' : '纸板',[support[0],support[1]]);
+    }
+    if (stage === 'fold') {
+      const other = project([-.146,.182,0]);
+      if (!blocked(other,wings)) textAt('左半纸板',[other[0],other[1]]);
+    } else {
+      const laser = project(multiply(model.source,BEAM_LENGTH+.038));
+      const offset = model.source[0] > .08 ? 19 : -18;
+      if (!blocked(laser,wings)) {
+        textAt('激光笔',[laser[0]+offset,laser[1]-12],
+          {align:offset>0?'left':'right'});
+      }
     }
   }
 }
